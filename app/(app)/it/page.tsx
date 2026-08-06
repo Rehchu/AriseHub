@@ -16,13 +16,34 @@ export default async function ITPage() {
     .eq("user_id", user!.id)
     .single();
 
-  const p = profile as { full_name: string; email: string | null; role: string } | null;
+  const p = profile as { id: string; full_name: string; email: string | null; role: string } | null;
+
+  // IT administration is unlocked by IT DEPARTMENT MEMBERSHIP — so adding
+  // someone to the IT department in Admin → People gives them the IT tools,
+  // no role change needed. Super_Admin always has it.
+  let inItDept = false;
+  if (p?.id) {
+    const { data: itDept } = await supabase
+      .from("departments")
+      .select("id")
+      .eq("slug", "it")
+      .maybeSingle();
+    if (itDept) {
+      const { data: membership } = await supabase
+        .from("department_members")
+        .select("id")
+        .eq("department_id", (itDept as { id: string }).id)
+        .eq("profile_id", p.id)
+        .maybeSingle();
+      inItDept = !!membership;
+    }
+  }
 
   return (
     <ITPortal
       name={p?.full_name ?? ""}
       email={p?.email ?? user?.email ?? ""}
-      isItAdmin={p?.role === "IT_Admin" || p?.role === "Super_Admin"}
+      isItAdmin={inItDept || p?.role === "Super_Admin"}
     />
   );
 }
