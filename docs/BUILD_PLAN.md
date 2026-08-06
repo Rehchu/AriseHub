@@ -15,7 +15,8 @@ Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · �
 ### Repo-inspired features to add (user approved all EXCEPT background checks)
 From B1Admin / ChurchCRM / ecclesiaCRM — build natively (licensing/stack rule):
 - ✅ **People directory** (5A) · ✅ **Groups + attendance + group roles** (5C, `0006`)
-- ⬜ **Custom fields** on people (5A) · ⬜ **Connect Card forms** (guest/volunteer form builder)
+- ✅ **Connect Card forms** (`0007`): builder + public `/f/<slug>` guest submission (anon RLS) + responses viewer
+- ⬜ **Custom fields** on people (5A)
 - ⬜ **Service Plans + volunteer scheduling** (5D, study B1Admin "Plans")
 - ⬜ **Pastoral-care Kanban** (visitation/follow-up board, from ecclesiaCRM)
 - ⬜ **Reporting surface** · ❌ background checks (cut by user)

@@ -35,6 +35,7 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
+    pathname.startsWith("/f/") || // public Connect Card submission pages
     pathname === "/favicon.ico";
 
   if (!user && !isPublic) {
