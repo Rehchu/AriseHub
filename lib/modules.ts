@@ -5,6 +5,7 @@ export type ModuleKey =
   | "people"
   | "checkins"
   | "forms"
+  | "care"
   | "groups"
   | "calendar"
   | "services"
@@ -32,6 +33,7 @@ export const MODULES: ModuleDef[] = [
   { key: "people", label: "People", href: "/people", icon: "users", accent: "#7c3aed", ready: true },
   { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: false, roles: ["Super_Admin", "IT_Admin", "Staff"] },
   { key: "forms", label: "Forms", href: "/forms", icon: "form", accent: "#0d9488", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
+  { key: "care", label: "Care", href: "/care", icon: "heart", accent: "#be123c", ready: true, roles: ["Super_Admin", "Staff"] },
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: true },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: false },
   { key: "services", label: "Services", href: "/services", icon: "music", accent: "#db2777", ready: false },
