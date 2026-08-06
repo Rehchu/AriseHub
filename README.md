@@ -13,6 +13,10 @@ Giving stays in **Tithe.ly** — AriseHub never stores donation data.
 - **Phase 1 (this) — Supabase schema + RLS: written, not yet applied.** Needs a Supabase project.
 - Phases 2–7: pending. See the build plan.
 
+## Scope decisions
+- **Phase 5E (Song library & charts) and 5F (On-stage chart access) are cut.** CCLI removed its public developer API, so automated CCLI usage reporting and SongSelect integration aren't buildable; churches use their own CCLI login instead. Phase 5D (Services/volunteer scheduling) stays, but without a reusable song catalog or transposition — it can attach files/notes to plan items ad-hoc.
+- Giving stays in Tithe.ly (never stored here).
+
 ## Phase 1 — apply the schema
 
 1. Create a Supabase project at [supabase.com](https://supabase.com).
