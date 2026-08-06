@@ -1,0 +1,14 @@
+{
+  "name": "arise-it-portal",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev:worker": "npm --prefix worker run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "db:generate": "npm --prefix worker run db:generate",
+    "db:migrate:local": "npm --prefix worker run db:migrate:local",
+    "db:migrate:remote": "npm --prefix worker run db:migrate:remote",
+    "build": "npm --prefix worker run build",
+    "deploy": "npm --prefix worker run deploy"
+  }
+}

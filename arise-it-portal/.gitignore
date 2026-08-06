@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+worker/seed.sql
+*.log
+.DS_Store

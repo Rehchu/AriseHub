@@ -1,0 +1,41 @@
+name = "arise-it"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Serves the built frontend (frontend/dist) directly from this Worker — no
+# separate Cloudflare Pages project needed. Requests that don't match a static
+# asset (e.g. everything under /api/*) fall through to the Worker script below.
+# Unmatched non-API routes (e.g. /assets/5 on a hard refresh) serve index.html
+# so the React Router SPA can take over client-side.
+[assets]
+directory = "../frontend/dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "arise_it_portal"
+database_id = "603344e7-bea4-42aa-9a09-527575b61566"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "arise-it-portal-files"
+
+# Set real secrets with:
+#   wrangler secret put JWT_SECRET
+#   wrangler secret put WIFI_ENCRYPTION_KEY
+# JWT_SECRET: any long random string.
+# WIFI_ENCRYPTION_KEY: 32 bytes, base64-encoded (e.g. `openssl rand -base64 32`).
+[vars]
+# Only matters for local dev where the Vite dev server (5173) calls the
+# wrangler dev API (8787) cross-origin. In production everything is one
+# origin, so this is effectively unused there.
+ALLOWED_ORIGINS = "http://localhost:5173"
+# Email invites. RESEND_API_KEY is a secret (set via `wrangler secret put`).
+# FROM_EMAIL uses myfaithtech.com — verified in this Resend account, so invites
+# can be delivered to any recipient. Change the address if you verify a
+# different domain (e.g. a subdomain of arisecenla.church) later.
+FROM_EMAIL = "Arise IT Portal <noreply@myfaithtech.com>"

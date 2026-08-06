@@ -1,0 +1,26 @@
+{
+  "name": "arise-it-portal-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "npm run build --prefix ../frontend",
+    "deploy": "npm run build --prefix ../frontend && wrangler deploy",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply arise_it_portal --local",
+    "db:migrate:remote": "wrangler d1 migrations apply arise_it_portal --remote",
+    "seed:local": "wrangler d1 execute arise_it_portal --local --file=./seed.sql",
+    "seed:remote": "wrangler d1 execute arise_it_portal --remote --file=./seed.sql"
+  },
+  "dependencies": {
+    "hono": "^4.6.14",
+    "drizzle-orm": "^0.36.4"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0",
+    "drizzle-kit": "^0.28.1",
+    "typescript": "^5.7.2",
+    "@cloudflare/workers-types": "^5.0.0"
+  }
+}

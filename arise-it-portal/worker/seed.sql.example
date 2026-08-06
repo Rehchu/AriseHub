@@ -1,0 +1,10 @@
+-- This is a TEMPLATE. Generate your own real seed.sql with:
+--   node scripts/make-admin-seed.mjs "Your Name" "you@example.com" "yourStrongPassword"
+-- then run:
+--   npm run seed:local   (or seed:remote)
+--
+-- Do NOT commit a real seed.sql with real credentials to source control.
+INSERT INTO campuses (name, address, timezone) VALUES ('Main Campus', '123 Church St', 'America/Chicago');
+
+INSERT INTO users (name, email, password_hash, password_salt, role, active, must_change_password)
+VALUES ('Admin', 'admin@example.com', 'REPLACE_HASH', 'REPLACE_SALT', 'super_admin', 1, 1);
