@@ -9,7 +9,16 @@ import {
   type NameTagData,
   type NameTagOptions,
 } from "@/lib/nametag";
-import { getDymoStatus, printViaDymo, printViaServer, type DymoStatus } from "@/lib/dymo";
+import {
+  getDymoStatus,
+  printViaDymo,
+  printViaServer,
+  printImageViaDymo,
+  printImageViaBrowser,
+  type DymoStatus,
+} from "@/lib/dymo";
+import { renderTagToPng, type TagTemplate } from "@/lib/tag-design";
+import { TagDesigner } from "./TagDesigner";
 
 export interface RoomRow {
   id: string;
@@ -115,9 +124,49 @@ export function CheckinStation({
 
   // Print through DYMO Connect when it's running here; otherwise fall back to
   // the browser print dialog (works on any desktop with the DYMO driver).
-  // Print chain: DYMO Connect on this machine → the shared desktop print agent
-  // (for iPads) → the browser print dialog. First one that works wins.
+  // Designed templates (drag-and-drop designer). When one exists we render it
+  // to an image and print that, so the label matches the design exactly.
+  const [templates, setTemplates] = useState<TagTemplate[]>([]);
+  const [showDesigner, setShowDesigner] = useState(false);
+  useEffect(() => {
+    supabase
+      .from("nametag_templates")
+      .select("id, name, width_in, height_in, design, is_default, kind")
+      .then(({ data }) => setTemplates((data ?? []) as TagTemplate[]));
+  }, [supabase]);
+
+  // Print chain: designed template (rendered to an image) if one exists, then
+  // DYMO Connect on this machine → the shared desktop print agent (for iPads)
+  // → the browser print dialog. First one that works wins.
   async function print(d: NameTagData) {
+    const forKind = (kind: "child" | "guardian") =>
+      templates.find((t) => t.kind === kind && t.is_default) ??
+      templates.find((t) => t.kind === kind);
+
+    const toPrint: TagTemplate[] = [];
+    const child = forKind("child");
+    if (child) toPrint.push(child);
+    if (tagOpts.showGuardianTag) {
+      const g = forKind("guardian");
+      if (g) toPrint.push(g);
+    }
+
+    if (toPrint.length > 0) {
+      for (const tpl of toPrint) {
+        const png = await renderTagToPng(tpl, {
+          name: d.name,
+          room: d.room,
+          code: d.code,
+          church: tagOpts.churchName,
+          hasAllergy: d.hasAllergy,
+        });
+        const ok = await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined);
+        if (!ok) printImageViaBrowser(png, tpl.width_in, tpl.height_in);
+      }
+      return;
+    }
+
+    // No designed template yet — fall back to the built-in layout.
     if (await printViaDymo(d, tagOpts, printer || undefined)) return;
     const server = localStorage.getItem("ah-print-server");
     if (server && (await printViaServer(d, tagOpts, server))) return;
@@ -264,6 +313,21 @@ export function CheckinStation({
             Prints to a <strong>DYMO LabelWriter</strong> on <strong>30252 Address
             labels</strong> (3.5&quot; × 1.125&quot;). Settings are saved per device.
           </p>
+
+          <div className="mb-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
+            <Icon name="form" size={16} className="text-brand-600" />
+            <span className="flex-1 text-xs text-ink-700">
+              {templates.length > 0
+                ? `${templates.length} custom design${templates.length === 1 ? "" : "s"} — used for printing.`
+                : "Design your own name tag: drag and drop text, logos, colours and decorations."}
+            </span>
+            <button
+              onClick={() => setShowDesigner(true)}
+              className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600"
+            >
+              Open designer
+            </button>
+          </div>
 
           {/* Printer status — the DYMO service is per-computer, so this reflects
               THIS station only. */}
@@ -577,6 +641,19 @@ export function CheckinStation({
             </p>
           )}
         </div>
+      )}
+
+      {showDesigner && (
+        <TagDesigner
+          initial={templates}
+          onClose={() => {
+            setShowDesigner(false);
+            supabase
+              .from("nametag_templates")
+              .select("id, name, width_in, height_in, design, is_default, kind")
+              .then(({ data }) => setTemplates((data ?? []) as TagTemplate[]));
+          }}
+        />
       )}
 
       {!isCheckinLead && (

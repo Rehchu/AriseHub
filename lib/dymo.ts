@@ -121,6 +121,81 @@ export async function printViaServer(
   }
 }
 
+/**
+ * Print a rendered design (PNG data URL) to the DYMO.
+ *
+ * Designs are rasterised by lib/tag-design.ts, then sent as a single full-bleed
+ * ImageObject. Going via an image means the printed label matches the designer
+ * exactly — no lossy translation into DYMO's text-layout XML.
+ */
+export async function printImageViaDymo(
+  pngDataUrl: string,
+  widthIn: number,
+  heightIn: number,
+  printerName?: string,
+): Promise<boolean> {
+  const fw = await loadDymo();
+  if (!fw) return false;
+  try {
+    if (!fw.checkEnvironment().isFrameworkInstalled) return false;
+    const printer = printerName || fw.getPrinters()[0]?.name;
+    if (!printer) return false;
+
+    const base64 = pngDataUrl.replace(/^data:image\/png;base64,/, "");
+    // DYMO uses twips (1/1440 in) for bounds.
+    const w = Math.round(widthIn * 1440);
+    const h = Math.round(heightIn * 1440);
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+<DieCutLabel Version="8.0" Units="twips">
+  <PaperOrientation>Landscape</PaperOrientation>
+  <Id>Address</Id>
+  <PaperName>30252 Address</PaperName>
+  <DrawCommands><RoundRectangle X="0" Y="0" Width="${h}" Height="${w}" Rx="0" Ry="0" /></DrawCommands>
+  <ObjectInfo>
+    <ImageObject>
+      <Name>TagImage</Name>
+      <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+      <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+      <LinkedObjectName></LinkedObjectName>
+      <Rotation>Rotation0</Rotation>
+      <IsMirrored>False</IsMirrored>
+      <IsVariable>True</IsVariable>
+      <Image>${base64}</Image>
+      <ScaleMode>Fill</ScaleMode>
+      <BorderWidth>0</BorderWidth>
+      <BorderColor Alpha="255" Red="0" Green="0" Blue="0" />
+      <BorderStyle>SolidLine</BorderStyle>
+      <HorizontalAlignment>Center</HorizontalAlignment>
+      <VerticalAlignment>Middle</VerticalAlignment>
+    </ImageObject>
+    <Bounds X="0" Y="0" Width="${w}" Height="${h}" />
+  </ObjectInfo>
+</DieCutLabel>`;
+
+    const label = fw.openLabelXml(xml);
+    fw.printLabel(printer, "", label.getLabelXml(), "");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Browser-print fallback for a rendered design. */
+export function printImageViaBrowser(pngDataUrl: string, widthIn: number, heightIn: number) {
+  const win = window.open("", "_blank", "width=460,height=340");
+  if (!win) {
+    alert("Allow pop-ups for this site to print name tags.");
+    return;
+  }
+  win.document.write(`<!doctype html><html><head><title>Name tag</title><style>
+    @page { size: ${widthIn}in ${heightIn}in; margin: 0; }
+    html,body { margin:0; padding:0; }
+    img { width:${widthIn}in; height:${heightIn}in; display:block; }
+  </style></head><body><img src="${pngDataUrl}" alt="" />
+  <script>window.onload=function(){window.print();};</script></body></html>`);
+  win.document.close();
+}
+
 // Label XML for a 30252 Address label (landscape). Object names are referenced
 // by setObjectText below, so keep them in sync.
 function labelXml(o: NameTagOptions, variant: "child" | "guardian") {
