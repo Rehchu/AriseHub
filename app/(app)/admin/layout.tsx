@@ -32,6 +32,7 @@ export default async function AdminLayout({
         <AdminTab href="/admin/campuses" label="Campuses" />
         <AdminTab href="/admin/departments" label="Departments" />
         <AdminTab href="/admin/people" label="People" />
+        <AdminTab href="/admin/fields" label="Custom Fields" />
       </nav>
       <div className="mt-6">{children}</div>
     </div>

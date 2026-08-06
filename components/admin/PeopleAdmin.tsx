@@ -8,23 +8,47 @@ import { InvitePanel } from "./InvitePanel";
 
 const ROLES: UserRole[] = ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"];
 
+export interface PersonFieldDef {
+  id: string;
+  label: string;
+  field_type: "text" | "number" | "date" | "select" | "checkbox";
+  options: string[] | null;
+  sort_order: number;
+}
+
 export function PeopleAdmin({
   profiles,
   departments,
   campuses,
   memberMap,
+  fields = [],
+  valueMap = {},
 }: {
   profiles: Profile[];
   departments: Department[];
   campuses: Campus[];
   memberMap: Record<string, string[]>;
+  fields?: PersonFieldDef[];
+  valueMap?: Record<string, Record<string, string>>;
 }) {
   const supabase = createClient();
   const [people, setPeople] = useState<Profile[]>(profiles);
   const [members, setMembers] = useState<Record<string, string[]>>(memberMap);
+  const [values, setValues] = useState<Record<string, Record<string, string>>>(valueMap);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function setFieldValue(profileId: string, fieldId: string, value: string) {
+    setValues((v) => ({ ...v, [profileId]: { ...(v[profileId] ?? {}), [fieldId]: value } }));
+    const { error } = await supabase
+      .from("person_field_values")
+      .upsert(
+        { profile_id: profileId, field_id: fieldId, value },
+        { onConflict: "profile_id,field_id" },
+      );
+    if (error) setError(error.message);
+  }
 
   const filtered = people.filter((p) =>
     (p.full_name + " " + (p.email ?? "")).toLowerCase().includes(q.toLowerCase()),
@@ -185,6 +209,57 @@ export function PeopleAdmin({
                       />
                       Check-in lead (can view children&apos;s medical info)
                     </label>
+
+                    {fields.length > 0 && (
+                      <div className="mt-4 border-t border-ink-200 pt-3">
+                        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-ink-500">
+                          <Icon name="form" size={14} /> Custom fields
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {fields.map((fld) => {
+                            const val = values[p.id]?.[fld.id] ?? "";
+                            return (
+                              <label key={fld.id} className="block text-sm">
+                                <span className="mb-1 block font-medium text-ink-600">{fld.label}</span>
+                                {fld.field_type === "select" ? (
+                                  <select
+                                    className="ah-input"
+                                    value={val}
+                                    onChange={(e) => setFieldValue(p.id, fld.id, e.target.value)}
+                                  >
+                                    <option value="">—</option>
+                                    {(fld.options ?? []).map((o) => (
+                                      <option key={o} value={o}>
+                                        {o}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : fld.field_type === "checkbox" ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={val === "true"}
+                                    onChange={(e) => setFieldValue(p.id, fld.id, String(e.target.checked))}
+                                  />
+                                ) : (
+                                  <input
+                                    type={
+                                      fld.field_type === "number"
+                                        ? "number"
+                                        : fld.field_type === "date"
+                                          ? "date"
+                                          : "text"
+                                    }
+                                    className="ah-input"
+                                    value={val}
+                                    onChange={(e) => setFieldValue(p.id, fld.id, e.target.value)}
+                                  />
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

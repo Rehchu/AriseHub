@@ -19,9 +19,11 @@ From B1Admin / ChurchCRM / ecclesiaCRM — build natively (licensing/stack rule)
 - ⬜ **Custom fields** on people (5A)
 - ✅ **Pastoral-care Kanban** (`0008`): visitation/follow-up board, Super_Admin+Staff only (sensitive)
 - ✅ **Service Plans + volunteer scheduling** (`0009`): running sheet w/ time total + explicit accept/decline
-- ⬜ **Custom fields** on people (5A) · ⬜ **Reporting surface** · ❌ background checks (cut by user)
+- ✅ **Custom fields** on people (5A, `0010`): Super_Admin defines fields, Staff sets per-person values
+- ✅ **Reporting surface**: single RLS-scoped snapshot page (no migration) — Super_Admin/Staff
+- ❌ background checks (cut by user)
 
-### ⚠️ Migrations 0007 (forms) + 0008 (care) + 0009 (service plans) written, NOT yet applied.
+**All approved repo features are now built.** Migrations 0001–0009 applied+verified; `0010` (custom fields) pending apply.
 
 ---
 

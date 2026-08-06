@@ -20,6 +20,7 @@ const PATHS: Record<string, string> = {
   trash: "M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13h10l1-13",
   heart: "M12 20s-7-4.5-9.5-9A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 9.5 5c-2.5 4.5-9.5 9-9.5 9Z",
   arrowRight: "M5 12h14M13 6l6 6-6 6",
+  chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
 };
 
 export function Icon({
