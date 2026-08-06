@@ -13,6 +13,21 @@ Giving stays in **Tithe.ly** — AriseHub never stores donation data.
 - **Phase 1 (this) — Supabase schema + RLS: written, not yet applied.** Needs a Supabase project.
 - Phases 2–7: pending. See the build plan.
 
+## Messaging, departments & invitations (`migration 0002`)
+Delivers three product requirements, schema-first (apply after `0001`):
+
+- **Invite anyone by email** with a role + one or more **departments** (Volunteers, Praise Team, Staff, Elders, Leadership, IT, Media, Creatives — all seeded; add more anytime). `invitations` (+ `invitation_departments`) hold the pending invite; the app emails a link (Resend). On signup, the `handle_new_auth_user` trigger consumes a matching pending invite — the new profile automatically adopts the invited **role**, **campus**, and **department memberships**.
+- **A group chat per department**, created automatically. `channels(type='department')` is made by a trigger when a department is created, and its membership *follows the department roster* — join a department and you're in its chat; leave and you're out. No manual chat admin.
+- **Direct messages** between any two people via `get_or_create_dm(other_profile)` — finds or creates the 1:1 channel.
+- Model: `channels` → `channel_members` → `messages` (soft-deletable, editable by author). Built for **Supabase Realtime**: the client subscribes to `messages` filtered by `channel_id`, and RLS guarantees you only receive rows for channels you belong to.
+- RLS: read/post only in your own channels; edit/delete only your own messages; department leads (or Super_Admin) manage their roster; invitations are Super_Admin-only and accepted server-side (not a client write).
+
+## Easier IT support tickets (design — lands in Phase 2 + Phase 6)
+Because everyone will have an AriseHub account, submitting an IT request should be one click, no re-login, no re-typing who they are:
+- The **auth bridge** (Phase 2) makes the AriseHub session valid against the existing Arise-IT D1 API, so a logged-in user can POST to `/api/tickets` as themselves.
+- The shell gets a persistent **"Get IT Help"** action (header + a card on the dashboard). It opens a short form (subject, category, urgency, details) and submits with the user's identity + campus **prefilled** from their profile — the request lands in the IT Ticket Queue already attributed, and the existing new-ticket email notification fires to IT.
+- The unauthenticated `/request` form stays as the fallback for people without accounts (guests, first-time visitors).
+
 ## Scope decisions
 - **Phase 5E (Song library & charts) and 5F (On-stage chart access) are cut.** CCLI removed its public developer API, so automated CCLI usage reporting and SongSelect integration aren't buildable; churches use their own CCLI login instead. Phase 5D (Services/volunteer scheduling) stays, but without a reusable song catalog or transposition — it can attach files/notes to plan items ad-hoc.
 - Giving stays in Tithe.ly (never stored here).
