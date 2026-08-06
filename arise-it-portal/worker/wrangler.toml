@@ -39,3 +39,7 @@ ALLOWED_ORIGINS = "http://localhost:5173"
 # can be delivered to any recipient. Change the address if you verify a
 # different domain (e.g. a subdomain of arisecenla.church) later.
 FROM_EMAIL = "Arise IT Portal <noreply@myfaithtech.com>"
+# AriseHub single sign-in. This API accepts Supabase access tokens from this
+# project (verified via its public JWKS) and maps them to local users by email,
+# so one AriseHub login covers IT too. Not a secret — it's a public URL.
+SUPABASE_URL = "https://luzmqpfsylpqxbwzyjcz.supabase.co"

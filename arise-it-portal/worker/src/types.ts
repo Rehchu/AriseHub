@@ -8,6 +8,10 @@ export interface Env {
   // gracefully and the admin shares the temp password manually as before.
   RESEND_API_KEY?: string;
   FROM_EMAIL?: string;
+  // AriseHub single sign-in: the Supabase project URL whose JWTs this API will
+  // accept (mapped to local users by email). Unset = bridge disabled, the
+  // portal's own cookie login is the only path.
+  SUPABASE_URL?: string;
 }
 
 export type Role = "super_admin" | "campus_admin" | "viewer";
