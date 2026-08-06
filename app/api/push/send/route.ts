@@ -1,13 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import webpush from "web-push";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-export const runtime = "nodejs";
+import { sendPush } from "@/lib/webpush";
 
 // POST { profileId, title, body, url } — sends a Web Push to every device that
 // `profileId` has subscribed. Caller must be authenticated. Dead subscriptions
-// (410/404) are pruned. The VAPID private key stays server-side only.
+// (404/410) are pruned. Uses Web Crypto (see lib/webpush.ts) so it runs on
+// Cloudflare Workers — the `web-push` npm package needs Node APIs and fails there.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -15,13 +14,15 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
   const subject = process.env.VAPID_SUBJECT || "mailto:admin@arisehub.app";
-  if (!pub || !priv) {
-    return NextResponse.json({ error: "push not configured" }, { status: 500 });
+  if (!publicKey || !privateKey) {
+    return NextResponse.json(
+      { error: "push not configured", detail: "VAPID keys missing on the server" },
+      { status: 500 },
+    );
   }
-  webpush.setVapidDetails(subject, pub, priv);
 
   const { profileId, title, body, url } = (await req.json()) as {
     profileId?: string;
@@ -32,10 +33,21 @@ export async function POST(req: NextRequest) {
   if (!profileId) return NextResponse.json({ error: "profileId required" }, { status: 400 });
 
   const admin = createAdminClient();
-  const { data: subs } = await admin
+  const { data: subs, error } = await admin
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("profile_id", profileId);
+
+  if (error) {
+    return NextResponse.json({ error: "lookup failed", detail: error.message }, { status: 500 });
+  }
+  if (!subs || subs.length === 0) {
+    // Surfaced to the UI so "nothing happened" is explainable.
+    return NextResponse.json(
+      { sent: 0, pruned: 0, detail: "No devices are subscribed for this person yet." },
+      { status: 200 },
+    );
+  }
 
   const payload = JSON.stringify({
     title: title || "AriseHub",
@@ -45,21 +57,27 @@ export async function POST(req: NextRequest) {
 
   let sent = 0;
   const dead: string[] = [];
+  const failures: number[] = [];
+
   await Promise.all(
-    (subs ?? []).map(async (s) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          payload,
-        );
-        sent++;
-      } catch (err: unknown) {
-        const code = (err as { statusCode?: number }).statusCode;
-        if (code === 404 || code === 410) dead.push(s.id);
-      }
+    subs.map(async (s) => {
+      const r = await sendPush(
+        { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
+        payload,
+        { publicKey, privateKey, subject },
+      );
+      if (r.ok) sent++;
+      else if (r.expired) dead.push(s.id);
+      else failures.push(r.status);
     }),
   );
+
   if (dead.length) await admin.from("push_subscriptions").delete().in("id", dead);
 
-  return NextResponse.json({ sent, pruned: dead.length });
+  return NextResponse.json({
+    sent,
+    pruned: dead.length,
+    failed: failures.length,
+    ...(failures.length ? { failureStatuses: failures } : {}),
+  });
 }

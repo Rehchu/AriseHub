@@ -94,8 +94,24 @@ export function NotificationToggle({ profileId }: { profileId: string }) {
         url: "/dashboard",
       }),
     });
-    const j = await res.json().catch(() => ({}));
-    setNote(res.ok ? `Test sent to ${j.sent ?? 0} device(s).` : "Test failed.");
+    const j = (await res.json().catch(() => ({}))) as {
+      sent?: number;
+      failed?: number;
+      detail?: string;
+      error?: string;
+      failureStatuses?: number[];
+    };
+    if (!res.ok) {
+      setNote(`Test failed: ${j.error ?? res.status}${j.detail ? ` — ${j.detail}` : ""}`);
+    } else if (j.detail) {
+      setNote(j.detail); // e.g. no devices subscribed
+    } else if ((j.sent ?? 0) > 0) {
+      setNote(`Sent to ${j.sent} device${j.sent === 1 ? "" : "s"}.`);
+    } else {
+      setNote(
+        `Not delivered${j.failureStatuses?.length ? ` (push service returned ${j.failureStatuses.join(", ")})` : ""}. Try turning notifications off and on again.`,
+      );
+    }
   }
 
   if (!supported) return null;
