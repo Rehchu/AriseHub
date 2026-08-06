@@ -52,6 +52,24 @@ export function FormBuilder({
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState<Field["field_type"]>("text");
   const [copied, setCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteForm() {
+    const n = submissions.length;
+    const warn =
+      n > 0
+        ? `Delete "${form.title}"? This also deletes ${n} response${n === 1 ? "" : "s"} — permanently. This cannot be undone.`
+        : `Delete "${form.title}"? This cannot be undone.`;
+    if (!window.confirm(warn)) return;
+    setDeleting(true);
+    const { error } = await supabase.from("forms").delete().eq("id", form.id);
+    if (error) {
+      setDeleting(false);
+      window.alert(error.message);
+      return;
+    }
+    window.location.href = "/forms";
+  }
 
   const publicUrl =
     typeof window !== "undefined" ? `${window.location.origin}/f/${form.slug}` : `/f/${form.slug}`;
@@ -103,10 +121,20 @@ export function FormBuilder({
           <h1 className="font-display text-2xl font-bold text-ink-900">{form.title}</h1>
           <p className="mt-1 text-sm text-ink-500">{submissions.length} responses</p>
         </div>
-        <label className="flex items-center gap-2 text-sm font-medium text-ink-600">
-          <input type="checkbox" checked={active} onChange={toggleActive} />
-          {active ? "Live" : "Off"}
-        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-ink-600">
+            <input type="checkbox" checked={active} onChange={toggleActive} />
+            {active ? "Live" : "Off"}
+          </label>
+          <button
+            onClick={deleteForm}
+            disabled={deleting}
+            className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 disabled:opacity-50"
+          >
+            <Icon name="trash" size={16} />
+            {deleting ? "Deleting…" : "Delete"}
+          </button>
+        </div>
       </div>
 
       {/* Share link */}

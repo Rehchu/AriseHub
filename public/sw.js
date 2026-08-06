@@ -1,5 +1,5 @@
 // AriseHub service worker — installability + Web Push.
-const CACHE = "arisehub-v1";
+const CACHE = "arisehub-v2";
 const SHELL = ["/dashboard", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {

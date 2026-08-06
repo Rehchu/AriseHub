@@ -21,6 +21,7 @@ export function PeopleAdmin({
   departments,
   campuses,
   memberMap,
+  leadMap = {},
   fields = [],
   valueMap = {},
 }: {
@@ -28,16 +29,54 @@ export function PeopleAdmin({
   departments: Department[];
   campuses: Campus[];
   memberMap: Record<string, string[]>;
+  leadMap?: Record<string, Record<string, string>>;
   fields?: PersonFieldDef[];
   valueMap?: Record<string, Record<string, string>>;
 }) {
   const supabase = createClient();
   const [people, setPeople] = useState<Profile[]>(profiles);
   const [members, setMembers] = useState<Record<string, string[]>>(memberMap);
+  const [leads, setLeads] = useState<Record<string, Record<string, string>>>(leadMap);
+
+  // Promote/demote within a department. Leads manage their department's roster
+  // and can assign tasks to its members.
+  async function setDeptRole(profileId: string, deptId: string, role: "lead" | "member") {
+    setLeads((l) => ({ ...l, [profileId]: { ...(l[profileId] ?? {}), [deptId]: role } }));
+    const { error } = await supabase
+      .from("department_members")
+      .update({ role })
+      .eq("profile_id", profileId)
+      .eq("department_id", deptId);
+    if (error) setError(error.message);
+  }
   const [values, setValues] = useState<Record<string, Record<string, string>>>(valueMap);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resetLink, setResetLink] = useState<{ name: string; link: string } | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null);
+
+  // IT / Super_Admin can issue a set-password link. We never see or set the
+  // password — the person chooses their own from the link.
+  async function resetPassword(p: Profile) {
+    if (!p.email) return setError(`${p.full_name} has no email on file.`);
+    setResetting(p.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: p.email }),
+      });
+      const j = (await res.json()) as { link?: string; error?: string };
+      if (!res.ok || !j.link) throw new Error(j.error ?? "Failed");
+      setResetLink({ name: p.full_name, link: j.link });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create a reset link.");
+    } finally {
+      setResetting(null);
+    }
+  }
 
   async function setFieldValue(profileId: string, fieldId: string, value: string) {
     setValues((v) => ({ ...v, [profileId]: { ...(v[profileId] ?? {}), [fieldId]: value } }));
@@ -70,6 +109,7 @@ export function PeopleAdmin({
       return { ...m, [profileId]: [...cur] };
     });
     if (on) {
+      setLeads((l) => ({ ...l, [profileId]: { ...(l[profileId] ?? {}), [deptId]: "member" } }));
       const { error } = await supabase
         .from("department_members")
         .insert({ department_id: deptId, profile_id: profileId });
@@ -86,6 +126,31 @@ export function PeopleAdmin({
 
   return (
     <div className="space-y-6">
+      {resetLink && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="mb-2 text-sm font-medium text-amber-900">
+            Set-password link for {resetLink.name} — send it to them directly. It
+            works once and expires; nobody (including you) sees their password.
+          </p>
+          <div className="flex gap-2">
+            <input readOnly value={resetLink.link} className="ah-input bg-white text-xs" />
+            <button
+              onClick={() => navigator.clipboard.writeText(resetLink.link)}
+              className="shrink-0 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white"
+            >
+              Copy
+            </button>
+            <button
+              onClick={() => setResetLink(null)}
+              className="shrink-0 rounded-lg px-2 text-amber-700"
+              aria-label="Dismiss"
+            >
+              <Icon name="x" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <InvitePanel departments={departments} campuses={campuses} />
 
       <div>
@@ -165,6 +230,14 @@ export function PeopleAdmin({
                     Departments ({deptIds.size})
                   </button>
                   <button
+                    onClick={() => resetPassword(p)}
+                    disabled={resetting === p.id}
+                    className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-50"
+                    title="Generate a set-password link for this person"
+                  >
+                    {resetting === p.id ? "…" : "Reset password"}
+                  </button>
+                  <button
                     onClick={() =>
                       patch(p.id, {
                         archived_at: p.archived_at ? null : new Date().toISOString(),
@@ -184,18 +257,42 @@ export function PeopleAdmin({
                     <div className="flex flex-wrap gap-2">
                       {departments.map((d) => {
                         const on = deptIds.has(d.id);
+                        const isLead = leads[p.id]?.[d.id] === "lead";
                         return (
-                          <button
+                          <span
                             key={d.id}
-                            onClick={() => toggleDept(p.id, d.id, !on)}
-                            className={`rounded-full px-3 py-1 text-sm transition ${
-                              on
-                                ? "bg-brand-500 text-white"
-                                : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-100"
+                            className={`inline-flex items-center overflow-hidden rounded-full ring-1 ${
+                              on ? "ring-brand-500" : "ring-ink-200"
                             }`}
                           >
-                            {d.name}
-                          </button>
+                            <button
+                              onClick={() => toggleDept(p.id, d.id, !on)}
+                              className={`px-3 py-1 text-sm transition ${
+                                on
+                                  ? "bg-brand-500 text-white"
+                                  : "bg-white text-ink-600 hover:bg-ink-100"
+                              }`}
+                            >
+                              {d.name}
+                            </button>
+                            {/* Promote to department lead — leads manage their
+                                roster and can assign tasks to its members. */}
+                            {on && (
+                              <button
+                                onClick={() =>
+                                  setDeptRole(p.id, d.id, isLead ? "member" : "lead")
+                                }
+                                title={isLead ? "Department lead — click to demote" : "Make department lead"}
+                                className={`px-2 py-1 text-xs font-semibold transition ${
+                                  isLead
+                                    ? "bg-brand-700 text-white"
+                                    : "bg-brand-100 text-brand-700 hover:bg-brand-200"
+                                }`}
+                              >
+                                {isLead ? "LEAD" : "＋lead"}
+                              </button>
+                            )}
+                          </span>
                         );
                       })}
                     </div>

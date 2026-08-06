@@ -44,7 +44,6 @@ export default async function DashboardPage() {
               : "Department group chats & direct messages"
           }
         />
-        <HelpCard />
         <Card
           href="/people"
           accent="#7c3aed"
@@ -126,17 +125,3 @@ function Card({
   );
 }
 
-function HelpCard() {
-  return (
-    <div className="flex h-full flex-col rounded-xl border border-brand-100 bg-brand-50 p-5 shadow-sm">
-      <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-white">
-        <Icon name="help" />
-      </span>
-      <h3 className="font-display font-semibold text-ink-900">Need IT help?</h3>
-      <p className="mt-1 text-sm text-ink-600">
-        Use the <span className="font-medium">Get IT Help</span> button in the top
-        bar — your name and campus are filled in for you.
-      </p>
-    </div>
-  );
-}

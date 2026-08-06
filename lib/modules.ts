@@ -32,14 +32,14 @@ export const MODULES: ModuleDef[] = [
   { key: "messages", label: "Messages", href: "/messages", icon: "chat", accent: "#2563eb", ready: true },
   { key: "tasks", label: "Tasks", href: "/tasks", icon: "task", accent: "#0891b2", ready: true },
   { key: "people", label: "People", href: "/people", icon: "users", accent: "#7c3aed", ready: true },
-  { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: false, roles: ["Super_Admin", "IT_Admin", "Staff"] },
+  { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
   { key: "forms", label: "Forms", href: "/forms", icon: "form", accent: "#0d9488", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
   { key: "care", label: "Care", href: "/care", icon: "heart", accent: "#be123c", ready: true, roles: ["Super_Admin", "Staff"] },
   { key: "reports", label: "Reports", href: "/reports", icon: "chart", accent: "#0f766e", ready: true, roles: ["Super_Admin", "Staff"] },
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: true },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: true },
   { key: "services", label: "Services", href: "/services", icon: "music", accent: "#db2777", ready: true },
-  { key: "it", label: "IT Support", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
+  { key: "it", label: "IT Portal", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
   { key: "admin", label: "Admin", href: "/admin/departments", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin"] },
 ];
 
