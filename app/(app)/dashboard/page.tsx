@@ -53,12 +53,11 @@ export default async function DashboardPage() {
           body="Church-wide directory"
         />
         <Card
-          href="/dashboard"
+          href="/groups"
           accent="#059669"
           icon="group"
           title="Groups"
           body="Small groups & attendance"
-          soon
         />
         <Card
           href="/dashboard"

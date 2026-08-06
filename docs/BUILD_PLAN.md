@@ -10,7 +10,15 @@ Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · �
 **Roles (clarified):** app `Super_Admin` = **Pastor & Apostle** (see everything). **IT_Admin** (Bradly) = IT-portal super-admin only, NOT app-wide — RLS `is_super_admin()` matches only `Super_Admin`. Church has **2 campuses**; the **directory is church-wide**, operational data (check-in/rooms/services/medical) stays **campus-scoped**.
 
 ### ⚠️ Pending Supabase migrations to apply (SQL editor, in order)
-`0003_realtime_messages` (live chat), `0004_directory_churchwide` (cross-campus directory + DM picker), `0005_tasks` (Tasks feature). 0001/0002 already applied.
+`0003_realtime_messages`, `0004_directory_churchwide`, `0005_tasks`, `0006_groups`. 0001/0002 already applied.
+
+### Repo-inspired features to add (user approved all EXCEPT background checks)
+From B1Admin / ChurchCRM / ecclesiaCRM — build natively (licensing/stack rule):
+- ✅ **People directory** (5A) · ✅ **Groups + attendance + group roles** (5C, `0006`)
+- ⬜ **Custom fields** on people (5A) · ⬜ **Connect Card forms** (guest/volunteer form builder)
+- ⬜ **Service Plans + volunteer scheduling** (5D, study B1Admin "Plans")
+- ⬜ **Pastoral-care Kanban** (visitation/follow-up board, from ecclesiaCRM)
+- ⬜ **Reporting surface** · ❌ background checks (cut by user)
 
 ---
 
