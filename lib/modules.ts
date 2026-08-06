@@ -8,7 +8,9 @@ export type ModuleKey =
   | "calendar"
   | "services"
   | "messages"
-  | "it";
+  | "tasks"
+  | "it"
+  | "admin";
 
 export interface ModuleDef {
   key: ModuleKey;
@@ -25,12 +27,14 @@ export interface ModuleDef {
 export const MODULES: ModuleDef[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: "home", accent: "#d2303b", ready: true },
   { key: "messages", label: "Messages", href: "/messages", icon: "chat", accent: "#2563eb", ready: true },
+  { key: "tasks", label: "Tasks", href: "/tasks", icon: "task", accent: "#0891b2", ready: true },
   { key: "people", label: "People", href: "/people", icon: "users", accent: "#7c3aed", ready: false },
   { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: false, roles: ["Super_Admin", "IT_Admin", "Staff"] },
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: false },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: false },
   { key: "services", label: "Services", href: "/services", icon: "music", accent: "#db2777", ready: false },
   { key: "it", label: "IT Portal", href: "/it", icon: "wrench", accent: "#4b5563", ready: false },
+  { key: "admin", label: "Admin", href: "/admin/departments", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin"] },
 ];
 
 export function visibleModules(role: UserRole | undefined): ModuleDef[] {

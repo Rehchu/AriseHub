@@ -1,0 +1,50 @@
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+
+// Admin area — Super_Admin only. RLS also enforces this server-side on every
+// write, but we gate the whole section here so non-admins never see it.
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", user!.id)
+    .single();
+
+  if (profile?.role !== "Super_Admin") redirect("/dashboard");
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+      <h1 className="font-display text-2xl font-bold text-ink-900">Admin</h1>
+      <p className="mt-1 text-ink-500">
+        Manage departments, people, and access for Arise Church.
+      </p>
+      <nav className="mt-6 flex gap-2 border-b border-ink-100">
+        <AdminTab href="/admin/campuses" label="Campuses" />
+        <AdminTab href="/admin/departments" label="Departments" />
+        <AdminTab href="/admin/people" label="People" />
+      </nav>
+      <div className="mt-6">{children}</div>
+    </div>
+  );
+}
+
+function AdminTab({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50"
+    >
+      {label}
+    </Link>
+  );
+}

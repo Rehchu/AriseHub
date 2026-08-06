@@ -7,6 +7,11 @@ Cloudflare Workers via `@opennextjs/cloudflare`. Giving stays in Tithe.ly.
 
 Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · ❌ cut
 
+**Roles (clarified):** app `Super_Admin` = **Pastor & Apostle** (see everything). **IT_Admin** (Bradly) = IT-portal super-admin only, NOT app-wide — RLS `is_super_admin()` matches only `Super_Admin`. Church has **2 campuses**; the **directory is church-wide**, operational data (check-in/rooms/services/medical) stays **campus-scoped**.
+
+### ⚠️ Pending Supabase migrations to apply (SQL editor, in order)
+`0003_realtime_messages` (live chat), `0004_directory_churchwide` (cross-campus directory + DM picker), `0005_tasks` (Tasks feature). 0001/0002 already applied.
+
 ---
 
 ## Phase 0 — Repo & source control
@@ -24,9 +29,11 @@ Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · �
 - ⬜ Proxy `/api/it/*` through Next.js route handlers (same-origin).
 
 ## Phase 3 — App shell, navigation, PWA
-- 🟡 Next.js shell: dark Arise sidebar + light Planning-Center canvas, module switcher (People / Check-Ins / Groups / Calendar / Services / Messages / IT), per-module muted accents, role-gated nav, mobile drawer.
-- ⬜ **"Get IT Help"** persistent action (prefilled ticket → D1 API) — the "easier support ticket" requirement.
+- ✅ Next.js App Router app at repo root: Supabase SSR auth (`@supabase/ssr`, middleware session refresh + route gating, email/password login), dark Arise sidebar + light canvas, role-gated module switcher (Dashboard/Messages ready; People/Check-Ins/Groups/Calendar/Services/IT "Soon"), per-module muted accents, mobile drawer, dashboard landing. Verified in-browser against the live Supabase project.
+- ✅ **Department chat + DMs over Supabase Realtime** (`0003` adds `messages` to the realtime publication): RLS-scoped channel list, thread with optimistic send, DM people-picker → `get_or_create_dm` RPC. Insert/read confirmed under RLS.
+- ✅ **"Get IT Help"** persistent header action — short prefilled form (name/email from profile) → live Arise-IT public ticket API. Verified prefill; auth-bridge upgrade to an authenticated POST is Phase 2.
 - ⬜ PWA via Serwist (manifest, NetworkFirst API cache, per-platform install incl. iOS instructional screen, web push).
+- ⬜ **Deploy step pending:** apply `supabase/migrations/0003_realtime_messages.sql` (SQL editor) so cross-client live updates fire; without it, only your own optimistic sends show until refresh.
 
 ## Phase 4 — Check-in & badge printing
 - ⬜ Print-job queue + local print agent (iPads can't talk to DYMO; Chrome 142+ gates localhost). `print_jobs`, `label_templates` (upload DYMO XML → bind named objects → tiered editor).

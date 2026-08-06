@@ -13,6 +13,8 @@ const PATHS: Record<string, string> = {
   menu: "M4 7h16M4 12h16M4 17h16",
   send: "M4 12l16-8-6 16-3-6-7-2Z",
   x: "M6 6l12 12M18 6 6 18",
+  task: "M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 14l2 2 4-4",
+  check: "M5 12l4 4L19 7",
 };
 
 export function Icon({
