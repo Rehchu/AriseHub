@@ -16,7 +16,7 @@ Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · �
 ## Phase 1 — Supabase schema & RLS  (`supabase/migrations/0001`)
 - ✅ Enums (`user_role`), tables: campuses, profiles (person ≠ login: `profiles.user_id` nullable so children/visitors have no auth row), profile_medical (split, gated by `is_checkin_lead`), families, family_members, guardians, rooms, services, service_assignments, checkins (no DELETE), chms_audit_log (service-role insert only).
 - ✅ RLS on every table, `updated_at` triggers, SECURITY-DEFINER role/campus helpers, auto-profile-on-signup, self-escalation guard.
-- ⬜ **Apply + verify** — blocked on a Supabase project (URL + anon + service-role key).
+- ✅ **Applied + verified** (Supabase project `luzmqpfsylpqxbwzyjcz`): 8 departments seeded, 8 group-chat channels auto-created by trigger, all core tables present, RLS confirmed enforcing (anon key gets `[]` on `departments` and `profile_medical`).
 
 ## Phase 2 — Auth bridge + comms data
 - 🟡 **Comms/invitations schema** (`supabase/migrations/0002`): departments (+seeded), department_members, channels/channel_members/messages (department group chats + DMs), invitations (+invitation_departments). Triggers wire roster↔chat and invite-consumption on signup. See README.
@@ -24,7 +24,7 @@ Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · �
 - ⬜ Proxy `/api/it/*` through Next.js route handlers (same-origin).
 
 ## Phase 3 — App shell, navigation, PWA
-- ⬜ Next.js shell: dark Arise sidebar + light Planning-Center canvas, module switcher (People / Check-Ins / Groups / Calendar / Services / Messages / IT), per-module muted accents, role-gated nav, mobile drawer.
+- 🟡 Next.js shell: dark Arise sidebar + light Planning-Center canvas, module switcher (People / Check-Ins / Groups / Calendar / Services / Messages / IT), per-module muted accents, role-gated nav, mobile drawer.
 - ⬜ **"Get IT Help"** persistent action (prefilled ticket → D1 API) — the "easier support ticket" requirement.
 - ⬜ PWA via Serwist (manifest, NetworkFirst API cache, per-platform install incl. iOS instructional screen, web push).
 
