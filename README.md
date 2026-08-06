@@ -25,16 +25,22 @@ Giving stays in **Tithe.ly** — AriseHub never stores donation data.
 `campuses`, `profiles` (+ `profile_medical` split out), `families`, `family_members`, `guardians`, `rooms`, `services`, `service_assignments`, `checkins`, `chms_audit_log` — with RLS on every table, `updated_at` triggers, and SECURITY-DEFINER helper functions for role/campus checks.
 
 ### Key access-control decisions baked in
+- **A profile is a PERSON, not a login.** `profiles.id` is its own uuid; `profiles.user_id` is a nullable link to `auth.users`. Children, visitors, and non-login members have `user_id = null` — essential, since check-in creates child profiles that will never have an auth account. Staff/admins with a Supabase login have `user_id` set.
+- **Auto-provisioning**: a trigger on `auth.users` creates a `Member` profile on signup, so there's never an authenticated user without a profile (the RLS helpers depend on it). An admin elevates the role afterward.
+- **Self-escalation blocked**: members can edit their own name/phone/photo, but a `before update` trigger forces `role`/`campus_id`/`is_checkin_lead`/`archived_at` back to their old values for non-admins — so a Member can't set themselves to `Super_Admin` (which the row-level "edit own profile" policy alone would allow).
 - **Soft deletes** on profiles (`archived_at`) — never hard-delete.
 - **`profiles.is_checkin_lead`** — the "explicit check-in role" from the plan. `profile_medical` (allergies/medical) is readable ONLY by Super_Admin or a profile with `is_checkin_lead = true`, so children's medical info is never exposed to general Staff/Volunteers who can see the directory.
 - **Campus-scoped**: non-super-admins only see/act on their own campus.
 - **`checkins` has no DELETE policy** — it's a child-safety audit record.
+- **`chms_audit_log` inserts are service-role only** (no authenticated INSERT policy) so the audit trail can't be forged or tampered with from a client.
 
 ## Phase 1 — verify (run after applying, per the build plan)
 - Create a Volunteer profile → confirm it **cannot** `SELECT` from `profile_medical`.
 - Set a profile's `campus_id` to campus A → confirm it cannot read campus B's `rooms`/`checkins`.
 - Attempt `DELETE FROM checkins` as any role → confirm no policy permits it.
 - Confirm a Staff profile can read the directory (`profiles`) but not `profile_medical`.
+- As a Member, `update profiles set role = 'Super_Admin' where user_id = auth.uid()` → confirm the role stays `Member` (the trigger reverts it) while a name change on the same row succeeds.
+- Sign up a new auth user → confirm a matching `Member` profile row is auto-created.
 
 ## Next (needs your Supabase project)
 Once the project exists and the migration is applied, Phase 2 modifies Arise-IT's `requireAuth` to verify Supabase JWTs (via JWKS) and maps identity by email to the existing D1 `users` row — single login across both halves.

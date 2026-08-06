@@ -35,8 +35,13 @@ create table campuses (
   updated_at timestamptz not null default now()
 );
 
+-- A profile is a PERSON, not a login. Children, visitors, and non-login members
+-- have profiles with user_id = null. Staff/admins with a Supabase Auth account
+-- have user_id set (unique). This is essential: check-in creates child profiles
+-- that will never have an auth.users row.
 create table profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid unique references auth.users(id) on delete set null, -- null for login-less people
   full_name text not null,
   email text,
   phone text,
@@ -53,6 +58,7 @@ create table profiles (
 );
 create index profiles_campus_idx on profiles(campus_id);
 create index profiles_role_idx on profiles(role);
+create index profiles_user_idx on profiles(user_id);
 
 create table profile_medical (
   profile_id uuid primary key references profiles(id) on delete cascade,
@@ -176,17 +182,17 @@ create trigger t_service_assignments_upd before update on service_assignments fo
 -- ---------------------------------------------------------------------------
 create or replace function public.current_profile_role() returns user_role
   language sql stable security definer set search_path = public as $$
-  select role from profiles where id = auth.uid()
+  select role from profiles where user_id = auth.uid()
 $$;
 
 create or replace function public.current_campus() returns uuid
   language sql stable security definer set search_path = public as $$
-  select campus_id from profiles where id = auth.uid()
+  select campus_id from profiles where user_id = auth.uid()
 $$;
 
 create or replace function public.is_checkin_lead() returns boolean
   language sql stable security definer set search_path = public as $$
-  select coalesce((select is_checkin_lead from profiles where id = auth.uid()), false)
+  select coalesce((select is_checkin_lead from profiles where user_id = auth.uid()), false)
 $$;
 
 create or replace function public.is_super_admin() returns boolean
@@ -205,6 +211,49 @@ create or replace function public.same_campus(target_campus uuid) returns boolea
   language sql stable security definer set search_path = public as $$
   select public.is_super_admin() or target_campus is not distinct from public.current_campus()
 $$;
+
+-- ---------------------------------------------------------------------------
+-- Provision a profile automatically when a Supabase Auth user is created, so
+-- there's never an authenticated user with no profile (RLS helpers depend on
+-- the profile row existing). Role defaults to Member; an admin elevates later.
+-- ---------------------------------------------------------------------------
+create or replace function public.handle_new_auth_user() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (user_id, full_name, email)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    new.email
+  )
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_auth_user();
+
+-- Stop a non-admin from escalating their own privileges. The profiles_update_own
+-- policy lets people edit their own row (name, phone, photo…) — but RLS can't
+-- compare OLD vs NEW, so without this a Member could set role = 'Super_Admin'.
+create or replace function public.protect_profile_privileged_fields() returns trigger
+  language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null and new.user_id = auth.uid() and not public.is_super_admin() then
+    new.role := old.role;
+    new.campus_id := old.campus_id;
+    new.is_checkin_lead := old.is_checkin_lead;
+    new.archived_at := old.archived_at;
+  end if;
+  return new;
+end;
+$$;
+
+create trigger t_profiles_protect
+  before update on profiles
+  for each row execute procedure public.protect_profile_privileged_fields();
 
 -- ---------------------------------------------------------------------------
 -- Enable RLS
@@ -229,9 +278,12 @@ create policy campuses_write on campuses for all to authenticated
 -- profiles: directory visible to check-in roles; members see/edit own row;
 -- only Super_Admin edits others.
 create policy profiles_select on profiles for select to authenticated
-  using (public.is_checkin_role() or id = auth.uid());
+  using (public.is_checkin_role() or user_id = auth.uid());
+-- Members may edit their own row, but not change their role or campus (those
+-- are admin-controlled — enforced by the trigger below, since RLS can't compare
+-- OLD vs NEW column values).
 create policy profiles_update_own on profiles for update to authenticated
-  using (id = auth.uid()) with check (id = auth.uid());
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy profiles_admin_write on profiles for all to authenticated
   using (public.is_super_admin()) with check (public.is_super_admin());
 
@@ -281,6 +333,8 @@ create policy checkins_update on checkins for update to authenticated
   using (public.is_checkin_role() and public.same_campus(campus_id))
   with check (public.is_checkin_role() and public.same_campus(campus_id));
 
--- chms_audit_log: Super_Admin reads. No UPDATE/DELETE. INSERT via service role.
+-- chms_audit_log: Super_Admin reads. No UPDATE/DELETE, and NO authenticated
+-- INSERT policy — audit rows are written only via the service-role key from the
+-- server (service role bypasses RLS). This prevents clients from forging or
+-- tampering with a child-safety audit trail.
 create policy chms_audit_select on chms_audit_log for select to authenticated using (public.is_super_admin());
-create policy chms_audit_insert on chms_audit_log for insert to authenticated with check (true);
