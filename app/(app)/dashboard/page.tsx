@@ -60,12 +60,18 @@ export default async function DashboardPage() {
           body="Small groups & attendance"
         />
         <Card
-          href="/dashboard"
+          href="/calendar"
           accent="#d97706"
           icon="calendar"
           title="Calendar"
-          body="Events & facility booking"
-          soon
+          body="Events, camps & facility booking"
+        />
+        <Card
+          href="/it"
+          accent="#4b5563"
+          icon="wrench"
+          title="IT Support"
+          body="Submit a request or track tickets"
         />
         <Card
           href="/services"
