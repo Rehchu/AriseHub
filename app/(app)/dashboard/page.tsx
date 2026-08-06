@@ -68,12 +68,11 @@ export default async function DashboardPage() {
           soon
         />
         <Card
-          href="/dashboard"
+          href="/services"
           accent="#db2777"
           icon="music"
           title="Services"
           body="Plans & volunteer scheduling"
-          soon
         />
       </div>
     </div>

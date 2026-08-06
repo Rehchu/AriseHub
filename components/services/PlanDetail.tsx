@@ -1,0 +1,269 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/shell/Icon";
+
+export interface Item {
+  id: string;
+  sort_order: number;
+  title: string;
+  item_type: "song" | "scripture" | "sermon" | "announcement" | "transition" | "prayer" | "other";
+  duration_minutes: number | null;
+  notes: string | null;
+}
+export interface Assignment {
+  id: string;
+  position: string;
+  profile_id: string | null;
+  status: "invited" | "accepted" | "declined";
+  assignee: { full_name: string } | null;
+}
+interface Plan {
+  id: string;
+  title: string;
+  service_date: string;
+  notes: string | null;
+}
+
+const ITEM_TYPES: Item["item_type"][] = [
+  "song",
+  "scripture",
+  "sermon",
+  "announcement",
+  "transition",
+  "prayer",
+  "other",
+];
+
+export function PlanDetail({
+  plan,
+  initialItems,
+  initialAssignments,
+  people,
+  canManage,
+  currentProfileId,
+}: {
+  plan: Plan;
+  initialItems: Item[];
+  initialAssignments: Assignment[];
+  people: { id: string; full_name: string }[];
+  canManage: boolean;
+  currentProfileId: string;
+}) {
+  const supabase = createClient();
+  const [items, setItems] = useState<Item[]>(initialItems);
+  const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments);
+
+  const [itTitle, setItTitle] = useState("");
+  const [itType, setItType] = useState<Item["item_type"]>("song");
+  const [itDur, setItDur] = useState("");
+
+  const [posName, setPosName] = useState("");
+  const [posPerson, setPosPerson] = useState("");
+
+  const totalMin = useMemo(
+    () => items.reduce((sum, i) => sum + (i.duration_minutes ?? 0), 0),
+    [items],
+  );
+
+  async function addItem(e: React.FormEvent) {
+    e.preventDefault();
+    if (!itTitle.trim()) return;
+    const { data } = await supabase
+      .from("plan_items")
+      .insert({
+        plan_id: plan.id,
+        title: itTitle.trim(),
+        item_type: itType,
+        duration_minutes: itDur ? Number(itDur) : null,
+        sort_order: items.length,
+      })
+      .select("*")
+      .single();
+    if (data) setItems((it) => [...it, data as Item]);
+    setItTitle("");
+    setItDur("");
+  }
+
+  async function removeItem(id: string) {
+    setItems((it) => it.filter((x) => x.id !== id));
+    await supabase.from("plan_items").delete().eq("id", id);
+  }
+
+  async function addPosition(e: React.FormEvent) {
+    e.preventDefault();
+    if (!posName.trim()) return;
+    const { data } = await supabase
+      .from("plan_assignments")
+      .insert({
+        plan_id: plan.id,
+        position: posName.trim(),
+        profile_id: posPerson || null,
+        status: "invited",
+      })
+      .select("id, position, profile_id, status")
+      .single();
+    if (data) {
+      const assignee = posPerson
+        ? { full_name: people.find((p) => p.id === posPerson)?.full_name ?? "" }
+        : null;
+      setAssignments((a) => [...a, { ...(data as Assignment), assignee }]);
+    }
+    setPosName("");
+    setPosPerson("");
+  }
+
+  async function removePosition(id: string) {
+    setAssignments((a) => a.filter((x) => x.id !== id));
+    await supabase.from("plan_assignments").delete().eq("id", id);
+  }
+
+  async function respond(a: Assignment, status: "accepted" | "declined") {
+    setAssignments((as) => as.map((x) => (x.id === a.id ? { ...x, status } : x)));
+    await supabase.from("plan_assignments").update({ status }).eq("id", a.id);
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+      <a href="/services" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-brand-600">
+        ← All plans
+      </a>
+      <h1 className="font-display text-2xl font-bold text-ink-900">{plan.title}</h1>
+      <p className="mt-1 text-ink-500">
+        {new Date(plan.service_date + "T00:00:00").toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        })}
+      </p>
+
+      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+        {/* Running sheet */}
+        <section>
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Order of service</h2>
+            <span className="text-xs font-medium text-ink-500">{totalMin} min total</span>
+          </div>
+          <div className="space-y-2">
+            {items.map((i, idx) => (
+              <div key={i.id} className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-100 text-xs font-medium text-ink-500">
+                  {idx + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-ink-800">{i.title}</p>
+                  <p className="text-xs capitalize text-ink-400">{i.item_type}</p>
+                </div>
+                {i.duration_minutes != null && (
+                  <span className="text-xs text-ink-400">{i.duration_minutes}m</span>
+                )}
+                {canManage && (
+                  <button onClick={() => removeItem(i.id)} className="text-ink-300 hover:text-brand-500" aria-label="Remove item">
+                    <Icon name="trash" size={15} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {items.length === 0 && (
+              <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-sm text-ink-400">
+                No items yet.
+              </p>
+            )}
+          </div>
+          {canManage && (
+            <form onSubmit={addItem} className="mt-3 space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
+              <input className="ah-input" placeholder="Item (e.g. Great Are You Lord)" value={itTitle} onChange={(e) => setItTitle(e.target.value)} />
+              <div className="flex gap-2">
+                <select className="ah-input capitalize" value={itType} onChange={(e) => setItType(e.target.value as Item["item_type"])}>
+                  {ITEM_TYPES.map((t) => (
+                    <option key={t} value={t} className="capitalize">
+                      {t}
+                    </option>
+                  ))}
+                </select>
+                <input type="number" min={0} className="ah-input w-24" placeholder="min" value={itDur} onChange={(e) => setItDur(e.target.value)} />
+                <button type="submit" className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">
+                  Add
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
+
+        {/* Volunteer scheduling */}
+        <section>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Team</h2>
+          <div className="space-y-2">
+            {assignments.map((a) => {
+              const mine = a.profile_id === currentProfileId;
+              return (
+                <div key={a.id} className="rounded-xl border border-ink-100 bg-white p-3">
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-ink-800">{a.position}</p>
+                      <p className="text-xs text-ink-400">{a.assignee?.full_name ?? "Unassigned"}</p>
+                    </div>
+                    <StatusBadge status={a.status} />
+                    {canManage && (
+                      <button onClick={() => removePosition(a.id)} className="text-ink-300 hover:text-brand-500" aria-label="Remove">
+                        <Icon name="x" size={14} />
+                      </button>
+                    )}
+                  </div>
+                  {mine && a.status === "invited" && (
+                    <div className="mt-2 flex gap-2">
+                      <button onClick={() => respond(a, "accepted")} className="flex-1 rounded-lg bg-emerald-500 py-1.5 text-sm font-medium text-white hover:bg-emerald-600">
+                        Accept
+                      </button>
+                      <button onClick={() => respond(a, "declined")} className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200">
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {assignments.length === 0 && (
+              <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-sm text-ink-400">
+                No positions yet.
+              </p>
+            )}
+          </div>
+          {canManage && (
+            <form onSubmit={addPosition} className="mt-3 space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
+              <input className="ah-input" placeholder="Position (e.g. Acoustic Guitar)" value={posName} onChange={(e) => setPosName(e.target.value)} />
+              <div className="flex gap-2">
+                <select className="ah-input" value={posPerson} onChange={(e) => setPosPerson(e.target.value)}>
+                  <option value="">Assign later</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.full_name}
+                    </option>
+                  ))}
+                </select>
+                <button type="submit" className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">
+                  Add
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: Assignment["status"] }) {
+  const style =
+    status === "accepted"
+      ? "bg-emerald-50 text-emerald-700"
+      : status === "declined"
+        ? "bg-ink-100 text-ink-400"
+        : "bg-amber-50 text-amber-700";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${style}`}>
+      {status}
+    </span>
+  );
+}

@@ -36,7 +36,7 @@ export const MODULES: ModuleDef[] = [
   { key: "care", label: "Care", href: "/care", icon: "heart", accent: "#be123c", ready: true, roles: ["Super_Admin", "Staff"] },
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: true },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: false },
-  { key: "services", label: "Services", href: "/services", icon: "music", accent: "#db2777", ready: false },
+  { key: "services", label: "Services", href: "/services", icon: "music", accent: "#db2777", ready: true },
   { key: "it", label: "IT Portal", href: "/it", icon: "wrench", accent: "#4b5563", ready: false },
   { key: "admin", label: "Admin", href: "/admin/departments", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin"] },
 ];

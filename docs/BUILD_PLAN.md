@@ -18,10 +18,10 @@ From B1Admin / ChurchCRM / ecclesiaCRM — build natively (licensing/stack rule)
 - ✅ **Connect Card forms** (`0007`): builder + public `/f/<slug>` guest submission (anon RLS) + responses viewer
 - ⬜ **Custom fields** on people (5A)
 - ✅ **Pastoral-care Kanban** (`0008`): visitation/follow-up board, Super_Admin+Staff only (sensitive)
-- ⬜ **Service Plans + volunteer scheduling** (5D, study B1Admin "Plans")
+- ✅ **Service Plans + volunteer scheduling** (`0009`): running sheet w/ time total + explicit accept/decline
 - ⬜ **Custom fields** on people (5A) · ⬜ **Reporting surface** · ❌ background checks (cut by user)
 
-### ⚠️ Migrations 0007 (forms) + 0008 (care) written, NOT yet applied.
+### ⚠️ Migrations 0007 (forms) + 0008 (care) + 0009 (service plans) written, NOT yet applied.
 
 ---
 
