@@ -28,7 +28,7 @@ export const MODULES: ModuleDef[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: "home", accent: "#d2303b", ready: true },
   { key: "messages", label: "Messages", href: "/messages", icon: "chat", accent: "#2563eb", ready: true },
   { key: "tasks", label: "Tasks", href: "/tasks", icon: "task", accent: "#0891b2", ready: true },
-  { key: "people", label: "People", href: "/people", icon: "users", accent: "#7c3aed", ready: false },
+  { key: "people", label: "People", href: "/people", icon: "users", accent: "#7c3aed", ready: true },
   { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: false, roles: ["Super_Admin", "IT_Admin", "Staff"] },
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: false },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: false },

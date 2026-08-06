@@ -46,12 +46,11 @@ export default async function DashboardPage() {
         />
         <HelpCard />
         <Card
-          href="/dashboard"
+          href="/people"
           accent="#7c3aed"
           icon="users"
           title="People"
-          body="Directory & households"
-          soon
+          body="Church-wide directory"
         />
         <Card
           href="/dashboard"
