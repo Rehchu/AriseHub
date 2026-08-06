@@ -4,12 +4,25 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "AriseHub",
   description: "Arise Church — one app for people, check-in, groups, services & IT.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "AriseHub",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
   themeColor: "#0b0b0c",
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1, // avoid iOS input-focus zoom jump
+  viewportFit: "cover", // extend under the iOS notch / safe areas
 };
 
 export default function RootLayout({

@@ -44,6 +44,25 @@ body {
   font-family: var(--font-display);
 }
 
+/* Safe-area insets for installed PWAs on notched devices (iPhone, etc.). */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-x {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Prevent iOS from zooming when focusing inputs (needs >=16px font). */
+@supports (-webkit-touch-callout: none) {
+  .ah-input {
+    font-size: 16px;
+  }
+}
+
 /* Shared form control — readable in the light canvas (fixes the earlier
    invisible-input problem by pinning a visible border + colors explicitly). */
 .ah-input {

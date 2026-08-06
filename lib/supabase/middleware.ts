@@ -36,6 +36,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/f/") || // public Connect Card submission pages
+    pathname === "/sw.js" ||
+    pathname === "/manifest.webmanifest" ||
     pathname === "/favicon.ico";
 
   if (!user && !isPublic) {

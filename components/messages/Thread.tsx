@@ -142,10 +142,18 @@ export function Thread({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2.5 border-b border-ink-100 bg-white px-5 py-3">
-        <Icon name={kind === "department" ? "group" : "chat"} className="text-ink-400" />
-        <h2 className="font-display font-bold text-ink-900">{title}</h2>
+    <div className="flex h-full w-full min-w-0 flex-col">
+      <header className="flex items-center gap-2.5 border-b border-ink-100 bg-white px-4 py-3 sm:px-5">
+        {/* Back to the channel list — only needed in the single-pane mobile view */}
+        <a
+          href="/messages"
+          className="-ml-1 shrink-0 rounded-lg p-1 text-ink-500 hover:bg-ink-50 lg:hidden"
+          aria-label="Back to conversations"
+        >
+          ←
+        </a>
+        <Icon name={kind === "department" ? "group" : "chat"} className="hidden shrink-0 text-ink-400 sm:block" />
+        <h2 className="truncate font-display font-bold text-ink-900">{title}</h2>
       </header>
 
       <div className="flex-1 space-y-1 overflow-y-auto bg-ink-50 px-4 py-4">
@@ -195,9 +203,9 @@ export function Thread({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={send} className="flex items-end gap-2 border-t border-ink-100 bg-white px-4 py-3">
+      <form onSubmit={send} className="flex items-end gap-2 border-t border-ink-100 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <textarea
-          className="ah-input max-h-32 min-h-0 resize-none py-2"
+          className="ah-input max-h-32 min-h-0 w-full flex-1 resize-none py-2"
           rows={1}
           placeholder={`Message ${title}`}
           value={body}

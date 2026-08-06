@@ -75,7 +75,7 @@ export function ChannelList({
 
   return (
     <>
-      <aside className="flex w-72 shrink-0 flex-col border-r border-ink-100 bg-white">
+      <aside className="flex w-full flex-col border-r border-ink-100 bg-white">
         <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
           <h2 className="font-display font-bold text-ink-900">Messages</h2>
           <button

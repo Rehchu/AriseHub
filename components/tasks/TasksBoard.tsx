@@ -279,6 +279,19 @@ function NewTask({
       return;
     }
     onCreated(data as TaskRow);
+    // Notify the assignee (if it's someone else) via Web Push — fire-and-forget.
+    if (target.kind === "person" && target.id !== currentProfileId) {
+      fetch("/api/push/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileId: target.id,
+          title: "New task assigned",
+          body: title.trim(),
+          url: "/tasks",
+        }),
+      }).catch(() => {});
+    }
     onClose();
   }
 

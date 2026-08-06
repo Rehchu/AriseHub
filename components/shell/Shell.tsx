@@ -9,6 +9,9 @@ import type { Profile } from "@/lib/database.types";
 import { Logo } from "@/components/Logo";
 import { Icon } from "./Icon";
 import { GetITHelp } from "./GetITHelp";
+import { RegisterServiceWorker } from "@/components/pwa/RegisterServiceWorker";
+import { NotificationToggle } from "@/components/pwa/NotificationToggle";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
 export function Shell({
   profile,
@@ -65,7 +68,8 @@ export function Shell({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-ink-50">
+    <div className="flex h-[100dvh] overflow-hidden bg-ink-50">
+      <RegisterServiceWorker />
       {/* Desktop sidebar */}
       <aside className="hidden w-64 shrink-0 flex-col bg-ink-900 py-5 lg:flex">
         <div className="mb-6 flex items-center gap-2.5 px-5 text-white">
@@ -75,7 +79,7 @@ export function Shell({
           </span>
         </div>
         {nav}
-        <SidebarFooter name={displayName} role={profile?.role} onSignOut={signOut} />
+        <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} onSignOut={signOut} />
       </aside>
 
       {/* Mobile drawer */}
@@ -85,7 +89,7 @@ export function Shell({
             className="absolute inset-0 bg-black/50"
             onClick={() => setDrawerOpen(false)}
           />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-ink-900 py-5">
+          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-ink-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
             <div className="mb-6 flex items-center justify-between px-5 text-white">
               <span className="flex items-center gap-2.5">
                 <Logo size={28} />
@@ -96,14 +100,14 @@ export function Shell({
               </button>
             </div>
             {nav}
-            <SidebarFooter name={displayName} role={profile?.role} onSignOut={signOut} />
+            <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} onSignOut={signOut} />
           </aside>
         </div>
       )}
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-3 border-b border-ink-100 bg-white px-4">
+        <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-ink-100 bg-white px-4 pt-safe safe-x">
           <button
             onClick={() => setDrawerOpen(true)}
             className="text-ink-600 lg:hidden"
@@ -131,6 +135,7 @@ export function Shell({
       {helpOpen && (
         <GetITHelp profile={profile} email={email} onClose={() => setHelpOpen(false)} />
       )}
+      <InstallPrompt />
     </div>
   );
 }
@@ -138,10 +143,12 @@ export function Shell({
 function SidebarFooter({
   name,
   role,
+  profileId,
   onSignOut,
 }: {
   name: string;
   role?: string;
+  profileId?: string;
   onSignOut: () => void;
 }) {
   return (
@@ -150,6 +157,7 @@ function SidebarFooter({
         <p className="truncate text-sm font-medium text-white">{name}</p>
         <p className="text-xs text-ink-400">{role?.replace("_", " ") ?? "Member"}</p>
       </div>
+      {profileId && <NotificationToggle profileId={profileId} />}
       <button
         onClick={onSignOut}
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
