@@ -38,8 +38,12 @@ export default async function AppLayout({
     isIT = !!itMember;
   }
 
+  // Pastoral care is Super_Admin + explicit grants; hide the nav item
+  // for everyone else rather than letting them hit a redirect.
+  const { data: canCare } = await supabase.rpc("is_pastoral");
+
   return (
-    <Shell profile={p ?? null} email={user.email ?? ""} isIT={isIT}>
+    <Shell profile={p ?? null} email={user.email ?? ""} isIT={isIT} canCare={!!canCare}>
       {children}
     </Shell>
   );

@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { users, sessions } from "../db/schema";
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from "../lib/crypto";
 import { signJwt } from "../lib/jwt";
+import { verifySupabaseJwt } from "../lib/supabase-auth";
 import { requireAuth, SESSION_COOKIE } from "../lib/auth-middleware";
 import { logAudit } from "../lib/audit";
 import type { Env, Variables } from "../types";
@@ -50,6 +51,63 @@ auth.post("/login", async (c) => {
       email: user.email,
       role: user.role,
       campusId: user.campusId,
+      mustChangePassword: user.mustChangePassword,
+    },
+  });
+});
+
+/**
+ * Single sign-on from AriseHub.
+ *
+ * The API accepts Supabase tokens (see lib/auth-middleware), but the portal
+ * FRONTEND is a separate SPA that relies on the church_session cookie — so
+ * arriving with a Supabase token alone still bounced to /login. This exchanges
+ * a verified AriseHub session for a normal portal session cookie.
+ *
+ * Identity is mapped by email to an ACTIVE local user: an AriseHub account with
+ * no IT account gets nothing here. IT permissions stay owned by this database.
+ */
+auth.post("/sso", async (c) => {
+  const header = c.req.header("Authorization");
+  if (!header?.startsWith("Bearer ") || !c.env.SUPABASE_URL) {
+    return c.json({ error: "AriseHub session required" }, 401);
+  }
+  const payload = await verifySupabaseJwt(header.slice(7).trim(), c.env.SUPABASE_URL);
+  if (!payload?.email) return c.json({ error: "Invalid or expired AriseHub session" }, 401);
+
+  const db = drizzle(c.env.DB);
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, payload.email.toLowerCase()))
+    .limit(1);
+  if (!user || !user.active) {
+    return c.json({ error: "No active IT account for this AriseHub user" }, 403);
+  }
+
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const token = await signJwt(
+    { sub: user.id, role: user.role, campusId: user.campusId, exp: Math.floor(expiresAt.getTime() / 1000) },
+    c.env.JWT_SECRET
+  );
+  const tokenHash = await sha256Hex(token);
+  await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
+
+  setCookie(c, SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "None",
+    path: "/",
+    maxAge: SESSION_DAYS * 24 * 60 * 60,
+  });
+
+  await logAudit(c.env, { userId: user.id, action: "sso_login", entityType: "user", entityId: user.id });
+
+  return c.json({
+    user: {
+      id: user.id, name: user.name, email: user.email,
+      role: user.role, campusId: user.campusId,
       mustChangePassword: user.mustChangePassword,
     },
   });

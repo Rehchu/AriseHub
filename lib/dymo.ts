@@ -113,7 +113,7 @@ export async function printViaServer(
     const res = await fetch(`${serverUrl.replace(/\/$/, "")}/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tag: d, options: o }),
+      body: JSON.stringify({ labelXml: buildTextLabelXml(d, o) }),
     });
     return res.ok;
   } catch {
@@ -141,11 +141,49 @@ export async function printImageViaDymo(
     const printer = printerName || fw.getPrinters()[0]?.name;
     if (!printer) return false;
 
-    const base64 = pngDataUrl.replace(/^data:image\/png;base64,/, "");
-    // DYMO uses twips (1/1440 in) for bounds.
-    const w = Math.round(widthIn * 1440);
-    const h = Math.round(heightIn * 1440);
-    const xml = `<?xml version="1.0" encoding="utf-8"?>
+    const xml = buildImageLabelXml(pngDataUrl, widthIn, heightIn);
+    const label = fw.openLabelXml(xml);
+    fw.printLabel(printer, "", label.getLabelXml(), "");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Legacy text-layout label, with values substituted in directly.
+ *
+ * The on-machine path fills fields through the SDK (setObjectText); the agent
+ * receives finished XML, so the text is inlined here instead.
+ */
+export function buildTextLabelXml(d: NameTagData, o: NameTagOptions): string {
+  const esc = (v: string) =>
+    v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const header = o.churchName ?? "";
+  const meta = [o.showRoom ? d.room : "", o.showDate ? new Date().toLocaleDateString() : ""]
+    .filter(Boolean)
+    .join("  ");
+  return labelXml(o, "child")
+    .replace(/>Header</g, ">" + esc(header) + "<")
+    .replace(/>ChildName</g, ">" + esc(d.name) + "<")
+    .replace(/>Meta</g, ">" + esc(meta) + "<")
+    .replace(/>Code</g, ">" + esc(o.showCode ? d.code : "") + "<");
+}
+
+/**
+ * Build DYMO label XML wrapping a rendered PNG as a full-bleed image.
+ * Shared by the direct (DYMO Connect on this machine) and agent paths.
+ */
+export function buildImageLabelXml(
+  pngDataUrl: string,
+  widthIn: number,
+  heightIn: number,
+): string {
+  const base64 = pngDataUrl.replace(/^data:image\/png;base64,/, "");
+  // DYMO uses twips (1/1440 in) for bounds.
+  const w = Math.round(widthIn * 1440);
+  const h = Math.round(heightIn * 1440);
+  return `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>Landscape</PaperOrientation>
   <Id>Address</Id>
@@ -171,10 +209,30 @@ export async function printImageViaDymo(
     <Bounds X="0" Y="0" Width="${w}" Height="${h}" />
   </ObjectInfo>
 </DieCutLabel>`;
+}
 
-    const label = fw.openLabelXml(xml);
-    fw.printLabel(printer, "", label.getLabelXml(), "");
-    return true;
+/**
+ * Print a rendered design through the shared desktop print agent.
+ * This is the iPad path: tablets can't reach DYMO Connect, so they post the
+ * label to an agent running on a desktop beside the printer.
+ */
+export async function printImageViaServer(
+  pngDataUrl: string,
+  widthIn: number,
+  heightIn: number,
+  serverUrl: string,
+  printerName?: string,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`${serverUrl.replace(/\/$/, "")}/print`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        labelXml: buildImageLabelXml(pngDataUrl, widthIn, heightIn),
+        printerName,
+      }),
+    });
+    return res.ok;
   } catch {
     return false;
   }

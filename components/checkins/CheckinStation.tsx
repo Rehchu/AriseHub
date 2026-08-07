@@ -15,6 +15,7 @@ import {
   printViaDymo,
   printViaServer,
   printImageViaDymo,
+  printImageViaServer,
   printImageViaBrowser,
   type DymoStatus,
 } from "@/lib/dymo";
@@ -164,8 +165,12 @@ export function CheckinStation({
           church: tagOpts.churchName,
           hasAllergy: d.hasAllergy,
         });
-        const ok = await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined);
-        if (!ok) printImageViaBrowser(png, tpl.width_in, tpl.height_in);
+        // DYMO Connect here → shared print agent (iPads) → browser dialog.
+        if (await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined)) continue;
+        const agent = localStorage.getItem("ah-print-server");
+        if (agent && (await printImageViaServer(png, tpl.width_in, tpl.height_in, agent, printer || undefined)))
+          continue;
+        printImageViaBrowser(png, tpl.width_in, tpl.height_in);
       }
       return;
     }

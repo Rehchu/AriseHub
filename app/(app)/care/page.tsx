@@ -13,9 +13,10 @@ export default async function CarePage() {
     .eq("user_id", user!.id)
     .single();
 
-  const role = (profile as { role?: string } | null)?.role;
-  // Belt-and-suspenders with the RLS: keep non-pastoral roles out of the page.
-  if (role !== "Super_Admin" && role !== "Staff") redirect("/dashboard");
+  // Care access is Super_Admin plus anyone they've explicitly granted —
+  // is_pastoral() is the single source of truth, matching the RLS.
+  const { data: allowed } = await supabase.rpc("is_pastoral");
+  if (!allowed) redirect("/dashboard");
 
   const profileId = (profile as { id: string }).id;
 

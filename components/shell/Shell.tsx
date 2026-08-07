@@ -12,6 +12,7 @@ import { GetITHelp } from "./GetITHelp";
 import { RegisterServiceWorker } from "@/components/pwa/RegisterServiceWorker";
 import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { ITPortalLink } from "./ITPortalLink";
 
 const IT_PORTAL =
   process.env.NEXT_PUBLIC_IT_PORTAL_URL ?? "https://itportal.myfaithtech.com";
@@ -20,11 +21,13 @@ export function Shell({
   profile,
   email,
   isIT = false,
+  canCare = false,
   children,
 }: {
   profile: Profile | null;
   email: string;
   isIT?: boolean;
+  canCare?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -33,7 +36,10 @@ export function Shell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const modules = visibleModules(profile?.role);
+  // Care is grant-based, not role-based, so filter it separately.
+  const modules = visibleModules(profile?.role).filter(
+    (m) => m.key !== "care" || canCare,
+  );
   const displayName = profile?.full_name || email;
 
   async function signOut() {
@@ -49,20 +55,7 @@ export function Shell({
           pathname === m.href || pathname.startsWith(m.href + "/");
         // IT staff jump straight into the portal instead of the self-help page.
         if (m.key === "it" && isIT) {
-          return (
-            <a
-              key={m.key}
-              href={IT_PORTAL}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => setDrawerOpen(false)}
-              className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
-            >
-              <Icon name={m.icon} />
-              <span className="flex-1">IT Portal</span>
-              <span className="text-[10px] text-ink-400">↗</span>
-            </a>
-          );
+          return <ITPortalLink key={m.key} onNavigate={() => setDrawerOpen(false)} />;
         }
         return (
           <Link
