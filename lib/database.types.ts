@@ -19,6 +19,11 @@ export interface Profile {
   role: UserRole;
   /** Ministry title (Apostle, Pastor, Elder…). Display only — never permissions. */
   title: string | null;
+  bio: string | null;
+  birthday: string | null;
+  address: string | null;
+  emergency_contact: string | null;
+  emergency_phone: string | null;
   campus_id: string | null;
   is_checkin_lead: boolean;
   archived_at: string | null;

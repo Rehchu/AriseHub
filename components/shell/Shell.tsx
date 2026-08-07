@@ -177,6 +177,13 @@ function SidebarFooter({
         <p className="text-xs text-ink-400">{role?.replace("_", " ") ?? "Member"}</p>
       </div>
       <a
+        href="/account/profile"
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+      >
+        <Icon name="badge" />
+        My profile
+      </a>
+      <a
         href="/account/notifications"
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
       >

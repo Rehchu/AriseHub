@@ -8,7 +8,6 @@ import { Icon } from "@/components/shell/Icon";
 export interface RoomRow {
   id: string;
   name: string;
-  description: string | null;
   campus_id: string | null;
   capacity: number | null;
   min_age: number | null;
@@ -60,7 +59,7 @@ export function RoomsAdmin({
         capacity: capacity === "" ? null : Number(capacity),
         active: true,
       })
-      .select("id, name, description, campus_id, capacity, min_age, max_age, active")
+      .select("id, name, campus_id, capacity, min_age, max_age, active")
       .single();
     setBusy(false);
     if (error) return setError(error.message);

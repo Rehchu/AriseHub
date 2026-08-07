@@ -20,7 +20,7 @@ export default async function RoomsAdminPage() {
   const [{ data: rooms }, { data: campuses }] = await Promise.all([
     supabase
       .from("rooms")
-      .select("id, name, description, campus_id, capacity, min_age, max_age, active")
+      .select("id, name, campus_id, capacity, min_age, max_age, active")
       .order("name"),
     supabase.from("campuses").select("id, name").order("name"),
   ]);

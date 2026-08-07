@@ -32,6 +32,36 @@ export async function POST(req: NextRequest) {
   };
   if (!profileId) return NextResponse.json({ error: "profileId required" }, { status: 400 });
 
+  // A push lands on someone's lock screen with whatever title we're handed, so
+  // "any signed-in user may notify anyone" is an impersonation channel. You may
+  // always notify yourself (the test button); notifying someone else is for the
+  // people who legitimately assign work: leadership, IT, staff, department leads.
+  const { data: meRow } = await supabase
+    .from("profiles")
+    .select("id, role")
+    .eq("user_id", user.id)
+    .single();
+  const me = meRow as { id: string; role: string } | null;
+  if (!me) return NextResponse.json({ error: "no profile" }, { status: 403 });
+
+  if (me.id !== profileId) {
+    const privileged = ["Super_Admin", "IT_Admin", "Staff"].includes(me.role);
+    let allowed = privileged;
+    if (!allowed) {
+      const { data: lead } = await supabase.rpc("is_any_department_lead");
+      allowed = lead === true;
+    }
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "You can only send notifications to yourself." },
+        { status: 403 },
+      );
+    }
+  }
+
+  // Never let a caller point a notification at another site.
+  const safeUrl = typeof url === "string" && /^\/(?!\/)/.test(url) ? url : "/dashboard";
+
   const admin = createAdminClient();
   const { data: subs, error } = await admin
     .from("push_subscriptions")
@@ -52,7 +82,7 @@ export async function POST(req: NextRequest) {
   const payload = JSON.stringify({
     title: title || "AriseHub",
     body: body || "You have a new notification.",
-    url: url || "/dashboard",
+    url: safeUrl,
   });
 
   let sent = 0;
