@@ -1,0 +1,74 @@
+# Deploy on push to main.
+#
+# Removes the "wait for someone at a laptop" bottleneck: merge to main and both
+# Workers ship. Needs two repository secrets:
+#
+#   CLOUDFLARE_API_TOKEN  — Cloudflare → My Profile → API Tokens →
+#                           "Edit Cloudflare Workers" template
+#   CLOUDFLARE_ACCOUNT_ID — f8622d4d3948b292b1069375575aa39a
+#
+# Plus the build-time public values (see the env block below). Server secrets
+# (service-role key, VAPID private key, Resend, SSO/CRON secrets) are NOT here —
+# they live in Worker secrets and are never needed to build.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  arisehub:
+    name: AriseHub
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Typecheck before shipping — a broken build should fail here, not live.
+      - run: npx tsc --noEmit
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          NEXT_PUBLIC_IT_PORTAL_URL: https://itportal.myfaithtech.com
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+        run: npx opennextjs-cloudflare build
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  it-portal:
+    name: IT portal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+        working-directory: arise-it-portal/worker
+      - run: npm ci
+        working-directory: arise-it-portal/frontend
+
+      - run: npx tsc --noEmit
+        working-directory: arise-it-portal/worker
+
+      - run: npm run build
+        working-directory: arise-it-portal/frontend
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: arise-it-portal/worker

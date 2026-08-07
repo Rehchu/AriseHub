@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile } from "@/components/Turnstile";
 
 export interface PublicField {
   id: string;
@@ -26,6 +27,7 @@ export function PublicForm({
   const supabase = createClient();
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   const [busy, setBusy] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,6 +137,8 @@ export function PublicForm({
       {fields.length === 0 && (
         <p className="text-sm text-ink-400">This form has no questions yet.</p>
       )}
+
+      <Turnstile onToken={setTurnstileToken} />
 
       {error && (
         <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>

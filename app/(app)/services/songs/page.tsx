@@ -12,7 +12,10 @@ export default async function SongsPage() {
     .eq("user_id", user!.id)
     .single();
   const role = (profile as { role?: string } | null)?.role;
-  const canManage = role === "Super_Admin" || role === "Staff";
+  // Department leads maintain the library too — the Praise Team leader is the
+  // person who actually builds the song list, and they are rarely Staff.
+  const { data: isLead } = await supabase.rpc("is_any_department_lead");
+  const canManage = role === "Super_Admin" || role === "Staff" || !!isLead;
 
   const { data: songs } = await supabase
     .from("songs")

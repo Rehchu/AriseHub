@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { occurrenceDates, REPEAT_LABELS, type RepeatRule } from "@/lib/recurrence";
 
 export interface RoomOpt {
   id: string;
@@ -300,6 +301,8 @@ function NewEvent({
   const [end, setEnd] = useState("20:00");
   const [setup, setSetup] = useState("0");
   const [teardown, setTeardown] = useState("0");
+  const [repeat, setRepeat] = useState<RepeatRule>("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -349,6 +352,8 @@ function NewEvent({
         setup_minutes: Number(setup) || 0,
         teardown_minutes: Number(teardown) || 0,
         requested_by: currentProfileId,
+        repeat_rule: repeat,
+        repeat_until: repeat === "none" || !repeatUntil ? null : repeatUntil,
         // Staff booking directly get an approved event (subject to the conflict
         // trigger); everyone else submits a request for approval.
         status: canApprove ? "approved" : "pending",
@@ -360,6 +365,46 @@ function NewEvent({
       setError(error.message);
       return;
     }
+    // Materialise the series as real events, so room-conflict checking,
+    // approval and editing all behave exactly like a one-off. Each occurrence
+    // is inserted separately: if one clashes with an existing booking the
+    // trigger rejects just that date rather than the whole series.
+    const parent = data as EventRow;
+    if (repeat !== "none" && repeatUntil) {
+      const until = new Date(repeatUntil + "T23:59:59");
+      const dates = occurrenceDates(new Date(starts_at), repeat, until);
+      const spanMs = new Date(ends_at).getTime() - new Date(starts_at).getTime();
+      const clashes: string[] = [];
+      for (const d of dates) {
+        const { error: occErr } = await supabase.from("events").insert({
+          title: title.trim(),
+          description: description.trim() || null,
+          event_type_id: typeId || null,
+          room_id: roomId || null,
+          starts_at: d.toISOString(),
+          ends_at: new Date(d.getTime() + spanMs).toISOString(),
+          all_day: allDay,
+          featured,
+          setup_minutes: Number(setup) || 0,
+          teardown_minutes: Number(teardown) || 0,
+          requested_by: currentProfileId,
+          status: canApprove ? "approved" : "pending",
+          repeat_rule: "none",
+          repeat_parent_id: parent.id,
+        });
+        if (occErr) clashes.push(d.toLocaleDateString());
+      }
+      if (clashes.length) {
+        // Don't fail silently — the room was already booked on these dates.
+        window.alert(
+          `Created the series, but these dates were skipped because the room was already booked:\n\n${clashes.join(", ")}`,
+        );
+      }
+      // Simplest correct refresh — the grid now holds many new rows.
+      window.location.reload();
+      return;
+    }
+
     const room = rooms.find((r) => r.id === roomId);
     const t = types.find((x) => x.id === typeId);
     onCreated({
@@ -481,6 +526,40 @@ function NewEvent({
         </div>
 
         {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
+        <div className="rounded-lg bg-ink-50 p-2.5">
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-medium text-ink-500">Repeats</span>
+            <select
+              className="ah-input"
+              value={repeat}
+              onChange={(e) => setRepeat(e.target.value as RepeatRule)}
+            >
+              {(Object.keys(REPEAT_LABELS) as RepeatRule[]).map((r) => (
+                <option key={r} value={r}>
+                  {REPEAT_LABELS[r]}
+                </option>
+              ))}
+            </select>
+          </label>
+          {repeat !== "none" && (
+            <label className="mt-2 block text-sm">
+              <span className="mb-1 block text-xs font-medium text-ink-500">Repeat until</span>
+              <input
+                type="date"
+                className="ah-input"
+                value={repeatUntil}
+                min={date}
+                onChange={(e) => setRepeatUntil(e.target.value)}
+                required
+              />
+              <span className="mt-1 block text-xs text-ink-400">
+                Each date is created as its own event, so you can edit or cancel one
+                without touching the rest.
+              </span>
+            </label>
+          )}
+        </div>
+
 
         <button type="submit" disabled={busy} className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-60">
           {busy ? "Saving…" : canApprove ? "Create event" : "Submit request"}

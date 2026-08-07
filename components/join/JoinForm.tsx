@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Turnstile } from "@/components/Turnstile";
 
 /**
  * Self-registration via an invite link. Creation happens server-side
@@ -25,6 +26,7 @@ export function JoinForm({
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
@@ -39,7 +41,7 @@ export function JoinForm({
     const res = await fetch("/api/join", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, email, password, fullName }),
+      body: JSON.stringify({ code, email, password, fullName, turnstileToken }),
     });
     const j = (await res.json().catch(() => ({}))) as { error?: string };
 
@@ -121,6 +123,8 @@ export function JoinForm({
           autoComplete="new-password"
         />
       </label>
+
+      <Turnstile onToken={setTurnstileToken} />
 
       {error && (
         <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>

@@ -76,6 +76,9 @@ export function PlanDetail({
 
   const [posName, setPosName] = useState("");
   const [posPerson, setPosPerson] = useState("");
+  const [dupDate, setDupDate] = useState("");
+  const [dupPeople, setDupPeople] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
 
   const planDate = new Date(plan.service_date + "T00:00:00");
 
@@ -157,6 +160,64 @@ export function PlanDetail({
   async function removePosition(id: string) {
     setAssignments((a) => a.filter((x) => x.id !== id));
     await supabase.from("plan_assignments").delete().eq("id", id);
+  }
+
+  /**
+   * Copy this plan to another date.
+   *
+   * The running order always carries over — that's the point. Whether the
+   * PEOPLE carry over is a choice: a rota often repeats, but assuming it
+   * silently would schedule someone without asking, so positions copy across
+   * as 'invited' and they still have to accept.
+   */
+  async function duplicate() {
+    if (!dupDate) return;
+    setDuplicating(true);
+
+    const { data: newPlan, error } = await supabase
+      .from("service_plans")
+      .insert({
+        title: plan.title,
+        service_date: dupDate,
+        notes: plan.notes,
+        created_by: currentProfileId,
+      })
+      .select("id")
+      .single();
+
+    if (error || !newPlan) {
+      setDuplicating(false);
+      window.alert(error?.message ?? "Could not duplicate this plan.");
+      return;
+    }
+    const newId = (newPlan as { id: string }).id;
+
+    if (items.length) {
+      await supabase.from("plan_items").insert(
+        items.map((i, idx) => ({
+          plan_id: newId,
+          title: i.title,
+          item_type: i.item_type,
+          duration_minutes: i.duration_minutes,
+          notes: i.notes,
+          sort_order: idx,
+        })),
+      );
+    }
+
+    if (assignments.length) {
+      await supabase.from("plan_assignments").insert(
+        assignments.map((a) => ({
+          plan_id: newId,
+          position: a.position,
+          // Keep the position either way; only carry the person if asked.
+          profile_id: dupPeople ? a.profile_id : null,
+          status: "invited",
+        })),
+      );
+    }
+
+    window.location.href = "/services/" + newId;
   }
 
   async function respond(a: Assignment, status: "accepted" | "declined") {
@@ -251,6 +312,40 @@ export function PlanDetail({
             </form>
           )}
         </section>
+
+          {canManage && (
+            <div className="mt-4 rounded-xl border border-ink-100 bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+                Reuse this plan
+              </p>
+              <p className="mt-1 text-xs text-ink-500">
+                Copies the whole running order to another date.
+              </p>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <input
+                  type="date"
+                  className="ah-input w-auto"
+                  value={dupDate}
+                  onChange={(e) => setDupDate(e.target.value)}
+                />
+                <button
+                  onClick={duplicate}
+                  disabled={!dupDate || duplicating}
+                  className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {duplicating ? "Copying…" : "Duplicate"}
+                </button>
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-sm text-ink-700">
+                <input
+                  type="checkbox"
+                  checked={dupPeople}
+                  onChange={(e) => setDupPeople(e.target.checked)}
+                />
+                Keep the same people (they&apos;ll still need to accept)
+              </label>
+            </div>
+          )}
 
         {/* Volunteer scheduling */}
         <section>

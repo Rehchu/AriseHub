@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 // Self-registration through a shared invite link.
 //
@@ -9,12 +10,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // departments the link specifies. Someone who hasn't been given a link cannot
 // register at all.
 export async function POST(req: NextRequest) {
-  const { code, email, password, fullName } = (await req.json()) as {
+  const { code, email, password, fullName, turnstileToken } = (await req.json()) as {
     code?: string;
     email?: string;
     password?: string;
     fullName?: string;
+    turnstileToken?: string;
   };
+
+  // Bot check before we touch the database. Fails open when unconfigured.
+  const bot = await verifyTurnstile(
+    turnstileToken,
+    req.headers.get("cf-connecting-ip"),
+  );
+  if (!bot.ok) {
+    return NextResponse.json({ error: bot.error ?? "Verification failed." }, { status: 400 });
+  }
 
   const cleanEmail = (email ?? "").trim().toLowerCase();
   const cleanName = (fullName ?? "").trim();
