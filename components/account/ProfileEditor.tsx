@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { useSignedUrl } from "@/lib/storage-url";
 
 export interface MyProfile {
   id: string;
@@ -43,6 +44,7 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
     emergency_phone: profile.emergency_phone ?? "",
   });
   const [photo, setPhoto] = useState(profile.photo_url);
+  const photoSrc = useSignedUrl("attachments", photo);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,14 +100,14 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
       setBusy(false);
       return setError(up.error.message);
     }
-    const { data } = supabase.storage.from("attachments").getPublicUrl(path);
+    // Private bucket — store the path and sign it for display.
     const { error } = await supabase
       .from("profiles")
-      .update({ photo_url: data.publicUrl })
+      .update({ photo_url: path })
       .eq("id", profile.id);
     setBusy(false);
     if (error) return setError(error.message);
-    setPhoto(data.publicUrl);
+    setPhoto(path);
   }
 
   const initials = profile.full_name
@@ -123,9 +125,9 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
       </p>
 
       <div className="mt-6 flex items-center gap-4 rounded-xl border border-ink-100 bg-white p-4">
-        {photo ? (
+        {photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={photo} alt="" className="h-16 w-16 rounded-full object-cover" />
+          <img src={photoSrc} alt="" className="h-16 w-16 rounded-full object-cover" />
         ) : (
           <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700">
             {initials}

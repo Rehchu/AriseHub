@@ -4,10 +4,12 @@
 // child-safety control at pickup: staff can match face to tag rather than
 // relying on a code alone.
 //
-// Requires a Storage bucket named `photos`. Create it once in the Supabase
-// dashboard (Storage → New bucket → name: photos → Public).
+// Requires a PRIVATE Storage bucket named `photos`. Photos of children are
+// never world-readable; display goes through a short-lived signed URL
+// (lib/storage-url.ts).
 
 import { createClient } from "@/lib/supabase/client";
+import { signedUrl } from "@/lib/storage-url";
 
 const BUCKET = "photos";
 
@@ -37,7 +39,7 @@ export interface UploadedPhoto {
   path: string;
 }
 
-/** Upload a person's photo. Returns the public URL and storage path. */
+/** Upload a person's photo. Returns a signed display URL and the storage path. */
 export async function uploadPersonPhoto(
   file: File,
   profileId: string,
@@ -53,12 +55,13 @@ export async function uploadPersonPhoto(
     if (error) {
       return {
         error: /bucket/i.test(error.message)
-          ? "Photo storage isn't set up yet — create a public bucket named 'photos' in Supabase."
+          ? "Photo storage isn't set up yet — create a private bucket named 'photos' in Supabase."
           : error.message,
       };
     }
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return { url: data.publicUrl, path };
+    // Signed, not public: the bucket holds photos of children.
+    const url = await signedUrl(BUCKET, path);
+    return { url: url ?? path, path };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not upload the photo." };
   }

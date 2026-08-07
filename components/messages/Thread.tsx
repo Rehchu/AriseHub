@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Message } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 import { notifyMany, preview } from "@/lib/notify";
+import { SignedAttachment } from "./SignedAttachment";
 import { compressImage } from "@/lib/photos";
 
 interface Row extends Message {
@@ -129,15 +130,16 @@ export function Thread({
           upsert: true,
         });
         if (error) throw error;
-        const { data } = supabase.storage.from("attachments").getPublicUrl(path);
-        attachment = { url: data.publicUrl, type: file.type || "file", name: file.name };
+        // Store the object path. The bucket is private, so the URL used to
+        // display it is signed on demand and expires.
+        attachment = { url: path, type: file.type || "file", name: file.name };
       } catch (err) {
         setSending(false);
         setBody(text);
         const msg = err instanceof Error ? err.message : "Upload failed";
         setUploadError(
           /bucket/i.test(msg)
-            ? "File sharing isn't set up yet — create a public bucket named 'attachments' in Supabase."
+            ? "File sharing isn't set up yet — create a private bucket named 'attachments' in Supabase."
             : msg,
         );
         return;
@@ -241,27 +243,13 @@ export function Thread({
                     <span className="italic opacity-60">message deleted</span>
                   ) : (
                     <>
-                      {m.attachment_url &&
-                        (m.attachment_type?.startsWith("image/") ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
-                            <img
-                              src={m.attachment_url}
-                              alt={m.attachment_name ?? "attachment"}
-                              className="mb-1 max-h-64 rounded-lg object-cover"
-                            />
-                          </a>
-                        ) : (
-                          <a
-                            href={m.attachment_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 px-2 py-1.5 text-xs underline"
-                          >
-                            <Icon name="form" size={14} />
-                            {m.attachment_name ?? "Attachment"}
-                          </a>
-                        ))}
+                      {m.attachment_url && (
+                        <SignedAttachment
+                          pathOrUrl={m.attachment_url}
+                          type={m.attachment_type}
+                          name={m.attachment_name}
+                        />
+                      )}
                       {m.body && (
                         <span className="whitespace-pre-wrap break-words">{m.body}</span>
                       )}
