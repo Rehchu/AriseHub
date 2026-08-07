@@ -1,0 +1,16 @@
+# Tiny scheduler for AriseHub.
+#
+# Cloudflare Cron fires a Worker's `scheduled` handler, which OpenNext's
+# generated worker doesn't expose. Rather than patch a generated file on every
+# build, this separate Worker just calls AriseHub's cron endpoints on schedule.
+# It also means changing the schedule doesn't require rebuilding the whole app.
+name = "arisehub-cron"
+main = "index.js"
+compatibility_date = "2025-03-25"
+
+[triggers]
+# UTC. 23:00 = 5pm CST / 6pm CDT (evening before). 13:00 Sat = 7am CST.
+crons = ["0 23 * * *", "0 13 * * 6"]
+
+[vars]
+APP_URL = "https://arisehub.myfaithtech.com"

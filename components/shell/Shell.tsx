@@ -176,7 +176,13 @@ function SidebarFooter({
         <p className="truncate text-sm font-medium text-white">{name}</p>
         <p className="text-xs text-ink-400">{role?.replace("_", " ") ?? "Member"}</p>
       </div>
-      {profileId && <NotificationToggle profileId={profileId} />}
+      <a
+        href="/account/notifications"
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+      >
+        <Icon name="help" />
+        Notifications
+      </a>
       <button
         onClick={onSignOut}
         className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"

@@ -13,6 +13,7 @@ export type ModuleKey =
   | "messages"
   | "tasks"
   | "it"
+  | "ideas"
   | "admin";
 
 export interface ModuleDef {
@@ -43,6 +44,7 @@ export const MODULES: ModuleDef[] = [
   // IT: the IT team goes straight to the portal (Shell rewrites the href);
   // everyone else lands on a self-service help page.
   { key: "it", label: "IT Support", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
+  { key: "ideas", label: "Ideas", href: "/ideas", icon: "chart", accent: "#7c3aed", ready: true },
   { key: "admin", label: "Admin", href: "/admin/departments", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin"] },
 ];
 
