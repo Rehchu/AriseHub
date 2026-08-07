@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { notify } from "@/lib/notify";
 
 export interface CareItem {
   id: string;
@@ -68,6 +69,9 @@ export function CareBoard({
       ),
     );
     await supabase.from("care_items").update({ assigned_to: profileId || null }).eq("id", item.id);
+    if (profileId && profileId !== currentProfileId) {
+      notify(profileId, "Care item assigned to you", item.title, "/care");
+    }
   }
 
   function addLocal(it: CareItem) {

@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Logo } from "@/components/Logo";
 
+// AriseHub is invite-only: accounts are created by an admin (Admin → People →
+// Invite someone). Flip this to true only if public self-signup is re-enabled
+// in Supabase Auth as well — hiding the tab alone would not be a control.
+const ALLOW_SIGNUP = false;
+
 export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -64,6 +69,7 @@ export default function LoginPage() {
           onSubmit={submit}
           className="space-y-4 rounded-2xl bg-white p-6 shadow-xl"
         >
+          {ALLOW_SIGNUP && (
           <div className="flex rounded-lg bg-ink-100 p-1 text-sm font-medium">
             <button
               type="button"
@@ -84,6 +90,7 @@ export default function LoginPage() {
               Create account
             </button>
           </div>
+          )}
 
           {mode === "signup" && (
             <Field label="Full name">

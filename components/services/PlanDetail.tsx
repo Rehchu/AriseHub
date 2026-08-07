@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { notify } from "@/lib/notify";
 import {
   availabilityFor,
   type Blockout,
@@ -133,6 +134,17 @@ export function PlanDetail({
         ? { full_name: people.find((p) => p.id === posPerson)?.full_name ?? "" }
         : null;
       setAssignments((a) => [...a, { ...(data as Assignment), assignee }]);
+      // Tell them they've been scheduled — a scheduler nobody hears from
+      // gets ignored.
+      if (posPerson && posPerson !== currentProfileId) {
+        notify(
+          posPerson,
+          "You've been scheduled",
+          plan.title + " — " + posName.trim() + " on " +
+            planDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }),
+          "/services/" + plan.id,
+        );
+      }
     }
     setPosName("");
     setPosPerson("");

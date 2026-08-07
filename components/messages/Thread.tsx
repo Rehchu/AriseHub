@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Message } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
+import { notifyMany, preview } from "@/lib/notify";
 
 interface Row extends Message {
   senderName: string;
@@ -128,6 +129,22 @@ export function Thread({
     if (data) {
       const m = data as Message;
       const senderName = await nameFor(m.sender_profile_id);
+
+      // Notify the other members of this channel. RLS scopes the read to
+      // channels we belong to, so this can't leak membership elsewhere.
+      const { data: members } = await supabase
+        .from("channel_members")
+        .select("profile_id")
+        .eq("channel_id", channelId);
+      const others = ((members ?? []) as { profile_id: string }[])
+        .map((x) => x.profile_id)
+        .filter((id) => id !== currentProfileId);
+      notifyMany(
+        others,
+        kind === "department" ? title : senderName,
+        (kind === "department" ? senderName + ": " : "") + preview(text),
+        "/messages/" + channelId,
+      );
       setRows((prev) =>
         prev.some((r) => r.id === m.id) ? prev : [...prev, { ...m, senderName }],
       );

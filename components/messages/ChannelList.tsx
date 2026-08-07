@@ -12,6 +12,7 @@ interface ChannelRow {
   id: string;
   type: "department" | "direct";
   label: string;
+  unread: number;
 }
 
 export function ChannelList({
@@ -53,6 +54,37 @@ export function ChannelList({
       }
     }
 
+    // Unread = messages newer than my last_read_at for that channel.
+    const { data: myMemberships } = await supabase
+      .from("channel_members")
+      .select("channel_id, last_read_at")
+      .eq("profile_id", currentProfileId);
+    const lastRead: Record<string, string | null> = {};
+    for (const m of (myMemberships ?? []) as {
+      channel_id: string;
+      last_read_at: string | null;
+    }[]) {
+      lastRead[m.channel_id] = m.last_read_at;
+    }
+
+    const { data: recent } = await supabase
+      .from("messages")
+      .select("channel_id, created_at, sender_profile_id")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    const unreadBy: Record<string, number> = {};
+    for (const m of (recent ?? []) as {
+      channel_id: string;
+      created_at: string;
+      sender_profile_id: string;
+    }[]) {
+      if (m.sender_profile_id === currentProfileId) continue;
+      const lr = lastRead[m.channel_id];
+      if (!lr || m.created_at > lr) {
+        unreadBy[m.channel_id] = (unreadBy[m.channel_id] ?? 0) + 1;
+      }
+    }
+
     setChannels(
       list.map((c) => ({
         id: c.id,
@@ -61,6 +93,7 @@ export function ChannelList({
           c.type === "department"
             ? (c.title ?? "Department")
             : (otherName[c.id] ?? "Direct message"),
+        unread: unreadBy[c.id] ?? 0,
       })),
     );
     setLoading(false);
@@ -69,6 +102,38 @@ export function ChannelList({
   useEffect(() => {
     load();
   }, [load]);
+
+  // Opening a channel marks it read; refresh so its badge clears.
+  useEffect(() => {
+    const m = pathname.match(/^\/messages\/([0-9a-f-]{36})/);
+    if (!m || !currentProfileId) return;
+    const channelId = m[1];
+    supabase
+      .from("channel_members")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("channel_id", channelId)
+      .eq("profile_id", currentProfileId)
+      .then(() => {
+        setChannels((cs) =>
+          cs.map((c) => (c.id === channelId ? { ...c, unread: 0 } : c)),
+        );
+      });
+  }, [pathname, currentProfileId, supabase]);
+
+  // Any new message anywhere refreshes the badges.
+  useEffect(() => {
+    const ch = supabase
+      .channel("unread-watch")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => load(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, [supabase, load]);
 
   const departments = channels.filter((c) => c.type === "department");
   const directs = channels.filter((c) => c.type === "direct");
@@ -139,11 +204,18 @@ function Section({
             className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition ${
               active
                 ? "bg-brand-50 font-medium text-brand-700"
-                : "text-ink-700 hover:bg-ink-50"
+                : c.unread > 0
+                  ? "font-semibold text-ink-900 hover:bg-ink-50"
+                  : "text-ink-700 hover:bg-ink-50"
             }`}
           >
             <Icon name={icon} size={18} className="text-ink-400" />
-            <span className="truncate">{c.label}</span>
+            <span className="flex-1 truncate">{c.label}</span>
+            {c.unread > 0 && (
+              <span className="ml-auto shrink-0 rounded-full bg-brand-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                {c.unread > 99 ? "99+" : c.unread}
+              </span>
+            )}
           </Link>
         );
       })}
