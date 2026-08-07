@@ -113,6 +113,61 @@ auth.post("/sso", async (c) => {
   });
 });
 
+/**
+ * SSO via top-level POST (the "POST binding" pattern).
+ *
+ * AriseHub submits a hidden form straight to this endpoint. Because it is a
+ * TOP-LEVEL navigation to this origin, the Set-Cookie is first-party and always
+ * honoured — unlike a cross-origin fetch, which browsers now block. The token
+ * travels in the request BODY, so it never lands in a URL or an access log,
+ * and the service worker never sees it because we redirect before the SPA loads.
+ */
+auth.post("/sso-redirect", async (c) => {
+  const fail = (msg: string) =>
+    c.redirect("/login?sso=" + encodeURIComponent(msg), 302);
+
+  let token = "";
+  try {
+    const form = await c.req.formData();
+    token = String(form.get("token") ?? "");
+  } catch {
+    return fail("bad_request");
+  }
+  if (!token || !c.env.SUPABASE_URL) return fail("no_token");
+
+  const payload = await verifySupabaseJwt(token, c.env.SUPABASE_URL);
+  if (!payload?.email) return fail("invalid_session");
+
+  const db = drizzle(c.env.DB);
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.email, payload.email.toLowerCase()))
+    .limit(1);
+  if (!user || !user.active) return fail("no_it_account");
+
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const sessionToken = await signJwt(
+    { sub: user.id, role: user.role, campusId: user.campusId, exp: Math.floor(expiresAt.getTime() / 1000) },
+    c.env.JWT_SECRET
+  );
+  const tokenHash = await sha256Hex(sessionToken);
+  await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
+
+  setCookie(c, SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "None",
+    path: "/",
+    maxAge: SESSION_DAYS * 24 * 60 * 60,
+  });
+
+  await logAudit(c.env, { userId: user.id, action: "sso_login", entityType: "user", entityId: user.id });
+
+  return c.redirect("/", 302);
+});
+
 auth.post("/logout", requireAuth, async (c) => {
   const token = getCookie(c, SESSION_COOKIE);
   if (token) {

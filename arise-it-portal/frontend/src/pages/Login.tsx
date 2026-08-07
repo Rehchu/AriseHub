@@ -4,7 +4,15 @@ import { useAuth } from "../lib/auth-context";
 import { ApiError } from "../lib/api";
 import { LogoMark } from "../components/Logo";
 
+const SSO_REASONS: Record<string,string> = {
+  no_token: "No AriseHub session was sent. Try opening the portal from AriseHub again.",
+  invalid_session: "Your AriseHub session has expired. Sign in to AriseHub again, then retry.",
+  no_it_account: "Your AriseHub account has no active IT portal account. Ask IT to add you.",
+  bad_request: "The sign-in hand-off was malformed. Please try again.",
+};
+
 export default function Login() {
+  const ssoReason = new URLSearchParams(window.location.search).get("sso");
   const { login, user } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -32,6 +40,16 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-ink-950">
+      {ssoReason && (
+
+        <div className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+
+          {SSO_REASONS[ssoReason] ?? "Single sign-on did not complete. Please sign in."}
+
+        </div>
+
+      )}
+
       <form onSubmit={handleSubmit} className="bg-white dark:bg-ink-800 rounded-xl shadow-xl p-8 w-full max-w-sm space-y-4">
         <div className="flex items-center gap-3 mb-2">
           <LogoMark size={44} />
