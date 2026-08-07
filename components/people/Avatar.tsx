@@ -33,7 +33,10 @@ export function Avatar({
   size?: number;
   className?: string;
 }) {
-  const url = useSignedUrl(PHOTO_BUCKETS, photo);
+  const resolved = useSignedUrl(PHOTO_BUCKETS, photo);
+  // A directory of 200 faces should not pull 200 full-size photos.
+  const url =
+    resolved && resolved.startsWith("/api/files/") ? `${resolved}?thumb=1` : resolved;
 
   if (url) {
     return (

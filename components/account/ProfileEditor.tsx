@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import { useSignedUrl } from "@/lib/storage-url";
-import { compressImage, uploadToR2 } from "@/lib/upload";
+import { uploadImageWithThumb } from "@/lib/upload";
 
 export interface MyProfile {
   id: string;
@@ -94,8 +94,7 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
     setError(null);
     // Compress first — phone photos are multi-megabyte and this used to store
     // them whole, which was slow to load and ate the storage quota.
-    const blob = await compressImage(file, 900, 0.85);
-    const up = await uploadToR2(blob, "profiles", file.name);
+    const up = await uploadImageWithThumb(file, "profiles", 900);
     if ("error" in up) {
       setBusy(false);
       return setError(up.error);

@@ -61,5 +61,15 @@ export async function POST(req: NextRequest) {
     customMetadata: { uploadedBy: user.id },
   });
 
+  // Optional small version, stored beside the original so the serve route can
+  // find it by convention rather than needing another column.
+  const thumb = form.get("thumb");
+  if (thumb instanceof File && thumb.size > 0 && thumb.size < 512 * 1024) {
+    await bucket.put(`${key}.thumb`, await thumb.arrayBuffer(), {
+      httpMetadata: { contentType: "image/jpeg", cacheControl: "private, max-age=31536000" },
+      customMetadata: { uploadedBy: user.id },
+    });
+  }
+
   return NextResponse.json({ key, ref: `r2:${key}` });
 }
