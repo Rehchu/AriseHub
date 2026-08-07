@@ -49,7 +49,12 @@ comment on column profiles.emergency_phone is
 -- ---------------------------------------------------------------------------
 -- A bio is written to be read, so it is public to signed-in members. Birthday,
 -- address and emergency contact are personal details and follow email/phone.
-create or replace view public.people_directory
+--
+-- Dropped rather than replaced: `create or replace view` cannot add a column in
+-- the middle of the list, and `bio` belongs next to the other display fields.
+drop view if exists public.people_directory;
+
+create view public.people_directory
 with (security_invoker = true) as
 select
   p.id,

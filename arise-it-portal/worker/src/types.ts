@@ -1,5 +1,7 @@
 export interface Env {
   DB: D1Database;
+  // Static SPA build; the Worker runs first and falls through to this.
+  ASSETS: Fetcher;
   FILES: R2Bucket;
   JWT_SECRET: string;
   WIFI_ENCRYPTION_KEY: string;

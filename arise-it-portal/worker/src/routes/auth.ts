@@ -9,6 +9,7 @@ import { verifySupabaseJwt } from "../lib/supabase-auth";
 import { verifySsoCode } from "../lib/sso-code";
 import { requireAuth, SESSION_COOKIE } from "../lib/auth-middleware";
 import { logAudit } from "../lib/audit";
+import { isRateLimited } from "../lib/rate-limit";
 import type { Env, Variables } from "../types";
 
 const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -19,12 +20,25 @@ auth.post("/login", async (c) => {
   const { email, password } = await c.req.json<{ email: string; password: string }>();
   if (!email || !password) return c.json({ error: "Email and password required" }, 400);
 
+  // Staff passwords are the only thing between the internet and the WiFi vault,
+  // so cap guesses per IP the same way the guest-code endpoint does.
+  const ip = c.req.header("CF-Connecting-IP") ?? "unknown";
+  if (await isRateLimited(c.env, "login_attempt", ip, { limit: 10, windowMinutes: 10 })) {
+    return c.json({ error: "Too many sign-in attempts — please wait a few minutes" }, 429);
+  }
+
   const db = drizzle(c.env.DB);
   const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
-  if (!user || !user.active) return c.json({ error: "Invalid credentials" }, 401);
+  if (!user || !user.active) {
+    await logAudit(c.env, { userId: null, action: "login_attempt", entityType: "user", ipAddress: ip });
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
 
   const ok = await verifyPassword(password, user.passwordHash, user.passwordSalt);
-  if (!ok) return c.json({ error: "Invalid credentials" }, 401);
+  if (!ok) {
+    await logAudit(c.env, { userId: null, action: "login_attempt", entityType: "user", entityId: user.id, ipAddress: ip });
+    return c.json({ error: "Invalid credentials" }, 401);
+  }
 
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const token = await signJwt(

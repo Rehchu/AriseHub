@@ -14,6 +14,7 @@ import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { GlobalSearch } from "./GlobalSearch";
 import { ITPortalLink } from "./ITPortalLink";
+import { BottomNav, bottomNavItems } from "./BottomNav";
 
 const IT_PORTAL =
   process.env.NEXT_PUBLIC_IT_PORTAL_URL ?? "https://itportal.myfaithtech.com";
@@ -49,9 +50,16 @@ export function Shell({
     router.refresh();
   }
 
-  const nav = (
+  const bottomItems = bottomNavItems(modules);
+  const bottomKeys = new Set(bottomItems.map((m) => m.key));
+
+  // `hideBottomNavItems` is for the phone drawer: no point listing Messages
+  // twice when it is already a thumb-tap away at the bottom of the screen.
+  const navList = (hideBottomNavItems = false) => (
     <nav className="flex-1 space-y-1 px-3">
-      {modules.map((m) => {
+      {modules
+        .filter((m) => !(hideBottomNavItems && bottomKeys.has(m.key)))
+        .map((m) => {
         const active =
           pathname === m.href || pathname.startsWith(m.href + "/");
         // IT staff jump straight into the portal instead of the self-help page.
@@ -79,7 +87,7 @@ export function Shell({
             )}
           </Link>
         );
-      })}
+        })}
     </nav>
   );
 
@@ -94,7 +102,7 @@ export function Shell({
             Arise<span className="text-brand-500">Hub</span>
           </span>
         </div>
-        {nav}
+        {navList()}
         <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} onSignOut={signOut} />
       </aside>
 
@@ -115,7 +123,7 @@ export function Shell({
                 <Icon name="x" />
               </button>
             </div>
-            {nav}
+            {navList(true)}
             <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} onSignOut={signOut} />
           </aside>
         </div>
@@ -126,10 +134,10 @@ export function Shell({
         <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-ink-100 bg-white px-4 pt-safe safe-x">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="text-ink-600 lg:hidden"
+            className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-600 active:bg-ink-100 lg:hidden"
             aria-label="Open menu"
           >
-            <Icon name="menu" />
+            <Icon name="menu" size={24} />
           </button>
           <div className="flex items-center gap-2 lg:hidden">
             <Logo size={24} />
@@ -148,12 +156,18 @@ export function Shell({
           )}
         </header>
 
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        {/* pb-16 clears the fixed bottom bar on phones. */}
+        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
       </div>
 
       {helpOpen && (
         <GetITHelp profile={profile} email={email} onClose={() => setHelpOpen(false)} />
       )}
+      <BottomNav
+        items={bottomItems}
+        onMore={() => setDrawerOpen(true)}
+        moreActive={drawerOpen}
+      />
       <InstallPrompt />
     </div>
   );

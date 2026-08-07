@@ -12,7 +12,9 @@ compatibility_flags = ["nodejs_compat"]
 directory = "../frontend/dist"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-run_worker_first = ["/api/*"]
+# Worker runs first for everything so security headers apply to page loads too;
+# non-API paths fall through to ASSETS in src/index.ts.
+run_worker_first = true
 
 [[d1_databases]]
 binding = "DB"
