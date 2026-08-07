@@ -22,6 +22,13 @@ import {
 import { renderTagToPng, type TagTemplate } from "@/lib/tag-design";
 import { TagDesigner } from "./TagDesigner";
 import { FamilyRegister } from "./FamilyRegister";
+import {
+  queueCheckin,
+  pendingCount,
+  flushQueue,
+  isOffline,
+  type QueuedCheckin,
+} from "@/lib/offline-queue";
 
 export interface RoomRow {
   id: string;
@@ -133,6 +140,44 @@ export function CheckinStation({
   const [templates, setTemplates] = useState<TagTemplate[]>([]);
   const [showDesigner, setShowDesigner] = useState(false);
   const [showFamily, setShowFamily] = useState(false);
+  const [offline, setOffline] = useState(false);
+  const [queued, setQueued] = useState(0);
+
+  // Check-in must survive flaky WiFi: queue locally, sync when we're back.
+  useEffect(() => {
+    const refresh = () => {
+      setOffline(isOffline());
+      setQueued(pendingCount());
+    };
+    refresh();
+
+    const sync = async () => {
+      if (isOffline() || pendingCount() === 0) return refresh();
+      const res = await flushQueue(async (row: QueuedCheckin) => {
+        const { error } = await supabase.from("checkins").insert({
+          profile_id: row.profile_id,
+          room_id: row.room_id,
+          campus_id: row.campus_id,
+          security_code: row.security_code,
+          checked_in_at: row.checked_in_at,
+          status: row.status,
+        });
+        return { error };
+      });
+      refresh();
+      if (res.synced > 0) router.refresh();
+    };
+
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", refresh);
+    const timer = setInterval(sync, 20000);
+    void sync();
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", refresh);
+      clearInterval(timer);
+    };
+  }, [supabase, router]);
   useEffect(() => {
     supabase
       .from("nametag_templates")
@@ -228,6 +273,40 @@ export function CheckinStation({
       }
     }
     const code = makeCode();
+    const nowIso = new Date().toISOString();
+    const roomName = rooms.find((r) => r.id === roomId)?.name ?? "";
+
+    // Offline: record locally, print the badge, move the line along.
+    if (isOffline()) {
+      queueCheckin({
+        localId: crypto.randomUUID(),
+        profile_id: person.id,
+        room_id: roomId,
+        campus_id: campusId,
+        security_code: code,
+        checked_in_at: nowIso,
+        status: "checked_in",
+        childName: person.full_name,
+        hasAllergy: person.has_allergy,
+        roomName,
+      });
+      setQueued(pendingCount());
+      setLastBadge({
+        name: person.full_name,
+        code,
+        room: roomName,
+        hasAllergy: person.has_allergy,
+      });
+      await print({
+        name: person.full_name,
+        code,
+        room: roomName,
+        hasAllergy: person.has_allergy,
+      });
+      setBusy(false);
+      setQ("");
+      return;
+    }
     const { data, error } = await supabase
       .from("checkins")
       .insert({
@@ -486,6 +565,19 @@ export function CheckinStation({
       {tab === "checkin" ? (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Check IN */}
+          {(offline || queued > 0) && (
+            <div className={"mb-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm " + (offline ? "bg-amber-50 text-amber-800" : "bg-ink-100 text-ink-600")}>
+              <Icon name="help" size={16} />
+              <span className="flex-1">
+                {offline
+                  ? "Offline — check-ins are saved on this device and will sync automatically."
+                  : "Syncing " + queued + " check-in" + (queued === 1 ? "" : "s") + "…"}
+              </span>
+              {queued > 0 && (
+                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold">{queued}</span>
+              )}
+            </div>
+          )}
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
