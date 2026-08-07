@@ -1,12 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Campus, Department, UserRole } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 
 const ROLES: UserRole[] = ["Member", "Volunteer", "Staff", "IT_Admin", "Super_Admin"];
 
+interface InviteLink {
+  id: string;
+  code: string;
+  label: string;
+  role: UserRole;
+  campus_id: string | null;
+  department_ids: string[];
+  active: boolean;
+  expires_at: string | null;
+  max_uses: number | null;
+  uses: number;
+}
+
+// Readable, unambiguous code — no O/0, I/1 to avoid mis-typing off a printout.
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function makeCode(len = 10) {
+  const buf = new Uint32Array(len);
+  crypto.getRandomValues(buf);
+  return [...buf].map((n) => ALPHABET[n % ALPHABET.length]).join("");
+}
+
+/**
+ * Shareable invite links. Public signup is off, so this is how people join:
+ * an admin creates a link carrying a role/campus/departments, shares it, and
+ * anyone with it registers themselves. Links can expire, cap uses, and be
+ * switched off — the code is a bearer secret.
+ */
 export function InvitePanel({
   departments,
   campuses,
@@ -16,68 +43,73 @@ export function InvitePanel({
 }) {
   const supabase = createClient();
   const [open, setOpen] = useState(false);
-  const [email, setEmail] = useState("");
+  const [links, setLinks] = useState<InviteLink[]>([]);
+  const [label, setLabel] = useState("");
   const [role, setRole] = useState<UserRole>("Member");
   const [campusId, setCampusId] = useState("");
   const [deptIds, setDeptIds] = useState<Set<string>>(new Set());
+  const [expires, setExpires] = useState("");
+  const [maxUses, setMaxUses] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [link, setLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    supabase
+      .from("invite_links")
+      .select("id, code, label, role, campus_id, department_ids, active, expires_at, max_uses, uses")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setLinks((data ?? []) as InviteLink[]));
+  }, [open, supabase]);
 
   function toggle(id: string) {
     setDeptIds((s) => {
-      const next = new Set(s);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
     });
   }
 
-  async function invite(e: React.FormEvent) {
+  const urlFor = (code: string) =>
+    typeof window !== "undefined" ? `${window.location.origin}/join/${code}` : `/join/${code}`;
+
+  async function create(e: React.FormEvent) {
     e.preventDefault();
-    const clean = email.trim().toLowerCase();
-    if (!clean) return;
     setBusy(true);
     setError(null);
-    setLink(null);
-
-    // Opaque token for the link (acceptance is by email-match on signup — the
-    // handle_new_auth_user trigger consumes the matching pending invitation).
-    const token = crypto.randomUUID().replace(/-/g, "");
     const { data, error } = await supabase
-      .from("invitations")
+      .from("invite_links")
       .insert({
-        email: clean,
+        code: makeCode(),
+        label: label.trim() || "General invite",
         role,
         campus_id: campusId || null,
-        token,
+        department_ids: [...deptIds],
+        expires_at: expires ? new Date(expires + "T23:59:59").toISOString() : null,
+        max_uses: maxUses ? Number(maxUses) : null,
       })
-      .select("id")
+      .select("id, code, label, role, campus_id, department_ids, active, expires_at, max_uses, uses")
       .single();
-
-    if (error || !data) {
-      setBusy(false);
-      setError(error?.message ?? "Could not create invitation.");
-      return;
-    }
-
-    if (deptIds.size) {
-      const rows = [...deptIds].map((department_id) => ({
-        invitation_id: (data as { id: string }).id,
-        department_id,
-      }));
-      const { error: dErr } = await supabase
-        .from("invitation_departments")
-        .insert(rows);
-      if (dErr) setError(`Invite created, but departments failed: ${dErr.message}`);
-    }
-
     setBusy(false);
-    setLink(`${window.location.origin}/login?invite=${token}`);
-    setEmail("");
-    setRole("Member");
-    setCampusId("");
+    if (error) return setError(error.message);
+    setLinks((ls) => [data as InviteLink, ...ls]);
+    setLabel("");
     setDeptIds(new Set());
+    setExpires("");
+    setMaxUses("");
+  }
+
+  async function toggleActive(l: InviteLink) {
+    setLinks((ls) => ls.map((x) => (x.id === l.id ? { ...x, active: !x.active } : x)));
+    await supabase.from("invite_links").update({ active: !l.active }).eq("id", l.id);
+  }
+
+  async function remove(id: string) {
+    if (!window.confirm("Delete this invite link? Anyone still holding it won't be able to join.")) return;
+    setLinks((ls) => ls.filter((x) => x.id !== id));
+    await supabase.from("invite_links").delete().eq("id", id);
   }
 
   return (
@@ -88,119 +120,151 @@ export function InvitePanel({
       >
         <span className="flex items-center gap-2 font-medium text-ink-900">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white">
-            <Icon name="users" size={18} />
+            <Icon name="link" size={18} />
           </span>
-          Invite someone
+          Invite links
         </span>
         <span className="text-ink-400">{open ? "–" : "+"}</span>
       </button>
 
       {open && (
-        <form onSubmit={invite} className="space-y-4 border-t border-ink-100 p-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="block sm:col-span-1">
-              <span className="mb-1 block text-sm font-medium text-ink-600">Email</span>
-              <input
-                type="email"
-                className="ah-input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-ink-600">Role</span>
-              <select
-                className="ah-input"
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-              >
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>
-                    {r.replace("_", " ")}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-ink-600">Campus</span>
-              <select
-                className="ah-input"
-                value={campusId}
-                onChange={(e) => setCampusId(e.target.value)}
-              >
-                <option value="">No campus</option>
-                {campuses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+        <div className="border-t border-ink-100 p-4">
+          <p className="mb-4 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
+            Share a link and people register themselves — they arrive with the role,
+            campus and departments you set here. Anyone holding the link can join, so
+            set an expiry or a use limit for wider shares, and switch it off when
+            you&apos;re done.
+          </p>
 
-          <div>
-            <span className="mb-1 block text-sm font-medium text-ink-600">
-              Departments (they&apos;ll join these group chats on signup)
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {departments.map((d) => {
-                const on = deptIds.has(d.id);
-                return (
-                  <button
-                    type="button"
-                    key={d.id}
-                    onClick={() => toggle(d.id)}
-                    className={`rounded-full px-3 py-1 text-sm transition ${
-                      on
-                        ? "bg-brand-500 text-white"
-                        : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
-                    }`}
-                  >
-                    {d.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {error && (
-            <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
-              {error}
-            </p>
-          )}
-
-          {link ? (
-            <div className="rounded-lg bg-emerald-50 p-3">
-              <p className="mb-2 text-sm font-medium text-emerald-800">
-                Invitation created. Send this link — they sign up with the invited
-                email and automatically get the role + departments.
-              </p>
-              <div className="flex gap-2">
-                <input readOnly className="ah-input text-xs" value={link} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(link);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  }}
-                  className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
-                >
-                  {copied ? "Copied" : "Copy"}
-                </button>
+          <form onSubmit={create} className="space-y-3 rounded-xl border border-ink-100 bg-ink-50 p-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink-600">Label</span>
+                <input
+                  className="ah-input"
+                  placeholder="Media Team signup"
+                  value={label}
+                  onChange={(e) => setLabel(e.target.value)}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink-600">They join as</span>
+                <select className="ah-input" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r.replace("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-ink-600">Campus</span>
+                <select className="ah-input" value={campusId} onChange={(e) => setCampusId(e.target.value)}>
+                  <option value="">No campus</option>
+                  {campuses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-ink-600">Expires</span>
+                  <input type="date" className="ah-input" value={expires} onChange={(e) => setExpires(e.target.value)} />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-ink-600">Max uses</span>
+                  <input type="number" min={1} className="ah-input" placeholder="∞" value={maxUses} onChange={(e) => setMaxUses(e.target.value)} />
+                </label>
               </div>
             </div>
-          ) : (
+
+            <div>
+              <span className="mb-1 block text-sm font-medium text-ink-600">
+                Departments they join
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {departments.map((d) => {
+                  const on = deptIds.has(d.id);
+                  return (
+                    <button
+                      type="button"
+                      key={d.id}
+                      onClick={() => toggle(d.id)}
+                      className={`rounded-full px-3 py-1 text-sm transition ${
+                        on ? "bg-brand-500 text-white" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-100"
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
+
             <button
               type="submit"
               disabled={busy}
               className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
             >
-              {busy ? "Creating…" : "Create invitation"}
+              {busy ? "Creating…" : "Create invite link"}
             </button>
-          )}
-        </form>
+          </form>
+
+          <div className="mt-4 space-y-2">
+            {links.map((l) => (
+              <div key={l.id} className="rounded-xl border border-ink-100 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-ink-900">{l.label}</span>
+                  <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-500">
+                    {l.role.replace("_", " ")}
+                  </span>
+                  {!l.active && (
+                    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-400">
+                      off
+                    </span>
+                  )}
+                  <span className="flex-1" />
+                  <button onClick={() => toggleActive(l)} className="text-xs font-medium text-ink-600 underline">
+                    {l.active ? "Turn off" : "Turn on"}
+                  </button>
+                  <button onClick={() => remove(l.id)} className="text-ink-300 hover:text-brand-500" aria-label="Delete">
+                    <Icon name="trash" size={15} />
+                  </button>
+                </div>
+
+                <div className="mt-2 flex gap-2">
+                  <input readOnly className="ah-input text-xs" value={urlFor(l.code)} />
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(urlFor(l.code));
+                      setCopiedId(l.id);
+                      setTimeout(() => setCopiedId(null), 1500);
+                    }}
+                    className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white"
+                  >
+                    {copiedId === l.id ? "Copied" : "Copy"}
+                  </button>
+                </div>
+
+                <p className="mt-1.5 text-xs text-ink-400">
+                  {l.uses} joined
+                  {l.max_uses != null && ` of ${l.max_uses}`}
+                  {l.expires_at &&
+                    ` · expires ${new Date(l.expires_at).toLocaleDateString()}`}
+                </p>
+              </div>
+            ))}
+            {links.length === 0 && (
+              <p className="rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-400">
+                No invite links yet — create one above and share it.
+              </p>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

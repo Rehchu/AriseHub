@@ -36,6 +36,8 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/auth") ||
     pathname.startsWith("/f/") || // public Connect Card submission pages
+    pathname.startsWith("/join/") || // invite-link self-registration
+    pathname.startsWith("/api/join") ||
     pathname === "/sw.js" ||
     pathname === "/manifest.webmanifest" ||
     pathname === "/favicon.ico";
