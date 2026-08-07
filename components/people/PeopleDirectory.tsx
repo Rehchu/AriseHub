@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Campus, Department } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
+import { Avatar } from "./Avatar";
 
 export interface DirectoryPerson {
   id: string;
@@ -13,17 +14,9 @@ export interface DirectoryPerson {
   phone: string | null;
   role: string;
   title: string | null;
+  photo_url: string | null;
   campus: string | null;
   departments: string[];
-}
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 }
 
 export function PeopleDirectory({
@@ -96,9 +89,7 @@ export function PeopleDirectory({
               onClick={() => setSelected(p)}
               className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-4 text-left transition hover:shadow-md"
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-700">
-                {initials(p.full_name)}
-              </span>
+              <Avatar name={p.full_name} photo={p.photo_url} size={44} />
               <div className="min-w-0">
                 <p className="truncate font-medium text-ink-900">{p.full_name}</p>
                 <p className="truncate text-xs text-ink-400">
@@ -145,9 +136,7 @@ function PersonDrawer({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start justify-between">
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700">
-            {initials(person.full_name)}
-          </span>
+          <Avatar name={person.full_name} photo={person.photo_url} size={64} />
           <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>

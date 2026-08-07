@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Campus, Department, Profile, UserRole } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 import { InvitePanel } from "./InvitePanel";
+import { Avatar } from "@/components/people/Avatar";
 
 // Suggestions only — the field is free text so unusual titles still work.
 const TITLES = [
@@ -193,14 +194,7 @@ export function PeopleAdmin({
             return (
               <div key={p.id} className="border-b border-ink-100 last:border-0">
                 <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-xs font-semibold text-brand-700">
-                    {p.full_name
-                      .split(" ")
-                      .map((s) => s[0])
-                      .slice(0, 2)
-                      .join("")
-                      .toUpperCase()}
-                  </span>
+                  <Avatar name={p.full_name} photo={p.photo_url} size={36} />
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-ink-900">
                       {p.full_name}

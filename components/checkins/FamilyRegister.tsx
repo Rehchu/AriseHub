@@ -158,7 +158,8 @@ export function FamilyRegister({
             if ("url" in r) {
               return supabase
                 .from("profiles")
-                .update({ photo_url: r.url, photo_path: r.path })
+                // Store the path, not the signed URL — signatures expire.
+                .update({ photo_url: r.path, photo_path: r.path })
                 .eq("id", id);
             }
           }),

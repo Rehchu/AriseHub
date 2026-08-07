@@ -45,6 +45,7 @@ export default async function PeoplePage() {
     phone: p.phone,
     role: p.role,
     title: p.title ?? null,
+    photo_url: p.photo_url,
     campus: p.campus_id ? (campusName[p.campus_id] ?? null) : null,
     departments: (deptsByProfile[p.id] ?? []).filter(Boolean),
   }));

@@ -44,7 +44,7 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
     emergency_phone: profile.emergency_phone ?? "",
   });
   const [photo, setPhoto] = useState(profile.photo_url);
-  const photoSrc = useSignedUrl("attachments", photo);
+  const photoSrc = useSignedUrl(["attachments", "photos"], photo);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);

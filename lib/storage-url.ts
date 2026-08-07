@@ -31,16 +31,31 @@ export function objectPath(bucket: string, urlOrPath: string): string {
   return urlOrPath.replace(/^\/+/, "");
 }
 
-export async function signedUrl(bucket: string, urlOrPath: string): Promise<string | null> {
+/**
+ * Profile photos are uploaded to `attachments`, photos of children and parents
+ * to `photos` — and both end up in profiles.photo_url. Rather than encode the
+ * bucket in every row, try each in turn; the miss costs one request and only
+ * happens for the second bucket.
+ */
+export async function signedUrl(
+  bucket: string | string[],
+  urlOrPath: string,
+): Promise<string | null> {
   if (!urlOrPath) return null;
   // Data URLs are local previews — nothing to sign.
   if (urlOrPath.startsWith("data:") || urlOrPath.startsWith("blob:")) return urlOrPath;
+
   const supabase = createClient();
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .createSignedUrl(objectPath(bucket, urlOrPath), SIGNED_TTL_SECONDS);
-  if (error) return null;
-  return data.signedUrl;
+  const buckets = Array.isArray(bucket) ? bucket : [bucket];
+  // A legacy public URL names its own bucket; trust that over the guess.
+  const named = buckets.find((b) => urlOrPath.includes(`/object/public/${b}/`));
+  for (const b of named ? [named] : buckets) {
+    const { data, error } = await supabase.storage
+      .from(b)
+      .createSignedUrl(objectPath(b, urlOrPath), SIGNED_TTL_SECONDS);
+    if (!error && data?.signedUrl) return data.signedUrl;
+  }
+  return null;
 }
 
 /**
@@ -48,7 +63,7 @@ export async function signedUrl(bucket: string, urlOrPath: string): Promise<stri
  * Returns null while resolving and if signing fails, so callers can fall back
  * to initials or a placeholder rather than rendering a broken image.
  */
-export function useSignedUrl(bucket: string, urlOrPath: string | null | undefined) {
+export function useSignedUrl(bucket: string | string[], urlOrPath: string | null | undefined) {
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,7 +78,8 @@ export function useSignedUrl(bucket: string, urlOrPath: string | null | undefine
     return () => {
       live = false;
     };
-  }, [bucket, urlOrPath]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [String(bucket), urlOrPath]);
 
   return url;
 }

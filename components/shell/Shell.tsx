@@ -15,6 +15,7 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { GlobalSearch } from "./GlobalSearch";
 import { ITPortalLink } from "./ITPortalLink";
 import { ThemeToggle } from "./ThemeToggle";
+import { Avatar } from "@/components/people/Avatar";
 import { BottomNav, bottomNavItems } from "./BottomNav";
 
 const IT_PORTAL =
@@ -104,7 +105,7 @@ export function Shell({
           </span>
         </div>
         {navList()}
-        <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} onSignOut={signOut} />
+        <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} photo={profile?.photo_url} onSignOut={signOut} />
       </aside>
 
       {/* Mobile drawer */}
@@ -125,7 +126,7 @@ export function Shell({
               </button>
             </div>
             {navList(true)}
-            <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} onSignOut={signOut} />
+            <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} photo={profile?.photo_url} onSignOut={signOut} />
           </aside>
         </div>
       )}
@@ -178,18 +179,23 @@ function SidebarFooter({
   name,
   role,
   profileId,
+  photo,
   onSignOut,
 }: {
   name: string;
   role?: string;
   profileId?: string;
+  photo?: string | null;
   onSignOut: () => void;
 }) {
   return (
     <div className="mt-4 border-t border-chrome-700 px-3 pt-4">
-      <div className="mb-2 px-2">
-        <p className="truncate text-sm font-medium text-chrome-50">{name}</p>
-        <p className="text-xs text-chrome-400">{role?.replace("_", " ") ?? "Member"}</p>
+      <div className="mb-2 flex items-center gap-2.5 px-2">
+        <Avatar name={name} photo={photo} size={34} />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-chrome-50">{name}</p>
+          <p className="text-xs text-chrome-400">{role?.replace("_", " ") ?? "Member"}</p>
+        </div>
       </div>
       <a
         href="/account/profile"
