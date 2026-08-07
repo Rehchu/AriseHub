@@ -10,12 +10,15 @@ const IT_PORTAL =
 /**
  * Opens the IT portal already signed in.
  *
- * The portal's API accepts AriseHub tokens, but its frontend is a separate SPA
- * that needs the church_session cookie — so we exchange the AriseHub session
- * for a portal session first, then open it. Both hosts are subdomains of
- * myfaithtech.com, so the credentialed request can set the cookie.
+ * The portal's frontend is a separate SPA that needs its own church_session
+ * cookie. Handing the session over by calling the portal's API directly from
+ * here doesn't work — browsers no longer reliably honour Set-Cookie on a
+ * cross-origin request.
  *
- * The token never goes in a URL.
+ * So we pass the AriseHub token in the URL FRAGMENT. Fragments are never sent
+ * to a server (so it stays out of logs, proxies and Referer headers), and the
+ * portal exchanges it SAME-ORIGIN for a cookie, then strips it from the URL
+ * before anything renders.
  */
 export function ITPortalLink({ onNavigate }: { onNavigate?: () => void }) {
   const supabase = createClient();
@@ -26,28 +29,19 @@ export function ITPortalLink({ onNavigate }: { onNavigate?: () => void }) {
     onNavigate?.();
     setBusy(true);
 
-    // Open the tab up-front: doing it after an await trips pop-up blockers.
-    const tab = window.open("", "_blank");
-
+    let url = IT_PORTAL;
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession();
-
       if (session?.access_token) {
-        await fetch(`${IT_PORTAL}/api/auth/sso`, {
-          method: "POST",
-          credentials: "include",
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
+        url = `${IT_PORTAL}/#sso=${encodeURIComponent(session.access_token)}`;
       }
     } catch {
-      // Fall through — the portal will just ask for a login as before.
-    } finally {
-      setBusy(false);
-      if (tab) tab.location.href = IT_PORTAL;
-      else window.location.href = IT_PORTAL;
+      // No token — the portal will just ask for a login, as before.
     }
+    setBusy(false);
+    window.location.href = url;
   }
 
   return (

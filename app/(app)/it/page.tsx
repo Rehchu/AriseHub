@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { SelfHelp } from "@/components/it/SelfHelp";
+import { PortalLauncher } from "@/components/it/PortalLauncher";
 
 const IT_PORTAL =
   process.env.NEXT_PUBLIC_IT_PORTAL_URL ?? "https://itportal.myfaithtech.com";
@@ -29,7 +30,9 @@ export default async function ITPage() {
       .maybeSingle();
     isIT = !!m;
   }
-  if (isIT) redirect(IT_PORTAL);
+  // A server redirect would land with no portal session and bounce to /login —
+  // the browser has to carry the token, so hand off client-side.
+  if (isIT) return <PortalLauncher />;
 
   return (
     <SelfHelp
