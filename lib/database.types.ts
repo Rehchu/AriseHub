@@ -54,7 +54,10 @@ export interface Message {
   id: string;
   channel_id: string;
   sender_profile_id: string;
-  body: string;
+  body: string | null;
+  attachment_url?: string | null;
+  attachment_type?: string | null;
+  attachment_name?: string | null;
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;

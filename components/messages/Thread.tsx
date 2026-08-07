@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Message } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 import { notifyMany, preview } from "@/lib/notify";
+import { compressImage } from "@/lib/photos";
 
 interface Row extends Message {
   senderName: string;
@@ -25,6 +26,9 @@ export function Thread({
   const [rows, setRows] = useState<Row[]>([]);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const nameCache = useRef<Record<string, string>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -107,9 +111,38 @@ export function Thread({
   async function send(e: React.FormEvent) {
     e.preventDefault();
     const text = body.trim();
-    if (!text) return;
+    if (!text && !file) return;
     setSending(true);
     setBody("");
+    setUploadError(null);
+
+    // Upload the attachment first — a message referencing a file that failed
+    // to upload would render as a broken image.
+    let attachment: { url: string; type: string; name: string } | null = null;
+    if (file) {
+      try {
+        const isImage = file.type.startsWith("image/");
+        const blob = isImage ? await compressImage(file, 1400, 0.82) : file;
+        const path = `messages/${channelId}/${Date.now()}-${file.name.replace(/[^\w.-]/g, "_")}`;
+        const { error } = await supabase.storage.from("attachments").upload(path, blob, {
+          contentType: file.type || "application/octet-stream",
+          upsert: true,
+        });
+        if (error) throw error;
+        const { data } = supabase.storage.from("attachments").getPublicUrl(path);
+        attachment = { url: data.publicUrl, type: file.type || "file", name: file.name };
+      } catch (err) {
+        setSending(false);
+        setBody(text);
+        const msg = err instanceof Error ? err.message : "Upload failed";
+        setUploadError(
+          /bucket/i.test(msg)
+            ? "File sharing isn't set up yet — create a public bucket named 'attachments' in Supabase."
+            : msg,
+        );
+        return;
+      }
+    }
     // Insert and get the row back so we can show it immediately — don't wait on
     // the Realtime round-trip (and it works even if Realtime is momentarily off).
     const { data, error } = await supabase
@@ -117,7 +150,10 @@ export function Thread({
       .insert({
         channel_id: channelId,
         sender_profile_id: currentProfileId,
-        body: text,
+        body: text || null,
+        attachment_url: attachment?.url ?? null,
+        attachment_type: attachment?.type ?? null,
+        attachment_name: attachment?.name ?? null,
       })
       .select("*")
       .single();
@@ -126,6 +162,8 @@ export function Thread({
       setBody(text); // restore on failure
       return;
     }
+    setFile(null);
+    setFilePreview(null);
     if (data) {
       const m = data as Message;
       const senderName = await nameFor(m.sender_profile_id);
@@ -142,7 +180,8 @@ export function Thread({
       notifyMany(
         others,
         kind === "department" ? title : senderName,
-        (kind === "department" ? senderName + ": " : "") + preview(text),
+        (kind === "department" ? senderName + ": " : "") +
+          (text ? preview(text) : attachment ? "📷 sent a photo" : ""),
         "/messages/" + channelId,
       );
       setRows((prev) =>
@@ -201,7 +240,32 @@ export function Thread({
                   {m.deleted_at ? (
                     <span className="italic opacity-60">message deleted</span>
                   ) : (
-                    <span className="whitespace-pre-wrap break-words">{m.body}</span>
+                    <>
+                      {m.attachment_url &&
+                        (m.attachment_type?.startsWith("image/") ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <a href={m.attachment_url} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={m.attachment_url}
+                              alt={m.attachment_name ?? "attachment"}
+                              className="mb-1 max-h-64 rounded-lg object-cover"
+                            />
+                          </a>
+                        ) : (
+                          <a
+                            href={m.attachment_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mb-1 flex items-center gap-2 rounded-lg bg-black/10 px-2 py-1.5 text-xs underline"
+                          >
+                            <Icon name="form" size={14} />
+                            {m.attachment_name ?? "Attachment"}
+                          </a>
+                        ))}
+                      {m.body && (
+                        <span className="whitespace-pre-wrap break-words">{m.body}</span>
+                      )}
+                    </>
                   )}
                   {mine && !m.deleted_at && (
                     <button
@@ -220,7 +284,46 @@ export function Thread({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={send} className="flex items-end gap-2 border-t border-ink-100 bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="border-t border-ink-100 bg-white">
+        {uploadError && (
+          <p className="px-4 pt-2 text-xs text-brand-600">{uploadError}</p>
+        )}
+        {filePreview && (
+          <div className="flex items-center gap-2 px-4 pt-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={filePreview} alt="" className="h-14 w-14 rounded-lg object-cover" />
+            <span className="flex-1 truncate text-xs text-ink-500">{file?.name}</span>
+            <button
+              type="button"
+              onClick={() => {
+                setFile(null);
+                setFilePreview(null);
+              }}
+              className="text-ink-400 hover:text-brand-500"
+            >
+              <Icon name="x" size={16} />
+            </button>
+          </div>
+        )}
+      <form onSubmit={send} className="flex items-end gap-2 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">
+          <Icon name="link" size={18} />
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setFile(f);
+              if (f.type.startsWith("image/")) {
+                const r = new FileReader();
+                r.onload = () => setFilePreview(String(r.result));
+                r.readAsDataURL(f);
+              } else setFilePreview(null);
+            }}
+          />
+        </label>
         <textarea
           className="ah-input max-h-32 min-h-0 w-full flex-1 resize-none py-2"
           rows={1}
@@ -236,13 +339,14 @@ export function Thread({
         />
         <button
           type="submit"
-          disabled={sending || !body.trim()}
+          disabled={sending || (!body.trim() && !file)}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white transition hover:bg-brand-600 disabled:opacity-50"
           aria-label="Send"
         >
           <Icon name="send" />
         </button>
       </form>
+      </div>
     </div>
   );
 }
