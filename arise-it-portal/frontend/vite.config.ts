@@ -24,6 +24,15 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // The navigation fallback serves index.html for any top-level
+        // navigation so deep links work offline — but /api/* must be excluded.
+        // Without this, a real browser navigation to an API route (the SSO
+        // hand-off at /api/auth/sso-code, the OAuth-style redirects) is
+        // swallowed by the service worker and answered with the app shell: the
+        // request never reaches the Worker, no cookie is set, no redirect
+        // happens, and the SPA boots on a URL it has no route for — a blank
+        // screen with the API URL still in the address bar.
+        navigateFallbackDenylist: [/^\/api\//],
         // App shell is precached; API calls always try the network first so
         // data is never stale, falling back to the last-seen response offline.
         runtimeCaching: [

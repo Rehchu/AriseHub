@@ -21,6 +21,7 @@ import PublicRequest from "./pages/PublicRequest";
 import QuickAccess from "./pages/QuickAccess";
 import GuestEquipment from "./pages/GuestEquipment";
 import GuestWifi from "./pages/GuestWifi";
+import NotFound from "./pages/NotFound";
 
 export default function App() {
   return (
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="audit-log" element={<AuditLog />} />
         <Route path="profile" element={<Profile />} />
       </Route>
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }
