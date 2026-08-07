@@ -13,13 +13,18 @@ import { RegisterServiceWorker } from "@/components/pwa/RegisterServiceWorker";
 import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 
+const IT_PORTAL =
+  process.env.NEXT_PUBLIC_IT_PORTAL_URL ?? "https://itportal.myfaithtech.com";
+
 export function Shell({
   profile,
   email,
+  isIT = false,
   children,
 }: {
   profile: Profile | null;
   email: string;
+  isIT?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -42,6 +47,23 @@ export function Shell({
       {modules.map((m) => {
         const active =
           pathname === m.href || pathname.startsWith(m.href + "/");
+        // IT staff jump straight into the portal instead of the self-help page.
+        if (m.key === "it" && isIT) {
+          return (
+            <a
+              key={m.key}
+              href={IT_PORTAL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setDrawerOpen(false)}
+              className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+            >
+              <Icon name={m.icon} />
+              <span className="flex-1">IT Portal</span>
+              <span className="text-[10px] text-ink-400">↗</span>
+            </a>
+          );
+        }
         return (
           <Link
             key={m.key}
@@ -120,6 +142,7 @@ export function Shell({
             <span className="font-display text-sm font-bold">AriseHub</span>
           </div>
           <div className="flex-1" />
+          {!isIT && (
           <button
             onClick={() => setHelpOpen(true)}
             className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-600"
@@ -127,6 +150,7 @@ export function Shell({
             <Icon name="help" size={18} />
             <span className="hidden sm:inline">Get IT Help</span>
           </button>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto">{children}</main>

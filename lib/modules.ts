@@ -39,7 +39,9 @@ export const MODULES: ModuleDef[] = [
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: true },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: true },
   { key: "services", label: "Services", href: "/services", icon: "music", accent: "#db2777", ready: true },
-  { key: "it", label: "IT Portal", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
+  // IT: the IT team goes straight to the portal (Shell rewrites the href);
+  // everyone else lands on a self-service help page.
+  { key: "it", label: "IT Support", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
   { key: "admin", label: "Admin", href: "/admin/departments", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin"] },
 ];
 

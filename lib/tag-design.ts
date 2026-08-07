@@ -30,6 +30,13 @@ export interface TagElement {
   radius?: number;
   // image
   src?: string; // data URL
+  // borders (any element)
+  borderWidth?: number;   // px at 96dpi
+  borderColor?: string;
+  // text extras
+  uppercase?: boolean;
+  lineHeight?: number;
+  shape?: "rect" | "ellipse";
   // shared
   rotation?: number;
   opacity?: number;
@@ -41,7 +48,30 @@ export interface TagDesign {
   background: string;
   backgroundImage?: string; // data URL
   elements: TagElement[];
+  /** Border drawn around the whole label. */
+  borderWidth?: number;
+  borderColor?: string;
+  borderRadius?: number;
+  /**
+   * Render in pure black & white. DYMO LabelWriters are thermal — they print
+   * black only — so previewing in mono shows exactly what comes out.
+   */
+  monochrome?: boolean;
 }
+
+/** Common DYMO label stock, so you can pick by name instead of measuring. */
+export const LABEL_PRESETS: { name: string; w: number; h: number; note?: string }[] = [
+  { name: "30252 Address", w: 3.5, h: 1.125, note: "most common" },
+  { name: "30256 Shipping (large)", w: 4, h: 2.3125 },
+  { name: "30323 Shipping", w: 4, h: 2.125 },
+  { name: "30321 Large Address", w: 3.5, h: 1.4375 },
+  { name: "30320 Address", w: 3.5, h: 1.125 },
+  { name: "30336 Multipurpose (small)", w: 2.125, h: 1 },
+  { name: "30334 Multipurpose (medium)", w: 2.25, h: 1.25 },
+  { name: "30333 Multipurpose 1/2 (x2)", w: 1, h: 1 },
+  { name: "99012 Large Address (EU)", w: 3.5, h: 1.4375 },
+  { name: "Name badge 4 x 2.31", w: 4, h: 2.3125 },
+];
 
 export interface TagTemplate {
   id: string;
@@ -218,15 +248,32 @@ export async function renderTagToPng(
 
     if (el.kind === "rect") {
       ctx.fillStyle = el.fill || "#000000";
-      roundRect(ctx, x, y, w, h, (el.radius ?? 0) * (dpi / 96));
-      ctx.fill();
+      if (el.shape === "ellipse") {
+        ctx.beginPath();
+        ctx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      } else {
+        roundRect(ctx, x, y, w, h, (el.radius ?? 0) * (dpi / 96));
+      }
+      if (el.fill !== "transparent") ctx.fill();
+      if (el.borderWidth) {
+        ctx.lineWidth = el.borderWidth * (dpi / 96);
+        ctx.strokeStyle = el.borderColor || "#000000";
+        ctx.stroke();
+      }
     } else if (el.kind === "line") {
       ctx.fillStyle = el.fill || "#000000";
       ctx.fillRect(x, y, w, Math.max(1, h));
     } else if (el.kind === "image" && el.src) {
       await drawImage(ctx, el.src, x, y, w, h);
+      if (el.borderWidth) {
+        ctx.lineWidth = el.borderWidth * (dpi / 96);
+        ctx.strokeStyle = el.borderColor || "#000000";
+        roundRect(ctx, x, y, w, h, (el.radius ?? 0) * (dpi / 96));
+        ctx.stroke();
+      }
     } else if (el.kind === "text") {
-      const raw = substitute(el.text ?? "", values);
+      let raw = substitute(el.text ?? "", values);
+      if (el.uppercase) raw = raw.toUpperCase();
       if (raw.trim()) {
         const size = (el.fontSize ?? 12) * ptScale;
         ctx.fillStyle = el.color || "#000000";
@@ -249,6 +296,36 @@ export async function renderTagToPng(
       }
     }
     ctx.restore();
+  }
+
+  // Border around the whole label.
+  if (tpl.design.borderWidth) {
+    const bw = tpl.design.borderWidth * (dpi / 96);
+    ctx.lineWidth = bw;
+    ctx.strokeStyle = tpl.design.borderColor || "#000000";
+    roundRect(
+      ctx,
+      bw / 2,
+      bw / 2,
+      W - bw,
+      H - bw,
+      (tpl.design.borderRadius ?? 0) * (dpi / 96),
+    );
+    ctx.stroke();
+  }
+
+  // Thermal printers (DYMO) print black only. Monochrome mode thresholds the
+  // image so the preview matches the physical label exactly.
+  if (tpl.design.monochrome) {
+    const img = ctx.getImageData(0, 0, W, H);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const v = lum < 160 ? 0 : 255;
+      d[i] = d[i + 1] = d[i + 2] = v;
+      d[i + 3] = 255;
+    }
+    ctx.putImageData(img, 0, 0);
   }
 
   return canvas.toDataURL("image/png");

@@ -6,11 +6,18 @@ import { Icon } from "@/components/shell/Icon";
 import {
   blankDesign,
   FONTS,
+  LABEL_PRESETS,
   renderTagToPng,
   type TagDesign,
   type TagElement,
   type TagTemplate,
 } from "@/lib/tag-design";
+import {
+  CLIPART,
+  CLIPART_CATEGORIES,
+  clipArtDataUrl,
+  type ClipArt,
+} from "@/lib/clipart";
 
 const SAMPLE = {
   name: "Kristina R.",
@@ -48,6 +55,9 @@ export function TagDesigner({
     },
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [artOpen, setArtOpen] = useState(false);
+  const [artCat, setArtCat] = useState<ClipArt["category"]>("faith");
+  const [artColor, setArtColor] = useState("#d2303b");
   const [preview, setPreview] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -102,6 +112,23 @@ export function TagDesigner({
     setCurrent((c) => ({ ...c, design: { ...c.design, elements: [...c.design.elements, base] } }));
     setSelectedId(base.id);
   }
+  // Clip art is added as an image element backed by an inline SVG data URL,
+  // so it scales and prints cleanly and can be recoloured on insert.
+  function addArt(art: ClipArt) {
+    const el: TagElement = {
+      id: newId(),
+      kind: "image",
+      x: 0.06,
+      y: 0.25,
+      w: 0.2,
+      h: 0.45,
+      src: clipArtDataUrl(art, artColor),
+    };
+    setCurrent((c) => ({ ...c, design: { ...c.design, elements: [...c.design.elements, el] } }));
+    setSelectedId(el.id);
+    setArtOpen(false);
+  }
+
   function removeEl(id: string) {
     setCurrent((c) => ({
       ...c,
@@ -297,6 +324,11 @@ export function TagDesigner({
                   ? `url(${current.design.backgroundImage})`
                   : undefined,
                 backgroundSize: "cover",
+                border: current.design.borderWidth
+                  ? current.design.borderWidth + "px solid " + (current.design.borderColor ?? "#0b0b0c")
+                  : undefined,
+                borderRadius: current.design.borderRadius ?? undefined,
+                filter: current.design.monochrome ? "grayscale(1) contrast(3)" : undefined,
               }}
             >
               {current.design.elements.map((el) => {
@@ -338,6 +370,7 @@ export function TagDesigner({
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           pointerEvents: "none",
+                          textTransform: el.uppercase ? "uppercase" : undefined,
                         }}
                       >
                         {el.text}
@@ -349,7 +382,10 @@ export function TagDesigner({
                           width: "100%",
                           height: "100%",
                           background: el.fill,
-                          borderRadius: el.radius ?? 0,
+                          borderRadius: el.shape === "ellipse" ? "50%" : (el.radius ?? 0),
+                          border: el.borderWidth
+                            ? el.borderWidth + "px solid " + (el.borderColor ?? "#0b0b0c")
+                            : undefined,
                           pointerEvents: "none",
                         }}
                       />
@@ -378,6 +414,7 @@ export function TagDesigner({
               <AddBtn onClick={() => addEl("text")}>+ Text</AddBtn>
               <AddBtn onClick={() => addEl("rect")}>+ Box</AddBtn>
               <AddBtn onClick={() => addEl("line")}>+ Line</AddBtn>
+              <AddBtn onClick={() => setArtOpen((o) => !o)}>+ Clip art</AddBtn>
               <label className="cursor-pointer rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-200">
                 + Image
                 <input
@@ -388,6 +425,53 @@ export function TagDesigner({
                 />
               </label>
             </div>
+
+            {artOpen && (
+              <div className="mt-3 rounded-xl border border-ink-200 bg-white p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  {CLIPART_CATEGORIES.map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => setArtCat(c.key)}
+                      className={
+                        "rounded-full px-3 py-1 text-sm transition " +
+                        (artCat === c.key
+                          ? "bg-brand-500 text-white"
+                          : "bg-ink-100 text-ink-600 hover:bg-ink-200")
+                      }
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  <span className="flex-1" />
+                  <label className="flex items-center gap-1.5 text-xs text-ink-500">
+                    Colour
+                    <input
+                      type="color"
+                      value={artColor}
+                      onChange={(e) => setArtColor(e.target.value)}
+                      className="h-7 w-10 rounded border border-ink-200"
+                    />
+                  </label>
+                </div>
+                <div className="grid grid-cols-6 gap-2 sm:grid-cols-8">
+                  {CLIPART.filter((a) => a.category === artCat).map((a) => (
+                    <button
+                      key={a.id}
+                      onClick={() => addArt(a)}
+                      title={a.label}
+                      className="flex aspect-square items-center justify-center rounded-lg border border-ink-100 bg-ink-50 p-1.5 transition hover:border-brand-300 hover:bg-white"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={clipArtDataUrl(a, artColor)} alt={a.label} className="h-full w-full object-contain" />
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-ink-400">
+                  Click art to drop it on the label, then drag to position and resize.
+                </p>
+              </div>
+            )}
 
             <p className="mt-3 text-xs text-ink-500">
               Placeholders: <code>{"{name}"}</code> <code>{"{room}"}</code>{" "}
@@ -409,6 +493,25 @@ export function TagDesigner({
           {/* ---- Inspector ---- */}
           <aside className="space-y-4">
             <Panel title="Label">
+              <Row label="Label size (DYMO stock)">
+                <select
+                  className="ah-input py-1 text-sm"
+                  value={current.width_in + "x" + current.height_in}
+                  onChange={(e) => {
+                    const preset = LABEL_PRESETS.find(
+                      (l) => l.w + "x" + l.h === e.target.value,
+                    );
+                    if (preset) update({ width_in: preset.w, height_in: preset.h });
+                  }}
+                >
+                  <option value="">Custom…</option>
+                  {LABEL_PRESETS.map((l) => (
+                    <option key={l.name} value={l.w + "x" + l.h}>
+                      {l.name} — {l.w}in × {l.h}in{l.note ? " (" + l.note + ")" : ""}
+                    </option>
+                  ))}
+                </select>
+              </Row>
               <Row label="Width (in)">
                 <input type="number" step="0.125" className="ah-input py-1 text-sm" value={current.width_in}
                   onChange={(e) => update({ width_in: Number(e.target.value) || 3.5 })} />
@@ -421,6 +524,28 @@ export function TagDesigner({
                 <input type="color" className="h-8 w-full rounded border border-ink-200" value={current.design.background}
                   onChange={(e) => updateDesign({ background: e.target.value })} />
               </Row>
+              <Row label={"Label border (" + (current.design.borderWidth ?? 0) + "px)"}>
+                <input type="range" min={0} max={12} value={current.design.borderWidth ?? 0} className="w-full"
+                  onChange={(e) => updateDesign({ borderWidth: Number(e.target.value) })} />
+              </Row>
+              {(current.design.borderWidth ?? 0) > 0 && (
+                <>
+                  <Row label="Border colour">
+                    <input type="color" className="h-8 w-full rounded border border-ink-200"
+                      value={current.design.borderColor ?? "#0b0b0c"}
+                      onChange={(e) => updateDesign({ borderColor: e.target.value })} />
+                  </Row>
+                  <Row label={"Border radius (" + (current.design.borderRadius ?? 0) + ")"}>
+                    <input type="range" min={0} max={40} value={current.design.borderRadius ?? 0} className="w-full"
+                      onChange={(e) => updateDesign({ borderRadius: Number(e.target.value) })} />
+                  </Row>
+                </>
+              )}
+              <label className="flex items-center gap-2 text-sm text-ink-700">
+                <input type="checkbox" checked={!!current.design.monochrome}
+                  onChange={(e) => updateDesign({ monochrome: e.target.checked })} />
+                Black &amp; white (matches thermal printing)
+              </label>
               <label className="mt-1 block cursor-pointer rounded-lg bg-ink-100 px-3 py-1.5 text-center text-sm font-medium text-ink-700">
                 Background image
                 <input type="file" accept="image/*" className="hidden"
@@ -462,7 +587,7 @@ export function TagDesigner({
                         <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
                       </select>
                     </Row>
-                    <div className="flex gap-3 text-sm text-ink-700">
+                    <div className="flex flex-wrap gap-3 text-sm text-ink-700">
                       <label className="flex items-center gap-1.5">
                         <input type="checkbox" checked={!!selected.bold}
                           onChange={(e) => updateEl(selected.id, { bold: e.target.checked })} /> Bold
@@ -471,12 +596,25 @@ export function TagDesigner({
                         <input type="checkbox" checked={!!selected.italic}
                           onChange={(e) => updateEl(selected.id, { italic: e.target.checked })} /> Italic
                       </label>
+                      <label className="flex items-center gap-1.5">
+                        <input type="checkbox" checked={!!selected.uppercase}
+                          onChange={(e) => updateEl(selected.id, { uppercase: e.target.checked })} /> UPPERCASE
+                      </label>
                     </div>
                     <Row label={`Letter spacing (${selected.letterSpacing ?? 0})`}>
                       <input type="range" min={0} max={12} value={selected.letterSpacing ?? 0} className="w-full"
                         onChange={(e) => updateEl(selected.id, { letterSpacing: Number(e.target.value) })} />
                     </Row>
                   </>
+                )}
+                {selected.kind === "rect" && (
+                  <Row label="Shape">
+                    <select className="ah-input py-1 text-sm" value={selected.shape ?? "rect"}
+                      onChange={(e) => updateEl(selected.id, { shape: e.target.value as "rect" | "ellipse" })}>
+                      <option value="rect">Rectangle</option>
+                      <option value="ellipse">Ellipse / circle</option>
+                    </select>
+                  </Row>
                 )}
                 {(selected.kind === "rect" || selected.kind === "line") && (
                   <>
@@ -488,6 +626,21 @@ export function TagDesigner({
                       <input type="range" min={0} max={24} value={selected.radius ?? 0} className="w-full"
                         onChange={(e) => updateEl(selected.id, { radius: Number(e.target.value) })} />
                     </Row>
+                  </>
+                )}
+                {selected.kind !== "line" && (
+                  <>
+                    <Row label={"Border (" + (selected.borderWidth ?? 0) + "px)"}>
+                      <input type="range" min={0} max={12} value={selected.borderWidth ?? 0} className="w-full"
+                        onChange={(e) => updateEl(selected.id, { borderWidth: Number(e.target.value) })} />
+                    </Row>
+                    {(selected.borderWidth ?? 0) > 0 && (
+                      <Row label="Border colour">
+                        <input type="color" className="h-8 w-full rounded border border-ink-200"
+                          value={selected.borderColor ?? "#0b0b0c"}
+                          onChange={(e) => updateEl(selected.id, { borderColor: e.target.value })} />
+                      </Row>
+                    )}
                   </>
                 )}
                 <Row label={`Rotation (${selected.rotation ?? 0}°)`}>

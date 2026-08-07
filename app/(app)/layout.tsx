@@ -24,8 +24,22 @@ export default async function AppLayout({
     .eq("user_id", user.id)
     .single();
 
+  // IT staff get the portal directly and don't see the "Get IT Help" button —
+  // they raise tickets in the portal itself. Everyone else gets self-service.
+  const p = profile as Profile | null;
+  let isIT = p?.role === "IT_Admin";
+  if (!isIT && p?.id) {
+    const { data: itMember } = await supabase
+      .from("department_members")
+      .select("id, departments!inner(slug)")
+      .eq("profile_id", p.id)
+      .eq("departments.slug", "it")
+      .maybeSingle();
+    isIT = !!itMember;
+  }
+
   return (
-    <Shell profile={(profile as Profile) ?? null} email={user.email ?? ""}>
+    <Shell profile={p ?? null} email={user.email ?? ""} isIT={isIT}>
       {children}
     </Shell>
   );
