@@ -1,9 +1,23 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PeopleAdmin, type PersonFieldDef } from "@/components/admin/PeopleAdmin";
 import type { Campus, Department, Profile } from "@/lib/database.types";
 
 export default async function PeopleAdminPage() {
   const supabase = await createClient();
+  // Super_Admin only — the layout also admits IT_Admin for integrations.
+  const {
+    data: { user: guardUser },
+  } = await supabase.auth.getUser();
+  const { data: guardProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", guardUser!.id)
+    .single();
+  if ((guardProfile as { role?: string } | null)?.role !== "Super_Admin") {
+    redirect("/dashboard");
+  }
+
 
   const [
     { data: profiles },

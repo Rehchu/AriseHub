@@ -1,9 +1,23 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DepartmentsAdmin } from "@/components/admin/DepartmentsAdmin";
 import type { Department } from "@/lib/database.types";
 
 export default async function DepartmentsAdminPage() {
   const supabase = await createClient();
+  // Super_Admin only — the layout also admits IT_Admin for integrations.
+  const {
+    data: { user: guardUser },
+  } = await supabase.auth.getUser();
+  const { data: guardProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("user_id", guardUser!.id)
+    .single();
+  if ((guardProfile as { role?: string } | null)?.role !== "Super_Admin") {
+    redirect("/dashboard");
+  }
+
   const { data } = await supabase
     .from("departments")
     .select("id, name, slug, description, campus_id, created_at, updated_at")
