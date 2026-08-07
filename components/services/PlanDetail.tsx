@@ -47,6 +47,7 @@ export function PlanDetail({
   initialItems,
   initialAssignments,
   people,
+  songs = [],
   canManage,
   currentProfileId,
   blockouts = [],
@@ -57,6 +58,7 @@ export function PlanDetail({
   initialItems: Item[];
   initialAssignments: Assignment[];
   people: { id: string; full_name: string }[];
+  songs?: { id: string; title: string; artist: string | null; default_key: string | null }[];
   canManage: boolean;
   currentProfileId: string;
   blockouts?: Blockout[];
@@ -70,6 +72,7 @@ export function PlanDetail({
   const [itTitle, setItTitle] = useState("");
   const [itType, setItType] = useState<Item["item_type"]>("song");
   const [itDur, setItDur] = useState("");
+  const [itSong, setItSong] = useState("");
 
   const [posName, setPosName] = useState("");
   const [posPerson, setPosPerson] = useState("");
@@ -102,6 +105,7 @@ export function PlanDetail({
         title: itTitle.trim(),
         item_type: itType,
         duration_minutes: itDur ? Number(itDur) : null,
+        song_id: itType === "song" && itSong ? itSong : null,
         sort_order: items.length,
       })
       .select("*")
@@ -209,7 +213,28 @@ export function PlanDetail({
           </div>
           {canManage && (
             <form onSubmit={addItem} className="mt-3 space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
-              <input className="ah-input" placeholder="Item (e.g. Great Are You Lord)" value={itTitle} onChange={(e) => setItTitle(e.target.value)} />
+              {itType === "song" && songs.length > 0 ? (
+                <select
+                  className="ah-input"
+                  value={itSong}
+                  onChange={(e) => {
+                    setItSong(e.target.value);
+                    const s = songs.find((x) => x.id === e.target.value);
+                    if (s) setItTitle(s.title + (s.default_key ? " (" + s.default_key + ")" : ""));
+                  }}
+                >
+                  <option value="">Choose a song…</option>
+                  {songs.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                      {s.artist ? " — " + s.artist : ""}
+                      {s.default_key ? " · " + s.default_key : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input className="ah-input" placeholder="Item (e.g. Great Are You Lord)" value={itTitle} onChange={(e) => setItTitle(e.target.value)} />
+              )}
               <div className="flex gap-2">
                 <select className="ah-input capitalize" value={itType} onChange={(e) => setItType(e.target.value as Item["item_type"])}>
                   {ITEM_TYPES.map((t) => (

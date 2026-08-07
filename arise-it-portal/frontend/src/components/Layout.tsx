@@ -38,6 +38,25 @@ const navItems = [
   { to: "/audit-log", label: "Audit Log", icon: ScrollText, roles: ["super_admin", "campus_admin"] },
 ];
 
+// Cross-links into AriseHub. Password resets live there because Supabase Auth
+// does — duplicating the service-role key into this worker would widen the
+// blast radius for no benefit.
+const ARISEHUB = "https://arisehub.myfaithtech.com";
+const externalItems = [
+  {
+    href: ARISEHUB + "/it/passwords",
+    label: "AriseHub Passwords",
+    icon: KeyRound,
+    roles: ["super_admin", "campus_admin"],
+  },
+  {
+    href: ARISEHUB + "/dashboard",
+    label: "Back to AriseHub",
+    icon: ArrowLeft,
+    roles: ["super_admin", "campus_admin", "viewer"],
+  },
+];
+
 export default function Layout() {
   const { user, logout } = useAuth();
   const { theme, toggle } = useTheme();
@@ -99,23 +118,21 @@ export default function Layout() {
                 {item.label}
               </NavLink>
             ))}
+
+          <div className="my-2 border-t border-white/10" />
+          {externalItems
+            .filter((item) => item.roles.includes(user.role))
+            .map((item) => (
+              <a
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-ink-200 transition-colors hover:bg-ink-800 hover:text-white"
+              >
+                <item.icon size={17} strokeWidth={2} />
+                {item.label}
+              </a>
+            ))}
         </nav>
-        <div className="px-3 pb-3 space-y-1">
-          <a
-            href="https://arisehub.myfaithtech.com/it/passwords"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-ink-200 transition-colors hover:bg-ink-800 hover:text-white"
-          >
-            <KeyRound size={17} strokeWidth={2} />
-            AriseHub passwords
-          </a>
-          <a
-            href="https://arisehub.myfaithtech.com/dashboard"
-            className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-ink-200 transition-colors hover:bg-ink-800 hover:text-white"
-          >
-            <ArrowLeft size={17} strokeWidth={2} />
-            Back to AriseHub
-          </a>
-        </div>
         <div className="p-3 border-t border-white/10">
           <NavLink to="/profile" className="flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-ink-800">
             <div className="w-8 h-8 rounded-full bg-brand-600 flex items-center justify-center text-xs font-semibold text-white">

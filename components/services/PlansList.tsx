@@ -70,6 +70,12 @@ export function PlansList({
           </p>
         </div>
         <a
+          href="/services/songs"
+          className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
+        >
+          Songs
+        </a>
+        <a
           href="/services/schedule"
           className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
         >

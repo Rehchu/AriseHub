@@ -25,6 +25,16 @@ export interface ElvantoPerson {
   [key: string]: unknown;
 }
 
+export interface ElvantoSong {
+  id: string;
+  title: string;
+  artist?: string;
+  ccli_number?: string;
+  bpm?: string | number;
+  arrangements?: { arrangement?: { id: string; title?: string; key?: string; bpm?: string }[] };
+  [key: string]: unknown;
+}
+
 export interface ElvantoGroup {
   id: string;
   name: string;
@@ -97,6 +107,29 @@ export async function getAllGroups(apiKey: string): Promise<ElvantoGroup[]> {
     { page_size: 500 },
   );
   return body.groups?.group ?? [];
+}
+
+/**
+ * Fetch the song library. Elvanto keys/BPM live on arrangements, so we take the
+ * first arrangement as the default — enough for a plan, and the team can adjust
+ * per service.
+ */
+export async function getAllSongs(apiKey: string): Promise<ElvantoSong[]> {
+  const out: ElvantoSong[] = [];
+  let page = 1;
+  const pageSize = 500;
+  for (let guard = 0; guard < 20; guard++) {
+    const body = await call<{ songs?: { song?: ElvantoSong[] } }>(apiKey, "songs/getAll", {
+      page,
+      page_size: pageSize,
+      fields: ["arrangements"],
+    });
+    const batch = body.songs?.song ?? [];
+    out.push(...batch);
+    if (batch.length < pageSize) break;
+    page++;
+  }
+  return out;
 }
 
 /** Cheap credential check for the settings screen. */

@@ -6,6 +6,7 @@ import { users, sessions } from "../db/schema";
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from "../lib/crypto";
 import { signJwt } from "../lib/jwt";
 import { verifySupabaseJwt } from "../lib/supabase-auth";
+import { verifySsoCode } from "../lib/sso-code";
 import { requireAuth, SESSION_COOKIE } from "../lib/auth-middleware";
 import { logAudit } from "../lib/audit";
 import type { Env, Variables } from "../types";
@@ -165,6 +166,53 @@ auth.post("/sso-redirect", async (c) => {
 
   await logAudit(c.env, { userId: user.id, action: "sso_login", entityType: "user", entityId: user.id });
 
+  return c.redirect("/", 302);
+});
+
+/**
+ * SSO landing point: a plain GET carrying a short-lived signed code.
+ *
+ * This is the fourth mechanism tried and the only one the environment allows —
+ * cross-origin fetch, URL fragments and cross-site POST were each blocked
+ * (blocked cookie, cached SPA JS, and a Cloudflare CSRF 403 respectively).
+ *
+ * The code asserts only "AriseHub says this email is signed in", is HMAC-signed
+ * with a shared secret and expires in 60 seconds, so it is safe in a URL.
+ * Identity still maps to an ACTIVE local user — IT permissions remain owned by
+ * this database.
+ */
+auth.get("/sso-code", async (c) => {
+  const fail = (msg: string) => c.redirect("/login?sso=" + encodeURIComponent(msg), 302);
+
+  const code = c.req.query("c");
+  const secret = c.env.SSO_SHARED_SECRET;
+  if (!code || !secret) return fail("no_token");
+
+  const email = await verifySsoCode(code, secret);
+  if (!email) return fail("invalid_session");
+
+  const db = drizzle(c.env.DB);
+  const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (!user || !user.active) return fail("no_it_account");
+
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
+  const sessionToken = await signJwt(
+    { sub: user.id, role: user.role, campusId: user.campusId, exp: Math.floor(expiresAt.getTime() / 1000) },
+    c.env.JWT_SECRET
+  );
+  const tokenHash = await sha256Hex(sessionToken);
+  await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
+
+  setCookie(c, SESSION_COOKIE, sessionToken, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "Lax",
+    path: "/",
+    maxAge: SESSION_DAYS * 24 * 60 * 60,
+  });
+
+  await logAudit(c.env, { userId: user.id, action: "sso_login", entityType: "user", entityId: user.id });
   return c.redirect("/", 302);
 });
 

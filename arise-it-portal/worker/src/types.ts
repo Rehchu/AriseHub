@@ -12,6 +12,8 @@ export interface Env {
   // accept (mapped to local users by email). Unset = bridge disabled, the
   // portal's own cookie login is the only path.
   SUPABASE_URL?: string;
+  // Shared with the AriseHub worker to sign single sign-on hand-off codes.
+  SSO_SHARED_SECRET?: string;
 }
 
 export type Role = "super_admin" | "campus_admin" | "viewer";

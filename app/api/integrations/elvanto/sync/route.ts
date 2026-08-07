@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getAllPeople, getAllGroups, displayName, bestPhone } from "@/lib/elvanto";
+import { getAllPeople, getAllGroups, getAllSongs, displayName, bestPhone } from "@/lib/elvanto";
 
 // One-way sync: Elvanto → AriseHub.
 //
@@ -145,6 +145,39 @@ export async function POST(req: NextRequest) {
       }
     } catch (e) {
       errors.push(`groups: ${e instanceof Error ? e.message : "failed"}`);
+    }
+
+    // ---------- Songs ----------
+    try {
+      const songs = await getAllSongs(apiKey);
+      const { data: existingSongs } = await admin.from("songs").select("id, elvanto_id");
+      const sByElvanto = new Map<string, string>();
+      for (const s of (existingSongs ?? []) as { id: string; elvanto_id: string | null }[]) {
+        if (s.elvanto_id) sByElvanto.set(s.elvanto_id, s.id);
+      }
+      for (const song of songs) {
+        const arr = song.arrangements?.arrangement?.[0];
+        const fields = {
+          title: song.title,
+          artist: song.artist || null,
+          ccli_number: song.ccli_number || null,
+          default_key: arr?.key || null,
+          bpm: arr?.bpm
+            ? Number(arr.bpm) || null
+            : song.bpm
+              ? Number(song.bpm) || null
+              : null,
+          elvanto_id: song.id,
+        };
+        if (dryRun) continue;
+        const existingSid = sByElvanto.get(song.id);
+        const res = existingSid
+          ? await admin.from("songs").update(fields).eq("id", existingSid)
+          : await admin.from("songs").insert(fields);
+        if (res.error) errors.push("song " + song.title + ": " + res.error.message);
+      }
+    } catch (e) {
+      errors.push("songs: " + (e instanceof Error ? e.message : "failed"));
     }
 
     const status = errors.length === 0 ? "success" : "partial";

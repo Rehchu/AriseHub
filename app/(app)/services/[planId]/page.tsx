@@ -47,7 +47,8 @@ export default async function PlanPage({
   // Availability signals + who is already serving on this date (any plan), so
   // the scheduler is warned before double-booking someone.
   const planDate = (plan as { service_date: string }).service_date;
-  const [{ data: blockouts }, { data: patterns }, { data: sameDay }] = await Promise.all([
+  const [{ data: songs }, { data: blockouts }, { data: patterns }, { data: sameDay }] = await Promise.all([
+    supabase.from("songs").select("id, title, artist, default_key").eq("archived", false).order("title"),
     supabase.from("blockout_dates").select("id, profile_id, starts_on, ends_on, reason"),
     supabase.from("serving_patterns").select("id, profile_id, weekday, weeks, note"),
     supabase
@@ -81,6 +82,7 @@ export default async function PlanPage({
       initialItems={(items ?? []) as Item[]}
       initialAssignments={normAssignments}
       people={(people ?? []) as { id: string; full_name: string }[]}
+      songs={(songs ?? []) as { id: string; title: string; artist: string | null; default_key: string | null }[]}
       canManage={canManage}
       currentProfileId={profileId}
       blockouts={(blockouts ?? []) as Blockout[]}
