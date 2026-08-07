@@ -25,8 +25,95 @@
   --color-ink-800: #1a1a1e;
   --color-ink-900: #0b0b0c;
 
+  /* Chrome that stays dark in BOTH themes: sidebar, drawer, kiosk bar. Kept
+     out of the ink scale so ink can invert for dark mode without turning the
+     sidebar white. */
+  --color-chrome-50: #f6f6f7;
+  --color-chrome-200: #c5c6ca;
+  --color-chrome-300: #9a9ba1;
+  --color-chrome-400: #6d6e76;
+  --color-chrome-600: #34353b;
+  --color-chrome-700: #26272c;
+  --color-chrome-800: #1a1a1e;
+  --color-chrome-900: #0b0b0c;
+
   --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ---------------------------------------------------------------------------
+   Dark mode.
+
+   Tailwind v4 compiles every utility down to var(--color-…), so redefining the
+   tokens re-themes the whole app: bg-white, text-ink-900, border-ink-100 and
+   the rest all follow. That is why there is not a single `dark:` class in the
+   codebase — one place to change, nothing to keep in sync.
+
+   The ink scale inverts (ink-50 is the page behind everything, ink-900 the
+   strongest text) and `white` becomes the raised card surface. Brand red keeps
+   its 500 anchor because that is the logo; the pale and deep ends swap so
+   text-brand-700 on bg-brand-50 stays legible either way.
+
+   Body text lands at 13:1 and muted text at 5.5:1 against their backgrounds —
+   both clear of the 4.5:1 AA threshold.
+   --------------------------------------------------------------------------- */
+/* Unlayered on purpose: Tailwind emits @theme into `@layer theme`, and an
+   override inside that same layer loses to it on source order. Unlayered CSS
+   beats layered CSS in the cascade, so these always win. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-white: #17181c;
+    --color-ink-50: #101013;
+    --color-ink-100: #26272c;
+    --color-ink-200: #34353b;
+    --color-ink-300: #4c4d54;
+    --color-ink-400: #9a9ba1;
+    --color-ink-500: #b4b5bb;
+    --color-ink-600: #c5c6ca;
+    --color-ink-700: #d8d9dc;
+    --color-ink-800: #e8e8ea;
+    --color-ink-900: #f6f6f7;
+
+    --color-brand-50: #3a1519;
+    --color-brand-100: #4d1a20;
+    --color-brand-200: #6b1f27;
+    --color-brand-600: #e04553;
+    --color-brand-700: #f0959e;
+    --color-brand-800: #f6bcc2;
+    --color-brand-900: #fbe0e2;
+
+    color-scheme: dark;
+  }
+}
+
+/* An explicit pick in the theme switcher beats the system setting. */
+:root[data-theme="dark"] {
+  --color-white: #17181c;
+  --color-ink-50: #101013;
+  --color-ink-100: #26272c;
+  --color-ink-200: #34353b;
+  --color-ink-300: #4c4d54;
+  --color-ink-400: #9a9ba1;
+  --color-ink-500: #b4b5bb;
+  --color-ink-600: #c5c6ca;
+  --color-ink-700: #d8d9dc;
+  --color-ink-800: #e8e8ea;
+  --color-ink-900: #f6f6f7;
+
+  --color-brand-50: #3a1519;
+  --color-brand-100: #4d1a20;
+  --color-brand-200: #6b1f27;
+  --color-brand-600: #e04553;
+  --color-brand-700: #f0959e;
+  --color-brand-800: #f6bcc2;
+  --color-brand-900: #fbe0e2;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
 
 html,
 body {
@@ -69,7 +156,8 @@ body {
   width: 100%;
   border-radius: 0.5rem;
   border: 1px solid var(--color-ink-200);
-  background: #fff;
+  /* Token, not #fff — this becomes the dark surface in dark mode. */
+  background: var(--color-white);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   color: var(--color-ink-800);

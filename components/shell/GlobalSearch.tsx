@@ -110,7 +110,7 @@ export function GlobalSearch() {
     <>
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-lg bg-ink-100 px-3 py-1.5 text-sm text-ink-500 transition hover:bg-ink-200"
+        className="flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-ink-100 px-3 text-sm text-ink-500 transition hover:bg-ink-200 lg:h-9"
         aria-label="Search"
       >
         <Icon name="search" size={16} />

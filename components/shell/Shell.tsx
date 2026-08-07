@@ -14,6 +14,7 @@ import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { GlobalSearch } from "./GlobalSearch";
 import { ITPortalLink } from "./ITPortalLink";
+import { ThemeToggle } from "./ThemeToggle";
 import { BottomNav, bottomNavItems } from "./BottomNav";
 
 const IT_PORTAL =
@@ -74,14 +75,14 @@ export function Shell({
             aria-disabled={!m.ready}
             className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
               active
-                ? "bg-brand-500 text-white"
-                : "text-ink-200 hover:bg-ink-700 hover:text-white"
+                ? "bg-brand-500 text-chrome-50"
+                : "text-chrome-200 hover:bg-chrome-700 hover:text-chrome-50"
             } ${m.ready ? "" : "cursor-default opacity-50"}`}
           >
             <Icon name={m.icon} />
             <span className="flex-1">{m.label}</span>
             {!m.ready && (
-              <span className="rounded bg-ink-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-300">
+              <span className="rounded bg-chrome-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-chrome-300">
                 Soon
               </span>
             )}
@@ -95,8 +96,8 @@ export function Shell({
     <div className="flex h-[100dvh] overflow-hidden bg-ink-50">
       <RegisterServiceWorker />
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col bg-ink-900 py-5 lg:flex">
-        <div className="mb-6 flex items-center gap-2.5 px-5 text-white">
+      <aside className="hidden w-64 shrink-0 flex-col bg-chrome-900 py-5 lg:flex">
+        <div className="mb-6 flex items-center gap-2.5 px-5 text-chrome-50">
           <Logo size={30} />
           <span className="font-display text-lg font-bold">
             Arise<span className="text-brand-500">Hub</span>
@@ -113,13 +114,13 @@ export function Shell({
             className="absolute inset-0 bg-black/50"
             onClick={() => setDrawerOpen(false)}
           />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-ink-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
-            <div className="mb-6 flex items-center justify-between px-5 text-white">
+          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-chrome-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
+            <div className="mb-6 flex items-center justify-between px-5 text-chrome-50">
               <span className="flex items-center gap-2.5">
                 <Logo size={28} />
                 <span className="font-display font-bold">AriseHub</span>
               </span>
-              <button onClick={() => setDrawerOpen(false)} className="text-ink-300">
+              <button onClick={() => setDrawerOpen(false)} className="text-chrome-300">
                 <Icon name="x" />
               </button>
             </div>
@@ -131,24 +132,24 @@ export function Shell({
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 shrink-0 items-center gap-3 border-b border-ink-100 bg-white px-4 pt-safe safe-x">
+        <header className="flex min-h-18 shrink-0 items-center gap-2 border-b border-ink-100 bg-white px-3 pt-safe safe-x lg:min-h-14 lg:gap-3 lg:px-4">
           <button
             onClick={() => setDrawerOpen(true)}
-            className="-ml-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-600 active:bg-ink-100 lg:hidden"
+            className="-ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-ink-700 active:bg-ink-100 lg:hidden"
             aria-label="Open menu"
           >
-            <Icon name="menu" size={24} />
+            <Icon name="menu" size={28} />
           </button>
           <div className="flex items-center gap-2 lg:hidden">
-            <Logo size={24} />
-            <span className="font-display text-sm font-bold">AriseHub</span>
+            <Logo size={30} />
+            <span className="font-display text-lg font-bold">AriseHub</span>
           </div>
           <div className="flex-1" />
           <GlobalSearch />
           {!isIT && (
           <button
             onClick={() => setHelpOpen(true)}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-brand-600"
+            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-brand-500 px-3 text-sm font-semibold text-chrome-50 transition hover:bg-brand-600 lg:h-9"
           >
             <Icon name="help" size={18} />
             <span className="hidden sm:inline">Get IT Help</span>
@@ -185,28 +186,29 @@ function SidebarFooter({
   onSignOut: () => void;
 }) {
   return (
-    <div className="mt-4 border-t border-ink-700 px-3 pt-4">
+    <div className="mt-4 border-t border-chrome-700 px-3 pt-4">
       <div className="mb-2 px-2">
-        <p className="truncate text-sm font-medium text-white">{name}</p>
-        <p className="text-xs text-ink-400">{role?.replace("_", " ") ?? "Member"}</p>
+        <p className="truncate text-sm font-medium text-chrome-50">{name}</p>
+        <p className="text-xs text-chrome-400">{role?.replace("_", " ") ?? "Member"}</p>
       </div>
       <a
         href="/account/profile"
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+        className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"
       >
         <Icon name="badge" />
         My profile
       </a>
       <a
         href="/account/notifications"
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+        className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"
       >
         <Icon name="help" />
         Notifications
       </a>
+      <ThemeToggle />
       <button
         onClick={onSignOut}
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+        className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"
       >
         <Icon name="logout" />
         Sign out
