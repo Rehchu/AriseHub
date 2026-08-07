@@ -58,13 +58,19 @@ export function PlansList({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <div className="flex-1">
           <h1 className="font-display text-2xl font-bold text-ink-900">Services</h1>
           <p className="mt-1 text-ink-500">
             {canManage ? "Service plans & volunteer scheduling." : "Your serving schedule."}
           </p>
         </div>
+        <a
+          href="/services/availability"
+          className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
+        >
+          My availability
+        </a>
         {canManage && (
           <button
             onClick={() => setCreating((c) => !c)}

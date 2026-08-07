@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PlanDetail, type Item, type Assignment } from "@/components/services/PlanDetail";
+import type { Blockout, ServingPattern } from "@/lib/availability";
 
 export default async function PlanPage({
   params,
@@ -43,6 +44,30 @@ export default async function PlanPage({
       : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
   ]);
 
+  // Availability signals + who is already serving on this date (any plan), so
+  // the scheduler is warned before double-booking someone.
+  const planDate = (plan as { service_date: string }).service_date;
+  const [{ data: blockouts }, { data: patterns }, { data: sameDay }] = await Promise.all([
+    supabase.from("blockout_dates").select("id, profile_id, starts_on, ends_on, reason"),
+    supabase.from("serving_patterns").select("id, profile_id, weekday, weeks, note"),
+    supabase
+      .from("plan_assignments")
+      .select("profile_id, position, service_plans!inner(service_date, title)")
+      .eq("service_plans.service_date", planDate)
+      .neq("plan_id", planId),
+  ]);
+
+  const alreadyServing: Record<string, string> = {};
+  for (const a of (sameDay ?? []) as unknown as {
+    profile_id: string | null;
+    position: string;
+    service_plans: { title: string } | { title: string }[] | null;
+  }[]) {
+    if (!a.profile_id) continue;
+    const sp = Array.isArray(a.service_plans) ? a.service_plans[0] : a.service_plans;
+    alreadyServing[a.profile_id] = (sp?.title ?? "another plan") + " — " + a.position;
+  }
+
   const normAssignments: Assignment[] = ((assignments ?? []) as unknown as Array<
     Omit<Assignment, "assignee"> & { assignee: { full_name: string }[] | { full_name: string } | null }
   >).map((a) => ({
@@ -58,6 +83,9 @@ export default async function PlanPage({
       people={(people ?? []) as { id: string; full_name: string }[]}
       canManage={canManage}
       currentProfileId={profileId}
+      blockouts={(blockouts ?? []) as Blockout[]}
+      patterns={(patterns ?? []) as ServingPattern[]}
+      alreadyServing={alreadyServing}
     />
   );
 }

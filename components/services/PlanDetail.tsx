@@ -3,6 +3,11 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import {
+  availabilityFor,
+  type Blockout,
+  type ServingPattern,
+} from "@/lib/availability";
 
 export interface Item {
   id: string;
@@ -43,6 +48,9 @@ export function PlanDetail({
   people,
   canManage,
   currentProfileId,
+  blockouts = [],
+  patterns = [],
+  alreadyServing = {},
 }: {
   plan: Plan;
   initialItems: Item[];
@@ -50,6 +58,9 @@ export function PlanDetail({
   people: { id: string; full_name: string }[];
   canManage: boolean;
   currentProfileId: string;
+  blockouts?: Blockout[];
+  patterns?: ServingPattern[];
+  alreadyServing?: Record<string, string>;
 }) {
   const supabase = createClient();
   const [items, setItems] = useState<Item[]>(initialItems);
@@ -61,6 +72,19 @@ export function PlanDetail({
 
   const [posName, setPosName] = useState("");
   const [posPerson, setPosPerson] = useState("");
+
+  const planDate = new Date(plan.service_date + "T00:00:00");
+
+  // Availability label for the person picker, e.g. 'Away — Vacation'.
+  function availLabel(profileId: string): { text: string; tone: string } | null {
+    if (alreadyServing[profileId]) {
+      return { text: "Already on " + alreadyServing[profileId], tone: "text-amber-700" };
+    }
+    const a = availabilityFor(profileId, planDate, blockouts, patterns);
+    if (a.state === "blocked") return { text: "Away — " + (a.reason ?? ""), tone: "text-brand-600" };
+    if (a.state === "off-pattern") return { text: a.reason ?? "Off pattern", tone: "text-ink-400" };
+    return null;
+  }
 
   const totalMin = useMemo(
     () => items.reduce((sum, i) => sum + (i.duration_minutes ?? 0), 0),
@@ -211,6 +235,11 @@ export function PlanDetail({
                       </button>
                     )}
                   </div>
+                  {a.profile_id && availLabel(a.profile_id) && (
+                    <p className={"mt-1 flex items-center gap-1 text-xs " + (availLabel(a.profile_id)!.tone)}>
+                      <Icon name="help" size={12} /> {availLabel(a.profile_id)!.text}
+                    </p>
+                  )}
                   {mine && a.status === "invited" && (
                     <div className="mt-2 flex gap-2">
                       <button onClick={() => respond(a, "accepted")} className="flex-1 rounded-lg bg-emerald-500 py-1.5 text-sm font-medium text-white hover:bg-emerald-600">
@@ -236,11 +265,14 @@ export function PlanDetail({
               <div className="flex gap-2">
                 <select className="ah-input" value={posPerson} onChange={(e) => setPosPerson(e.target.value)}>
                   <option value="">Assign later</option>
-                  {people.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name}
-                    </option>
-                  ))}
+                  {people.map((p) => {
+                    const a = availLabel(p.id);
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {p.full_name}{a ? " · " + a.text : ""}
+                      </option>
+                    );
+                  })}
                 </select>
                 <button type="submit" className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">
                   Add
