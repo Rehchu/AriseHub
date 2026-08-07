@@ -12,6 +12,7 @@ import { GetITHelp } from "./GetITHelp";
 import { RegisterServiceWorker } from "@/components/pwa/RegisterServiceWorker";
 import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { GlobalSearch } from "./GlobalSearch";
 import { ITPortalLink } from "./ITPortalLink";
 
 const IT_PORTAL =
@@ -135,6 +136,7 @@ export function Shell({
             <span className="font-display text-sm font-bold">AriseHub</span>
           </div>
           <div className="flex-1" />
+          <GlobalSearch />
           {!isIT && (
           <button
             onClick={() => setHelpOpen(true)}

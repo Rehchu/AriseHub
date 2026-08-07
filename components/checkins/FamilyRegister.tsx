@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { uploadPersonPhoto, previewUrl } from "@/lib/photos";
 
 interface ChildRow {
   key: string;
@@ -10,6 +11,8 @@ interface ChildRow {
   dob: string;
   allergy: boolean;
   allergyNotes: string;
+  photo?: File;
+  photoPreview?: string;
 }
 
 let seq = 0;
@@ -39,6 +42,10 @@ export function FamilyRegister({
   const [p1Email, setP1Email] = useState("");
   const [p2Name, setP2Name] = useState("");
   const [p2Phone, setP2Phone] = useState("");
+  const [p1Photo, setP1Photo] = useState<File | undefined>();
+  const [p1Preview, setP1Preview] = useState<string>();
+  const [p2Photo, setP2Photo] = useState<File | undefined>();
+  const [p2Preview, setP2Preview] = useState<string>();
   const [children, setChildren] = useState<ChildRow[]>([
     { key: newKey(), name: "", dob: "", allergy: false, allergyNotes: "" },
   ]);
@@ -141,6 +148,27 @@ export function FamilyRegister({
         await supabase.from("profile_medical").insert(medical);
       }
 
+      // Photos upload last: they need the profile ids, and a failed upload
+      // must never lose the registration itself.
+      const photoJobs: Promise<unknown>[] = [];
+      const attach = (file: File | undefined, id: string | undefined) => {
+        if (!file || !id) return;
+        photoJobs.push(
+          uploadPersonPhoto(file, id).then((r) => {
+            if ("url" in r) {
+              return supabase
+                .from("profiles")
+                .update({ photo_url: r.url, photo_path: r.path })
+                .eq("id", id);
+            }
+          }),
+        );
+      };
+      attach(p1Photo, parentIds[0]);
+      attach(p2Photo, parentIds[1]);
+      kids.forEach((c, i) => attach(c.photo, ((kidProfiles ?? [])[i] as { id: string } | undefined)?.id));
+      await Promise.allSettled(photoJobs);
+
       setBusy(false);
       setDone(`${surname} registered — ${kids.length} child${kids.length === 1 ? "" : "ren"} ready to check in.`);
       onRegistered();
@@ -236,8 +264,29 @@ export function FamilyRegister({
               />
             </div>
           </div>
+          <div className="mt-3 flex flex-wrap gap-4">
+            <PhotoPicker
+              label="Parent 1 photo"
+              preview={p1Preview}
+              onPick={async (f) => {
+                setP1Photo(f);
+                setP1Preview(await previewUrl(f));
+              }}
+            />
+            {p2Name.trim() && (
+              <PhotoPicker
+                label="Parent 2 photo"
+                preview={p2Preview}
+                onPick={async (f) => {
+                  setP2Photo(f);
+                  setP2Preview(await previewUrl(f));
+                }}
+              />
+            )}
+          </div>
           <p className="mt-2 text-xs text-ink-400">
-            Both parents are authorised to pick up.
+            Both parents are authorised to pick up. Photos help confirm identity
+            at pickup.
           </p>
         </div>
 
@@ -288,6 +337,15 @@ export function FamilyRegister({
                     </button>
                   )}
                 </div>
+                <div className="mt-2">
+                  <PhotoPicker
+                    label="Photo"
+                    preview={c.photoPreview}
+                    onPick={async (f) =>
+                      updateChild(c.key, { photo: f, photoPreview: await previewUrl(f) })
+                    }
+                  />
+                </div>
                 <label className="mt-2 flex items-center gap-2 text-sm text-ink-700">
                   <input
                     type="checkbox"
@@ -325,6 +383,46 @@ export function FamilyRegister({
         </button>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Photo picker with a live preview. `capture` opens the camera directly on
+ * phones and tablets, which is how these get taken at the desk.
+ */
+function PhotoPicker({
+  label,
+  preview,
+  onPick,
+}: {
+  label: string;
+  preview?: string;
+  onPick: (f: File) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm">
+      {preview ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={preview} alt="" className="h-14 w-14 rounded-lg object-cover ring-1 ring-ink-200" />
+      ) : (
+        <span className="flex h-14 w-14 items-center justify-center rounded-lg bg-ink-100 text-ink-400">
+          <Icon name="users" size={20} />
+        </span>
+      )}
+      <span className="text-ink-600">
+        <span className="block font-medium">{label}</span>
+        <span className="text-xs text-brand-600 underline">
+          {preview ? "Change" : "Add photo"}
+        </span>
+      </span>
+      <input
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+      />
+    </label>
   );
 }
 

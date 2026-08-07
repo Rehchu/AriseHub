@@ -45,6 +45,39 @@ export default async function ReportsPage() {
   ]);
 
   const people = (peopleRows.data ?? []) as { role: string; campus_id: string | null }[];
+
+  // Trends: check-in attendance and new people over the last 8 weeks. Leadership
+  // asks "are we growing?" far more often than "how many rows are there".
+  const eightWeeksAgo = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000).toISOString();
+  const [{ data: recentCheckins }, { data: newPeople }] = await Promise.all([
+    supabase.from("checkins").select("checked_in_at").gte("checked_in_at", eightWeeksAgo),
+    supabase.from("profiles").select("created_at").gte("created_at", eightWeeksAgo),
+  ]);
+
+  function weekly(rows: { d: string }[]) {
+    const buckets: Record<string, number> = {};
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000);
+      d.setDate(d.getDate() - d.getDay());
+      buckets[d.toISOString().slice(0, 10)] = 0;
+    }
+    const keys = Object.keys(buckets).sort();
+    for (const r of rows) {
+      const d = new Date(r.d);
+      d.setDate(d.getDate() - d.getDay());
+      const k = d.toISOString().slice(0, 10);
+      if (k in buckets) buckets[k]++;
+      else if (keys.length && k < keys[0]) buckets[keys[0]]++;
+    }
+    return keys.map((k) => ({ week: k, count: buckets[k] }));
+  }
+
+  const attendanceTrend = weekly(
+    ((recentCheckins ?? []) as { checked_in_at: string }[]).map((r) => ({ d: r.checked_in_at })),
+  );
+  const growthTrend = weekly(
+    ((newPeople ?? []) as { created_at: string }[]).map((r) => ({ d: r.created_at })),
+  );
   const byRole: Record<string, number> = {};
   const byCampus: Record<string, number> = {};
   const campusName: Record<string, string> = {};
@@ -72,6 +105,11 @@ export default async function ReportsPage() {
       </div>
 
       <div className="mt-8 grid gap-6 sm:grid-cols-2">
+        <Trend title="Check-ins — last 8 weeks" data={attendanceTrend} accent="#0891b2" />
+        <Trend title="New people — last 8 weeks" data={growthTrend} accent="#059669" />
+      </div>
+
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
         <Breakdown title="People by role" data={byRole} />
         <Breakdown title="People by campus" data={byCampus} />
       </div>
@@ -103,6 +141,50 @@ function Stat({
       <p className="text-2xl font-bold text-ink-900">{value}</p>
       <p className="text-sm text-ink-500">{label}</p>
       {sub && <p className="text-xs text-ink-400">{sub}</p>}
+    </div>
+  );
+}
+
+/** Compact weekly bar chart — enough to see a direction at a glance. */
+function Trend({
+  title,
+  data,
+  accent,
+}: {
+  title: string;
+  data: { week: string; count: number }[];
+  accent: string;
+}) {
+  const max = Math.max(1, ...data.map((d) => d.count));
+  const total = data.reduce((s, d) => s + d.count, 0);
+  return (
+    <div className="rounded-xl border border-ink-100 bg-white p-5">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="font-display font-semibold text-ink-900">{title}</h2>
+        <span className="text-sm text-ink-500">{total} total</span>
+      </div>
+      {total === 0 ? (
+        <p className="text-sm text-ink-400">No data yet.</p>
+      ) : (
+        <div className="flex h-24 items-end gap-1.5">
+          {data.map((d) => (
+            <div key={d.week} className="flex flex-1 flex-col items-center gap-1">
+              <div
+                className="w-full rounded-t"
+                style={{
+                  height: Math.max(2, (d.count / max) * 72),
+                  backgroundColor: accent,
+                  opacity: d.count === 0 ? 0.15 : 1,
+                }}
+                title={d.week + ": " + d.count}
+              />
+              <span className="text-[9px] text-ink-400">
+                {new Date(d.week + "T00:00:00").toLocaleDateString(undefined, { month: "numeric", day: "numeric" })}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

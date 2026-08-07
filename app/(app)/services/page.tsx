@@ -21,6 +21,11 @@ export default async function ServicesPage() {
     .select("id, title, service_date")
     .order("service_date", { ascending: false });
 
+  const { data: departments } = await supabase
+    .from("departments")
+    .select("id, name")
+    .order("name");
+
   const { data: myAssignments } = await supabase
     .from("plan_assignments")
     .select("plan_id, status")
@@ -35,5 +40,12 @@ export default async function ServicesPage() {
     myStatus: myStatus[p.id] ?? null,
   }));
 
-  return <PlansList initial={rows} canManage={canManage} currentProfileId={profileId} />;
+  return (
+    <PlansList
+      initial={rows}
+      canManage={canManage}
+      currentProfileId={profileId}
+      departments={(departments ?? []) as { id: string; name: string }[]}
+    />
+  );
 }

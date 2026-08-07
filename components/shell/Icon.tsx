@@ -21,6 +21,7 @@ const PATHS: Record<string, string> = {
   heart: "M12 20s-7-4.5-9.5-9A4.5 4.5 0 0 1 12 6a4.5 4.5 0 0 1 9.5 5c-2.5 4.5-9.5 9-9.5 9Z",
   arrowRight: "M5 12h14M13 6l6 6-6 6",
   chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3",
 };
 
 export function Icon({

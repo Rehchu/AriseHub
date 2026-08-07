@@ -23,16 +23,19 @@ export function PlansList({
   initial,
   canManage,
   currentProfileId,
+  departments = [],
 }: {
   initial: PlanRow[];
   canManage: boolean;
   currentProfileId: string;
+  departments?: { id: string; name: string }[];
 }) {
   const supabase = createClient();
   const router = useRouter();
   const [plans] = useState<PlanRow[]>(initial);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
+  const [deptId, setDeptId] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -45,6 +48,7 @@ export function PlansList({
       .insert({
         title: title.trim(),
         service_date: date || undefined,
+        department_id: deptId || null,
         created_by: currentProfileId,
       })
       .select("id")
@@ -66,6 +70,12 @@ export function PlansList({
           </p>
         </div>
         <a
+          href="/services/schedule"
+          className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
+        >
+          Schedule calendar
+        </a>
+        <a
           href="/services/availability"
           className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
         >
@@ -85,6 +95,16 @@ export function PlansList({
         <form onSubmit={create} className="mb-6 flex flex-wrap gap-2 rounded-xl border border-ink-100 bg-white p-4">
           <input className="ah-input flex-1" placeholder="Plan title (e.g. Sunday AM)" value={title} onChange={(e) => setTitle(e.target.value)} required />
           <input type="date" className="ah-input w-auto" value={date} onChange={(e) => setDate(e.target.value)} />
+          {departments.length > 0 && (
+            <select className="ah-input w-auto" value={deptId} onChange={(e) => setDeptId(e.target.value)}>
+              <option value="">No department</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button type="submit" disabled={busy} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60">
             Create
           </button>
