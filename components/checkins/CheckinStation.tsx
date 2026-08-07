@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import {
@@ -19,6 +20,7 @@ import {
 } from "@/lib/dymo";
 import { renderTagToPng, type TagTemplate } from "@/lib/tag-design";
 import { TagDesigner } from "./TagDesigner";
+import { FamilyRegister } from "./FamilyRegister";
 
 export interface RoomRow {
   id: string;
@@ -82,6 +84,7 @@ export function CheckinStation({
   isCheckinLead: boolean;
 }) {
   const supabase = createClient();
+  const router = useRouter();
   const [checkins, setCheckins] = useState<CheckinRow[]>(initial);
   const [tab, setTab] = useState<"checkin" | "roster">("checkin");
   const [q, setQ] = useState("");
@@ -128,6 +131,7 @@ export function CheckinStation({
   // to an image and print that, so the label matches the design exactly.
   const [templates, setTemplates] = useState<TagTemplate[]>([]);
   const [showDesigner, setShowDesigner] = useState(false);
+  const [showFamily, setShowFamily] = useState(false);
   useEffect(() => {
     supabase
       .from("nametag_templates")
@@ -478,9 +482,17 @@ export function CheckinStation({
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Check IN */}
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
-              Find a child or person
-            </h2>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+                Find a child or person
+              </h2>
+              <button
+                onClick={() => setShowFamily(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-ink-200"
+              >
+                <Icon name="users" size={16} /> Register a family
+              </button>
+            </div>
             <input
               className="ah-input"
               placeholder="Type a name…"
@@ -643,6 +655,13 @@ export function CheckinStation({
         </div>
       )}
 
+      {showFamily && (
+        <FamilyRegister
+          campusId={campusId}
+          onClose={() => setShowFamily(false)}
+          onRegistered={() => router.refresh()}
+        />
+      )}
       {showDesigner && (
         <TagDesigner
           initial={templates}
