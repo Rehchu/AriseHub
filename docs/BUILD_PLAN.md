@@ -9,8 +9,8 @@ Status legend: ✅ done · 🟡 in progress / schema-written · ⬜ pending · �
 
 **Roles (clarified):** app `Super_Admin` = **Pastor & Apostle** (see everything). **IT_Admin** (Bradly) = IT-portal super-admin only, NOT app-wide — RLS `is_super_admin()` matches only `Super_Admin`. Church has **2 campuses**; the **directory is church-wide**, operational data (check-in/rooms/services/medical) stays **campus-scoped**.
 
-### ⚠️ Pending Supabase migrations to apply (SQL editor, in order)
-`0003_realtime_messages`, `0004_directory_churchwide`, `0005_tasks`, `0006_groups`. 0001/0002 already applied.
+### ⚠️ Pending Supabase migrations
+See **docs/PENDING_MIGRATIONS.md** — 0001–0020 applied; 0021 and 0022 pending, plus two Storage buckets.
 
 ### Repo-inspired features to add (user approved all EXCEPT background checks)
 From B1Admin / ChurchCRM / ecclesiaCRM — build natively (licensing/stack rule):
