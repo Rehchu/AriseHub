@@ -12,6 +12,7 @@ export interface DirectoryPerson {
   email: string | null;
   phone: string | null;
   role: string;
+  title: string | null;
   campus: string | null;
   departments: string[];
 }
@@ -101,7 +102,7 @@ export function PeopleDirectory({
               <div className="min-w-0">
                 <p className="truncate font-medium text-ink-900">{p.full_name}</p>
                 <p className="truncate text-xs text-ink-400">
-                  {p.role.replace("_", " ")}
+                  {p.title || p.role.replace("_", " ")}
                   {p.campus && ` · ${p.campus}`}
                 </p>
                 {p.departments.length > 0 && (
@@ -153,7 +154,7 @@ function PersonDrawer({
         </div>
         <h2 className="font-display text-xl font-bold text-ink-900">{person.full_name}</h2>
         <p className="text-sm text-ink-500">
-          {person.role.replace("_", " ")}
+          {person.title || person.role.replace("_", " ")}
           {person.campus && ` · ${person.campus}`}
         </p>
 
@@ -171,6 +172,12 @@ function PersonDrawer({
                 {person.phone}
               </a>
             </Row>
+          )}
+          {!person.email && !person.phone && (
+            <p className="rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-500">
+              Contact details are visible to leadership only. Use the message
+              button below to reach them.
+            </p>
           )}
           {person.departments.length > 0 && (
             <Row label="Departments">

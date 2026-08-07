@@ -6,6 +6,19 @@ import type { Campus, Department, Profile, UserRole } from "@/lib/database.types
 import { Icon } from "@/components/shell/Icon";
 import { InvitePanel } from "./InvitePanel";
 
+// Suggestions only — the field is free text so unusual titles still work.
+const TITLES = [
+  "Apostle",
+  "Pastor",
+  "Co-Pastor",
+  "Elder",
+  "Minister",
+  "Deacon",
+  "Department Head",
+  "Worship Leader",
+  "Administrator",
+];
+
 const ROLES: UserRole[] = ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"];
 
 export interface PersonFieldDef {
@@ -167,6 +180,12 @@ export function PeopleAdmin({
           </p>
         )}
 
+        <datalist id="ah-titles">
+          {TITLES.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+
         <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
           {filtered.map((p) => {
             const isOpen = expanded === p.id;
@@ -191,7 +210,12 @@ export function PeopleAdmin({
                         </span>
                       )}
                     </p>
-                    <p className="truncate text-xs text-ink-400">{p.email}</p>
+                    <p className="truncate text-xs text-ink-400">
+                      {p.title && (
+                        <span className="mr-1.5 font-medium text-brand-600">{p.title}</span>
+                      )}
+                      {p.email}
+                    </p>
                   </div>
 
                   <select
@@ -251,6 +275,29 @@ export function PeopleAdmin({
 
                 {isOpen && (
                   <div className="border-t border-ink-100 bg-ink-50 px-4 py-3">
+                    {/* Ministry title is what people are *called*; the role select
+                        above is what they can *do*. Our Apostle and Pastor are
+                        Super_Admins who should read as Apostle and Pastor. */}
+                    <label className="mb-3 block">
+                      <span className="mb-1 flex items-center gap-2 text-xs font-medium text-ink-500">
+                        <Icon name="badge" size={14} /> Ministry title
+                      </span>
+                      <input
+                        className="ah-input max-w-xs py-1.5 text-sm"
+                        placeholder="Apostle, Pastor, Elder…"
+                        defaultValue={p.title ?? ""}
+                        list="ah-titles"
+                        onBlur={(e) => {
+                          const v = e.target.value.trim();
+                          if (v !== (p.title ?? "")) patch(p.id, { title: v || null });
+                        }}
+                      />
+                      <span className="mt-1 block text-xs text-ink-400">
+                        Shown throughout the app. Permissions still come from the
+                        role above.
+                      </span>
+                    </label>
+
                     <div className="mb-2 flex items-center gap-2 text-xs font-medium text-ink-500">
                       <Icon name="group" size={14} /> Department memberships
                     </div>

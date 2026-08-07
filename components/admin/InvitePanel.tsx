@@ -48,7 +48,11 @@ export function InvitePanel({
   const [role, setRole] = useState<UserRole>("Member");
   const [campusId, setCampusId] = useState("");
   const [deptIds, setDeptIds] = useState<Set<string>>(new Set());
-  const [expires, setExpires] = useState("");
+  // Links are bearer secrets — default to expiring tomorrow.
+  const [expires, setExpires] = useState(() => {
+    const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    return d.toISOString().slice(0, 10);
+  });
   const [maxUses, setMaxUses] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +91,9 @@ export function InvitePanel({
         role,
         campus_id: campusId || null,
         department_ids: [...deptIds],
-        expires_at: expires ? new Date(expires + "T23:59:59").toISOString() : null,
+        expires_at: expires
+          ? new Date(expires + "T23:59:59").toISOString()
+          : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         max_uses: maxUses ? Number(maxUses) : null,
       })
       .select("id, code, label, role, campus_id, department_ids, active, expires_at, max_uses, uses")
@@ -132,8 +138,8 @@ export function InvitePanel({
           <p className="mb-4 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
             Share a link and people register themselves — they arrive with the role,
             campus and departments you set here. Anyone holding the link can join, so
-            set an expiry or a use limit for wider shares, and switch it off when
-            you&apos;re done.
+            links expire after 24 hours by default — extend the date only if you
+            genuinely need longer, and switch a link off when you&apos;re done.
           </p>
 
           <form onSubmit={create} className="space-y-3 rounded-xl border border-ink-100 bg-ink-50 p-3">
