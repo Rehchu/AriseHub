@@ -7,10 +7,10 @@ export default async function MyProfilePage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Your own row, straight from profiles — the privacy view redacts other
-  // people, not you.
+  // people_directory is now the only way to read contact columns (0029).
+  // It un-redacts your own row, so this returns your real details.
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("people_directory")
     .select(
       "id, full_name, email, phone, photo_url, bio, birthday, address, emergency_contact, emergency_phone, role, title, campus_id",
     )

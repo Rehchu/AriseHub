@@ -28,7 +28,7 @@ export default async function PeopleAdminPage() {
     { data: values },
   ] = await Promise.all([
     supabase
-      .from("profiles")
+      .from("people_directory")
       .select(
         "id, user_id, full_name, email, phone, photo_url, role, title, campus_id, is_checkin_lead, archived_at, created_at, updated_at",
       )

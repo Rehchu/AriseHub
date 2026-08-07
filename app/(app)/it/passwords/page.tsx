@@ -19,7 +19,7 @@ export default async function ITPasswordsPage() {
 
   // Only people with a login can have a password reset.
   const { data: people } = await supabase
-    .from("profiles")
+    .from("people_directory")
     .select("id, full_name, email, user_id")
     .not("user_id", "is", null)
     .is("archived_at", null)

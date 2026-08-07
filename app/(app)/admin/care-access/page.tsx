@@ -19,23 +19,31 @@ export default async function CareAccessPage() {
   const [{ data: grants }, { data: people }, { data: supers }] = await Promise.all([
     supabase
       .from("care_access")
-      .select("profile_id, granted_at, note, profiles!care_access_profile_id_fkey(full_name, email)"),
+      .select("profile_id, granted_at, note"),
     supabase
-      .from("profiles")
+      .from("people_directory")
       .select("id, full_name, email, role")
       .is("archived_at", null)
       .not("user_id", "is", null)
       .order("full_name"),
-    supabase.from("profiles").select("id, full_name").eq("role", "Super_Admin"),
+    supabase.from("people_directory").select("id, full_name").eq("role", "Super_Admin"),
   ]);
 
-  const normalized: Grant[] = ((grants ?? []) as unknown as Array<{
+  // Names come from the same directory list rather than an embedded join —
+  // contact columns are only reachable through people_directory now (0029).
+  const byId = new Map(
+    ((people ?? []) as { id: string; full_name: string; email: string | null }[]).map((p) => [
+      p.id,
+      p,
+    ]),
+  );
+
+  const normalized: Grant[] = ((grants ?? []) as Array<{
     profile_id: string;
     granted_at: string;
     note: string | null;
-    profiles: { full_name: string; email: string | null } | { full_name: string; email: string | null }[] | null;
   }>).map((g) => {
-    const p = Array.isArray(g.profiles) ? g.profiles[0] : g.profiles;
+    const p = byId.get(g.profile_id);
     return {
       profile_id: g.profile_id,
       granted_at: g.granted_at,

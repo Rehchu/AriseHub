@@ -12,7 +12,7 @@ export default async function ITPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("people_directory")
     .select("id, full_name, email, role")
     .eq("user_id", user!.id)
     .single();

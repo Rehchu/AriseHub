@@ -27,7 +27,7 @@ export default async function ElvantoPage() {
 
   const { count: linked } = await supabase
     .from("profiles")
-    .select("*", { count: "exact", head: true })
+    .select("id", { count: "exact", head: true })
     .not("elvanto_id", "is", null);
 
   return (

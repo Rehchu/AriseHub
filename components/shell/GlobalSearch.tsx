@@ -56,7 +56,7 @@ export function GlobalSearch() {
       const like = `%${term}%`;
       setBusy(true);
       const [people, tasks, events, groupsRes, plans, forms] = await Promise.all([
-        supabase.from("profiles").select("id, full_name, email, role").ilike("full_name", like).is("archived_at", null).limit(6),
+        supabase.from("people_directory").select("id, full_name, email, role").ilike("full_name", like).is("archived_at", null).limit(6),
         supabase.from("tasks").select("id, title, status").ilike("title", like).limit(5),
         supabase.from("events").select("id, title, starts_at").ilike("title", like).limit(5),
         supabase.from("groups").select("id, name, group_type").ilike("name", like).limit(5),

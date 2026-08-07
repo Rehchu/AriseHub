@@ -19,18 +19,6 @@ export default async function PeoplePage() {
       supabase.from("department_members").select("profile_id, department_id"),
     ]);
 
-  // Until 0027 is applied the view doesn't exist — fall back to profiles so the
-  // directory keeps working (contact details are simply not yet restricted).
-  const rows = dirError
-    ? (
-        await supabase
-          .from("profiles")
-          .select("id, full_name, email, phone, role, campus_id, photo_url, archived_at")
-          .is("archived_at", null)
-          .order("full_name")
-      ).data
-    : profiles;
-
   const campusName: Record<string, string> = {};
   for (const c of (campuses ?? []) as Campus[]) campusName[c.id] = c.name;
   const deptName: Record<string, string> = {};
@@ -41,7 +29,7 @@ export default async function PeoplePage() {
     (deptsByProfile[m.profile_id] ??= []).push(deptName[m.department_id] ?? "");
   }
 
-  const people: DirectoryPerson[] = ((rows ?? []) as Array<{
+  const people: DirectoryPerson[] = ((profiles ?? []) as Array<{
     id: string;
     full_name: string;
     email: string | null;

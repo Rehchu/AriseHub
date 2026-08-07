@@ -35,7 +35,11 @@ bucket_name = "arise-it-portal-files"
 # Only matters for local dev where the Vite dev server (5173) calls the
 # wrangler dev API (8787) cross-origin. In production everything is one
 # origin, so this is effectively unused there.
-ALLOWED_ORIGINS = "https://arisehub.myfaithtech.com,http://localhost:5173,http://localhost:3000"
+# Production only. localhost was listed here and, with credentials:true, let any
+# page on a dev server make credentialed calls to the live API.
+# Production only. localhost was listed here and, with credentials:true, any
+# page on a local dev server could make credentialed calls to the live API.
+ALLOWED_ORIGINS = "https://arisehub.myfaithtech.com,https://itportal.myfaithtech.com"
 # Email invites. RESEND_API_KEY is a secret (set via `wrangler secret put`).
 # FROM_EMAIL uses myfaithtech.com — verified in this Resend account, so invites
 # can be delivered to any recipient. Change the address if you verify a
