@@ -1,0 +1,26 @@
+import { createClient } from "@/lib/supabase/server";
+import { ElvantoSync, type SyncRun } from "@/components/admin/ElvantoSync";
+
+export default async function ElvantoPage() {
+  const supabase = await createClient();
+  const { data: runs } = await supabase
+    .from("elvanto_syncs")
+    .select(
+      "id, started_at, finished_at, status, people_created, people_updated, groups_created, groups_updated, errors",
+    )
+    .order("started_at", { ascending: false })
+    .limit(10);
+
+  const { count: linked } = await supabase
+    .from("profiles")
+    .select("*", { count: "exact", head: true })
+    .not("elvanto_id", "is", null);
+
+  return (
+    <ElvantoSync
+      runs={(runs ?? []) as SyncRun[]}
+      linkedCount={linked ?? 0}
+      configured={!!process.env.ELVANTO_API_KEY}
+    />
+  );
+}
