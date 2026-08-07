@@ -14,6 +14,11 @@
   // Canonical hostname. Added in the dashboard; declared here so redeploys and
   // any future rebuild of this Worker keep the binding.
   "routes": [{ "pattern": "arisehub.myfaithtech.com", "custom_domain": true }],
+  // Media (profile photos, chat attachments, check-in photos). R2 gives 10GB on
+  // the free plan against Supabase Storage's 1GB, and no egress charges.
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "arisehub-media" }
+  ],
   "vars": {
     // Public values only. Secrets (SUPABASE_SERVICE_ROLE_KEY, VAPID_PRIVATE_KEY)
     // are set with `wrangler secret put` and never live in this file.

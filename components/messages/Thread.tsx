@@ -6,6 +6,7 @@ import type { Message } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 import { notifyMany, preview } from "@/lib/notify";
 import { SignedAttachment } from "./SignedAttachment";
+import { uploadToR2 } from "@/lib/upload";
 import { compressImage } from "@/lib/photos";
 
 interface Row extends Message {
@@ -124,15 +125,12 @@ export function Thread({
       try {
         const isImage = file.type.startsWith("image/");
         const blob = isImage ? await compressImage(file, 1400, 0.82) : file;
-        const path = `messages/${channelId}/${Date.now()}-${file.name.replace(/[^\w.-]/g, "_")}`;
-        const { error } = await supabase.storage.from("attachments").upload(path, blob, {
-          contentType: file.type || "application/octet-stream",
-          upsert: true,
-        });
-        if (error) throw error;
-        // Store the object path. The bucket is private, so the URL used to
-        // display it is signed on demand and expires.
-        attachment = { url: path, type: file.type || "file", name: file.name };
+        // R2, via our own route: every read is checked against the session, so
+        // someone removed from the channel loses the file immediately rather
+        // than when a signature happens to expire.
+        const up = await uploadToR2(blob, `messages/${channelId}`, file.name);
+        if ("error" in up) throw new Error(up.error);
+        attachment = { url: up.ref, type: file.type || "file", name: file.name };
       } catch (err) {
         setSending(false);
         setBody(text);

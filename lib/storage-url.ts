@@ -19,6 +19,22 @@ import { createClient } from "@/lib/supabase/client";
 
 const SIGNED_TTL_SECONDS = 60 * 60; // an hour — long enough to read a thread
 
+/**
+ * New uploads go to R2 and are stored as `r2:<key>`. Those need no signing —
+ * /api/files/<key> checks the session on every request, so access ends when
+ * someone is removed rather than when a signature expires. Anything without
+ * the prefix is a Supabase Storage path or a legacy public URL.
+ */
+export const R2_PREFIX = "r2:";
+
+export function isR2(ref: string | null | undefined): boolean {
+  return !!ref && ref.startsWith(R2_PREFIX);
+}
+
+export function r2Url(ref: string): string {
+  return "/api/files/" + ref.slice(R2_PREFIX.length).split("/").map(encodeURIComponent).join("/");
+}
+
 /** `https://…/storage/v1/object/public/attachments/a/b.png` -> `a/b.png` */
 export function objectPath(bucket: string, urlOrPath: string): string {
   const marker = `/storage/v1/object/public/${bucket}/`;
@@ -44,6 +60,7 @@ export async function signedUrl(
   if (!urlOrPath) return null;
   // Data URLs are local previews — nothing to sign.
   if (urlOrPath.startsWith("data:") || urlOrPath.startsWith("blob:")) return urlOrPath;
+  if (isR2(urlOrPath)) return r2Url(urlOrPath);
 
   const supabase = createClient();
   const buckets = Array.isArray(bucket) ? bucket : [bucket];
@@ -64,12 +81,19 @@ export async function signedUrl(
  * to initials or a placeholder rather than rendering a broken image.
  */
 export function useSignedUrl(bucket: string | string[], urlOrPath: string | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
+  // R2 needs no round trip, so resolve it in the initial state.
+  const [url, setUrl] = useState<string | null>(
+    isR2(urlOrPath) ? r2Url(urlOrPath!) : null,
+  );
 
   useEffect(() => {
     let live = true;
     if (!urlOrPath) {
       setUrl(null);
+      return;
+    }
+    if (isR2(urlOrPath)) {
+      setUrl(r2Url(urlOrPath));
       return;
     }
     signedUrl(bucket, urlOrPath).then((u) => {

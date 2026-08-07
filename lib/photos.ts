@@ -4,14 +4,11 @@
 // child-safety control at pickup: staff can match face to tag rather than
 // relying on a code alone.
 //
-// Requires a PRIVATE Storage bucket named `photos`. Photos of children are
-// never world-readable; display goes through a short-lived signed URL
-// (lib/storage-url.ts).
+// Stored in Cloudflare R2 and served through /api/files, which checks the
+// session on every request. Nothing here is ever publicly reachable.
 
-import { createClient } from "@/lib/supabase/client";
-import { signedUrl } from "@/lib/storage-url";
+import { uploadToR2 } from "@/lib/upload";
 
-const BUCKET = "photos";
 
 /** Downscale before upload — phone photos are ~4 MB, a badge needs ~40 KB. */
 export async function compressImage(file: File, maxDim = 600, quality = 0.8): Promise<Blob> {
@@ -44,24 +41,12 @@ export async function uploadPersonPhoto(
   file: File,
   profileId: string,
 ): Promise<UploadedPhoto | { error: string }> {
-  const supabase = createClient();
   try {
     const blob = await compressImage(file);
-    const path = `people/${profileId}-${Date.now()}.jpg`;
-    const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
-      contentType: "image/jpeg",
-      upsert: true,
-    });
-    if (error) {
-      return {
-        error: /bucket/i.test(error.message)
-          ? "Photo storage isn't set up yet — create a private bucket named 'photos' in Supabase."
-          : error.message,
-      };
-    }
-    // Signed, not public: the bucket holds photos of children.
-    const url = await signedUrl(BUCKET, path);
-    return { url: url ?? path, path };
+    const up = await uploadToR2(blob, "people", `${profileId}.jpg`);
+    if ("error" in up) return up;
+    // The ref is what gets stored and what the Avatar resolves.
+    return { url: up.ref, path: up.ref };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not upload the photo." };
   }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import { useSignedUrl } from "@/lib/storage-url";
+import { compressImage, uploadToR2 } from "@/lib/upload";
 
 export interface MyProfile {
   id: string;
@@ -91,23 +92,21 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
     if (!file) return;
     setBusy(true);
     setError(null);
-    const path = `profiles/${profile.id}-${Date.now()}-${file.name.replace(/[^\w.-]/g, "_")}`;
-    const up = await supabase.storage.from("attachments").upload(path, file, {
-      contentType: file.type,
-      upsert: true,
-    });
-    if (up.error) {
+    // Compress first — phone photos are multi-megabyte and this used to store
+    // them whole, which was slow to load and ate the storage quota.
+    const blob = await compressImage(file, 900, 0.85);
+    const up = await uploadToR2(blob, "profiles", file.name);
+    if ("error" in up) {
       setBusy(false);
-      return setError(up.error.message);
+      return setError(up.error);
     }
-    // Private bucket — store the path and sign it for display.
     const { error } = await supabase
       .from("profiles")
-      .update({ photo_url: path })
+      .update({ photo_url: up.ref })
       .eq("id", profile.id);
     setBusy(false);
     if (error) return setError(error.message);
-    setPhoto(path);
+    setPhoto(up.ref);
   }
 
   const initials = profile.full_name
