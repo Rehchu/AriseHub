@@ -26,12 +26,14 @@ export function Shell({
   email,
   isIT = false,
   canCare = false,
+  canInvite = false,
   children,
 }: {
   profile: Profile | null;
   email: string;
   isIT?: boolean;
   canCare?: boolean;
+  canInvite?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -105,7 +107,7 @@ export function Shell({
           </span>
         </div>
         {navList()}
-        <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} photo={profile?.photo_url} onSignOut={signOut} />
+        <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} photo={profile?.photo_url} canInvite={canInvite} onSignOut={signOut} />
       </aside>
 
       {/* Mobile drawer */}
@@ -126,7 +128,7 @@ export function Shell({
               </button>
             </div>
             {navList(true)}
-            <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} photo={profile?.photo_url} onSignOut={signOut} />
+            <SidebarFooter name={displayName} role={profile?.role} profileId={profile?.id} photo={profile?.photo_url} canInvite={canInvite} onSignOut={signOut} />
           </aside>
         </div>
       )}
@@ -180,12 +182,14 @@ function SidebarFooter({
   role,
   profileId,
   photo,
+  canInvite,
   onSignOut,
 }: {
   name: string;
   role?: string;
   profileId?: string;
   photo?: string | null;
+  canInvite?: boolean;
   onSignOut: () => void;
 }) {
   return (
@@ -197,6 +201,15 @@ function SidebarFooter({
           <p className="text-xs text-chrome-400">{role?.replace("_", " ") ?? "Member"}</p>
         </div>
       </div>
+      {canInvite && (
+        <a
+          href="/invite"
+          className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"
+        >
+          <Icon name="link" />
+          Invite people
+        </a>
+      )}
       <a
         href="/account/profile"
         className="flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"

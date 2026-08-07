@@ -37,17 +37,31 @@ function makeCode(len = 10) {
 export function InvitePanel({
   departments,
   campuses,
+  createdBy,
+  isSuperAdmin = true,
+  defaultOpen = false,
 }: {
   departments: Department[];
   campuses: Campus[];
+  /** Stamped onto the row — the RLS policy for department leads is written
+   *  against it, so a lead's insert fails without it (0034). */
+  createdBy?: string;
+  /** Leads may only invite at Member or Volunteer. */
+  isSuperAdmin?: boolean;
+  defaultOpen?: boolean;
 }) {
   const supabase = createClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [links, setLinks] = useState<InviteLink[]>([]);
   const [label, setLabel] = useState("");
   const [role, setRole] = useState<UserRole>("Member");
+  // RLS caps a department lead at these two; offering more would just error.
+  const allowedRoles = isSuperAdmin ? ROLES : (["Member", "Volunteer"] as UserRole[]);
   const [campusId, setCampusId] = useState("");
-  const [deptIds, setDeptIds] = useState<Set<string>>(new Set());
+  const [deptIds, setDeptIds] = useState<Set<string>>(
+    // One department to lead? Preselect it — the choice is not a choice.
+    () => new Set(!isSuperAdmin && departments.length === 1 ? [departments[0].id] : []),
+  );
   // Links are bearer secrets — default to expiring tomorrow.
   const [expires, setExpires] = useState(() => {
     const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -87,6 +101,7 @@ export function InvitePanel({
       .from("invite_links")
       .insert({
         code: makeCode(),
+        ...(createdBy ? { created_by: createdBy } : {}),
         label: label.trim() || "General invite",
         role,
         campus_id: campusId || null,
@@ -140,6 +155,13 @@ export function InvitePanel({
             campus and departments you set here. Anyone holding the link can join, so
             links expire after 24 hours by default — extend the date only if you
             genuinely need longer, and switch a link off when you&apos;re done.
+            {!isSuperAdmin && (
+              <>
+                {" "}
+                You can invite into the departments you lead, as a Member or
+                Volunteer.
+              </>
+            )}
           </p>
 
           <form onSubmit={create} className="space-y-3 rounded-xl border border-ink-100 bg-ink-50 p-3">
@@ -156,7 +178,7 @@ export function InvitePanel({
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-ink-600">They join as</span>
                 <select className="ah-input" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-                  {ROLES.map((r) => (
+                  {allowedRoles.map((r) => (
                     <option key={r} value={r}>
                       {r.replace("_", " ")}
                     </option>

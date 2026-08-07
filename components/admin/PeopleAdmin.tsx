@@ -165,7 +165,7 @@ export function PeopleAdmin({
         </div>
       )}
 
-      <InvitePanel departments={departments} campuses={campuses} />
+      <InvitePanel departments={departments} campuses={campuses} isSuperAdmin />
 
       <div>
         <input

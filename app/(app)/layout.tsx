@@ -44,8 +44,13 @@ export default async function AppLayout({
   // for everyone else rather than letting them hit a redirect.
   const { data: canCare } = await supabase.rpc("is_pastoral");
 
+  // Department heads issue their own invite links (0018), so they need the
+  // nav entry even though /admin stays Super_Admin-only.
+  const { data: leadsSomething } = await supabase.rpc("is_any_department_lead");
+  const canInvite = p?.role === "Super_Admin" || !!leadsSomething;
+
   return (
-    <Shell profile={p ?? null} email={user.email ?? ""} isIT={isIT} canCare={!!canCare}>
+    <Shell profile={p ?? null} email={user.email ?? ""} isIT={isIT} canCare={!!canCare} canInvite={canInvite}>
       {children}
     </Shell>
   );
