@@ -23,8 +23,10 @@ export default async function AdminLayout({
   const role = (profile as { role?: string } | null)?.role;
   const isSuper = role === "Super_Admin";
   const isIT = role === "IT_Admin";
-  // Integrations are IT's job; everything else here is Super_Admin only.
-  if (!isSuper && !isIT) redirect("/dashboard");
+  const isStaff = role === "Staff";
+  // Each page below carries its own guard, so the layout only decides who may
+  // see the section at all: admins, IT (integrations), and Staff (rooms).
+  if (!isSuper && !isIT && !isStaff) redirect("/dashboard");
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -33,6 +35,7 @@ export default async function AdminLayout({
         Manage departments, people, and access for Arise Church.
       </p>
       <nav className="mt-6 flex gap-2 border-b border-ink-100">
+        {(isSuper || isStaff) && <AdminTab href="/admin/rooms" label="Rooms" />}
         {isSuper && (
           <>
             <AdminTab href="/admin/campuses" label="Campuses" />
@@ -42,7 +45,7 @@ export default async function AdminLayout({
             <AdminTab href="/admin/care-access" label="Care Access" />
           </>
         )}
-        <AdminTab href="/admin/elvanto" label="Elvanto" />
+        {(isSuper || isIT) && <AdminTab href="/admin/elvanto" label="Elvanto" />}
       </nav>
       <div className="mt-6">{children}</div>
     </div>
