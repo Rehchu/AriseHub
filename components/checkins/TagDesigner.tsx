@@ -276,9 +276,31 @@ export function TagDesigner({
   }
 
   function insertMergeField(token: string) {
-    if (!selected || selected.kind !== "text") return;
     pushHistory();
-    updateEl(selected.id, { text: `${selected.text ?? ""}${token}` });
+    // Append to the selected text box if there is one. Otherwise CREATE one —
+    // clicking a merge field with nothing selected used to do nothing at all,
+    // so the chips could only ever merge into an existing box and never add a
+    // field, which is the obvious thing to want from a row of field buttons.
+    if (selected && selected.kind === "text") {
+      updateEl(selected.id, { text: `${selected.text ?? ""}${token}` });
+      return;
+    }
+    const el: TagElement = {
+      id: newElementId(),
+      kind: "text",
+      // Dropped clear of the existing rows rather than on top of them.
+      x: 0.08,
+      y: Math.min(0.8, 0.12 + current.design.elements.length * 0.06),
+      w: 0.4,
+      h: 0.16,
+      text: token,
+      fontFamily: "Poppins",
+      fontSize: 12,
+      color: "#0b0b0c",
+      align: "left",
+    };
+    setElements((els) => [...els, el]);
+    setSelectedId(el.id);
   }
 
   /**
@@ -323,6 +345,34 @@ export function TagDesigner({
     },
     [current.design.gridSize, current.design.snapToGrid],
   );
+
+  /**
+   * Which element does a click at this point mean?
+   *
+   * An element's hit area is its whole box, transparent parts included — so a
+   * sparkle whose box overlaps {name} swallowed every click meant for the text
+   * underneath, and the only way to reach it was the layers list. Measured on
+   * the live board: 3 of 8 elements were unreachable this way.
+   *
+   * Clicking the same spot again walks DOWN the stack, so everything under the
+   * pointer is reachable in turn — the standard behaviour in a layout tool.
+   */
+  function pickAt(fx: number, fy: number, currentId: string | null): TagElement | null {
+    const under = current.design.elements.filter(
+      (el) =>
+        !el.hidden &&
+        !el.locked &&
+        fx >= Math.min(el.x, el.x + el.w) &&
+        fx <= Math.max(el.x, el.x + el.w) &&
+        fy >= Math.min(el.y, el.y + el.h) &&
+        fy <= Math.max(el.y, el.y + el.h),
+    );
+    if (under.length === 0) return null;
+    // Last in the array paints on top, so search topmost-first.
+    const top = [...under].reverse();
+    const at = top.findIndex((el) => el.id === currentId);
+    return at === -1 ? top[0] : top[(at + 1) % top.length];
+  }
 
   function onPointerDown(e: React.PointerEvent, el: TagElement, mode: "move" | "resize") {
     if (el.locked) return;
@@ -578,6 +628,8 @@ export function TagDesigner({
   }
 
   const gridSize = current.design.gridSize ?? 0.025;
+  /** The black-and-white print preview. Artwork only — never editor chrome. */
+  const artFilter = current.design.monochrome ? "grayscale(1) contrast(3)" : undefined;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-ink-50">
@@ -760,26 +812,39 @@ export function TagDesigner({
                   width: stageW,
                   height: stageH,
                   flex: "0 0 auto",
-                  background: current.design.background,
-                  backgroundImage: current.design.backgroundImage
-                    ? `url(${current.design.backgroundImage})`
-                    : undefined,
-                  // Matches the renderer, which letterboxes by default. The stage
-                  // used to force `cover` and quietly disagree with the print.
-                  backgroundSize: current.design.backgroundFit === "cover"
-                    ? "cover"
-                    : current.design.backgroundFit === "stretch"
-                      ? "100% 100%"
-                      : "contain",
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "center",
                   border: current.design.borderWidth
                     ? current.design.borderWidth * pxScale + "px solid " + (current.design.borderColor ?? "#0b0b0c")
                     : undefined,
                   borderRadius: (current.design.borderRadius ?? 0) * pxScale || undefined,
-                  filter: current.design.monochrome ? "grayscale(1) contrast(3)" : undefined,
                 }}
               >
+                {/* The artwork, and ONLY the artwork, wears the print filter.
+                    It used to sit on the stage itself, so every editor overlay
+                    inherited it — and `contrast(3)` maps a 10%-black gridline
+                    (#e6e6e6) straight to white. The grid, the safe-margin guide
+                    and every element's dashed outline were all being erased by
+                    the black-and-white preview, which is exactly why Grid could
+                    read as ON with nothing on screen. */}
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    background: current.design.background,
+                    backgroundImage: current.design.backgroundImage
+                      ? `url(${current.design.backgroundImage})`
+                      : undefined,
+                    // Matches the renderer, which letterboxes by default. The
+                    // stage used to force `cover` and quietly disagree with the
+                    // print.
+                    backgroundSize: current.design.backgroundFit === "cover"
+                      ? "cover"
+                      : current.design.backgroundFit === "stretch"
+                        ? "100% 100%"
+                        : "contain",
+                    backgroundRepeat: "no-repeat",
+                    backgroundPosition: "center",
+                    filter: current.design.monochrome ? "grayscale(1) contrast(3)" : undefined,
+                  }}
+                />
                 {showGrid && (
                   <div
                     className="pointer-events-none absolute inset-0"
@@ -828,10 +893,32 @@ export function TagDesigner({
                       key={el.id}
                       data-el-id={el.id}
                       style={common}
-                      onPointerDown={(e) => onPointerDown(e, el, "move")}
+                      onPointerDown={(e) => {
+                        // Resolve what was really clicked before starting a
+                        // drag: the element whose box caught the pointer may be
+                        // a transparent one lying over the thing you meant.
+                        const rect = stageRef.current?.getBoundingClientRect();
+                        let target = el;
+                        if (rect) {
+                          const picked = pickAt(
+                            (e.clientX - rect.left) / rect.width,
+                            (e.clientY - rect.top) / rect.height,
+                            selectedId,
+                          );
+                          if (picked) target = picked;
+                        }
+                        onPointerDown(e, target, "move");
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedId(el.id);
+                        const rect = stageRef.current?.getBoundingClientRect();
+                        if (!rect) return setSelectedId(el.id);
+                        const picked = pickAt(
+                          (e.clientX - rect.left) / rect.width,
+                          (e.clientY - rect.top) / rect.height,
+                          selectedId,
+                        );
+                        setSelectedId((picked ?? el).id);
                       }}
                     >
                       {el.kind === "text" && (
@@ -855,6 +942,7 @@ export function TagDesigner({
                             whiteSpace: el.wrap ? "normal" : "nowrap",
                             overflow: "hidden",
                             pointerEvents: "none",
+                            filter: artFilter,
                             textTransform: el.uppercase ? "uppercase" : undefined,
                           }}
                         >
@@ -872,6 +960,7 @@ export function TagDesigner({
                               ? `${el.borderWidth * pxScale}px ${el.borderStyle ?? "solid"} ${el.borderColor ?? "#0b0b0c"}`
                               : undefined,
                             pointerEvents: "none",
+                            filter: artFilter,
                           }}
                         />
                       )}
@@ -885,13 +974,14 @@ export function TagDesigner({
                             height: "100%",
                             objectFit: el.fit === "cover" ? "cover" : el.fit === "stretch" ? "fill" : "contain",
                             pointerEvents: "none",
+                            filter: artFilter,
                           }}
                         />
                       )}
                       {(el.kind === "qr" || el.kind === "barcode") && (
                         <div
                           className="flex h-full w-full items-center justify-center border border-dashed border-ink-300 bg-white/70 text-center text-[10px] font-medium text-ink-500"
-                          style={{ pointerEvents: "none" }}
+                          style={{ pointerEvents: "none", filter: artFilter }}
                         >
                           {el.kind === "qr" ? "QR" : "▌▌▍▌"}
                           <span className="ml-1 font-mono">{el.codeValue ?? "{code}"}</span>
@@ -1000,7 +1090,7 @@ export function TagDesigner({
 
             <div className="mt-3">
               <p className="mb-1 text-xs text-ink-500">
-                Merge fields — click to add to the selected text box:
+                Merge fields — click one to add it to the selected text box, or to drop a new one onto the label:
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {MERGE_FIELDS.map((f) => (
