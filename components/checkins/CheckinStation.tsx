@@ -27,6 +27,8 @@ import { FamilyRegister } from "./FamilyRegister";
 import {
   queueCheckin,
   pendingCount,
+  stuckCheckins,
+  discardStuck,
   flushQueue,
   isOffline,
   type QueuedCheckin,
@@ -180,6 +182,9 @@ export function CheckinStation({
   const [showFamily, setShowFamily] = useState(false);
   const [offline, setOffline] = useState(false);
   const [queued, setQueued] = useState(0);
+  // Check-ins that gave up syncing. Kept rather than deleted — an attendance
+  // record for a child should not vanish because the network misbehaved.
+  const [stuck, setStuck] = useState<QueuedCheckin[]>([]);
 
   // Check-in must survive flaky WiFi: queue locally, sync when we're back.
   useEffect(() => {
@@ -199,9 +204,17 @@ export function CheckinStation({
           security_code: row.security_code,
           checked_in_at: row.checked_in_at,
           status: row.status,
+          // The idempotency key the queue always claimed to send. Without it
+          // the unique index has nothing to catch, and a reply lost in flight
+          // inserts the child twice.
+          local_id: row.localId,
+          // Offline rows used to arrive with nobody attributed to them.
+          checked_in_by: row.checked_in_by,
         });
         return { error };
       });
+      setQueued(pendingCount());
+      setStuck(stuckCheckins());
       refresh();
       if (res.synced > 0) router.refresh();
     };
@@ -411,7 +424,7 @@ export function CheckinStation({
 
     // Offline: record locally, print the badge, move the line along.
     if (isOffline()) {
-      queueCheckin({
+      const saved = queueCheckin({
         localId: crypto.randomUUID(),
         profile_id: person.id,
         room_id: roomId,
@@ -419,10 +432,19 @@ export function CheckinStation({
         security_code: code,
         checked_in_at: nowIso,
         status: "checked_in",
+        checked_in_by: currentProfileId,
         childName: person.full_name,
         hasAllergy: person.has_allergy,
         roomName,
       });
+      // localStorage failing used to be swallowed while the UI said "saved" —
+      // and the badge has already printed, so the child is physically checked
+      // in with no record anywhere.
+      if (!saved) {
+        setError(
+          `${person.full_name}'s badge printed, but this device couldn't save the check-in offline (storage full or blocked). Write it down and tell a check-in lead.`,
+        );
+      }
       setQueued(pendingCount());
       setLastBadge({
         name: person.full_name,
@@ -765,6 +787,42 @@ export function CheckinStation({
       )}
 
       {error && <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
+
+      {/* Check-ins that stopped syncing. These used to be deleted after five
+          attempts with the count returned but never displayed, so a child's
+          attendance record disappeared and nobody knew. */}
+      {stuck.length > 0 && (
+        <div className="mb-4 rounded-xl border-2 border-brand-400 bg-brand-50 p-3">
+          <p className="font-display text-sm font-bold text-brand-800">
+            {stuck.length} check-in{stuck.length === 1 ? "" : "s"} could not be saved
+          </p>
+          <p className="mb-2 text-xs text-brand-700">
+            These children were checked in on this device and their badges
+            printed, but the record never reached the server. Show a check-in
+            lead before clearing them.
+          </p>
+          <ul className="space-y-1">
+            {stuck.map((s) => (
+              <li key={s.localId} className="flex flex-wrap items-center gap-2 rounded-lg bg-white px-2.5 py-1.5 text-sm">
+                <span className="font-medium text-ink-900">{s.childName}</span>
+                <span className="font-mono text-xs text-ink-500">{s.security_code}</span>
+                <span className="text-xs text-ink-400">{s.roomName}</span>
+                <span className="flex-1" />
+                <span className="text-xs text-brand-700">{s.lastError}</span>
+                <button
+                  onClick={() => {
+                    discardStuck(s.localId);
+                    setStuck(stuckCheckins());
+                  }}
+                  className="rounded-md bg-ink-100 px-2 py-1 text-xs font-medium text-ink-600 hover:bg-ink-200"
+                >
+                  Clear
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Badge shown right after check-in — the number the guardian must present */}
       {lastBadge && (
