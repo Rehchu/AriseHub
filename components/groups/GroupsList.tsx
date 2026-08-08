@@ -45,20 +45,41 @@ export function GroupsList({
     g.name.toLowerCase().includes(q.toLowerCase()),
   );
 
+  /** Group currently being joined, so its button can't be pressed twice. */
+  const [joining, setJoining] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
   async function join(g: GroupRow) {
+    // The optimistic update hides the Join button (it's gated on !isMember), so
+    // a rejected insert left someone believing they had joined with no way to
+    // retry — and they turn up on Wednesday to a leader whose roster is missing
+    // them. Revert and say so.
+    if (joining) return;
+    setJoining(g.id);
+    setError(null);
     setGroups((gs) =>
       gs.map((x) => (x.id === g.id ? { ...x, isMember: true, memberCount: x.memberCount + 1 } : x)),
     );
-    await supabase
+    const { error: joinError } = await supabase
       .from("group_members")
       .insert({ group_id: g.id, profile_id: currentProfileId, role: "member" });
+    setJoining(null);
+    if (joinError) {
+      setGroups((gs) =>
+        gs.map((x) =>
+          x.id === g.id ? { ...x, isMember: false, memberCount: Math.max(0, x.memberCount - 1) } : x,
+        ),
+      );
+      setError(`Couldn't join ${g.name} — ${joinError.message}`);
+    }
   }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
     setBusy(true);
-    const { data, error } = await supabase
+    setError(null);
+    const { data, error: createError } = await supabase
       .from("groups")
       .insert({
         name: name.trim(),
@@ -68,17 +89,28 @@ export function GroupsList({
       })
       .select("id")
       .single();
-    if (!error && data) {
-      // Creator becomes the leader.
-      await supabase.from("group_members").insert({
-        group_id: (data as { id: string }).id,
-        profile_id: currentProfileId,
-        role: "leader",
-      });
-      router.push(`/groups/${(data as { id: string }).id}`);
+    if (createError || !data) {
+      // The button just flipped back from "Creating…" and said nothing, so you
+      // assumed a typo and tried again.
+      setBusy(false);
+      setError(createError?.message ?? "Couldn't create that group — try again.");
       return;
     }
-    setBusy(false);
+    // Creator becomes the leader. If THIS fails you land in a group you just
+    // made with no "+ Add" and no explanation, because canManage is false.
+    const { error: leaderError } = await supabase.from("group_members").insert({
+      group_id: (data as { id: string }).id,
+      profile_id: currentProfileId,
+      role: "leader",
+    });
+    if (leaderError) {
+      setBusy(false);
+      setError(
+        `Group created, but you couldn't be set as its leader (${leaderError.message}). Ask an admin to add you.`,
+      );
+      return;
+    }
+    router.push(`/groups/${(data as { id: string }).id}`);
   }
 
   return (
@@ -87,6 +119,9 @@ export function GroupsList({
         <div>
           <h1 className="font-display text-2xl font-bold text-ink-900">Groups</h1>
           <p className="mt-1 text-ink-500">Small groups, ministries, and classes.</p>
+          {error && (
+            <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
+          )}
         </div>
         <button
           onClick={() => setCreating((c) => !c)}
@@ -145,8 +180,12 @@ export function GroupsList({
                 Open
               </Link>
               {!g.isMember && g.is_open && (
-                <button onClick={() => join(g)} className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-onaccent hover:bg-accent-strong">
-                  Join
+                <button
+                  onClick={() => join(g)}
+                  disabled={joining === g.id}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-onaccent hover:bg-accent-strong disabled:opacity-60"
+                >
+                  {joining === g.id ? "Joining…" : "Join"}
                 </button>
               )}
             </div>

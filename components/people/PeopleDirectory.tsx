@@ -123,11 +123,25 @@ function PersonDrawer({
   const supabase = createClient();
   const router = useRouter();
 
+  // A dead button otherwise: `error` was dropped on the floor, so a failed RPC
+  // did nothing at all — no spinner, no message, the drawer just sat there — and
+  // people tapped it again and again, firing the RPC each time.
+  const [opening, setOpening] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
+
   async function message() {
-    const { data } = await supabase.rpc("get_or_create_dm", {
+    if (opening) return;
+    setOpening(true);
+    setDmError(null);
+    const { data, error } = await supabase.rpc("get_or_create_dm", {
       other_profile: person.id,
     });
-    if (data) router.push(`/messages/${data}`);
+    if (error || !data) {
+      setOpening(false);
+      setDmError(error?.message ?? "Couldn't open a conversation with them.");
+      return;
+    }
+    router.push(`/messages/${data}`);
   }
 
   return (
@@ -182,11 +196,15 @@ function PersonDrawer({
           )}
         </div>
 
+        {dmError && (
+          <p className="mt-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{dmError}</p>
+        )}
         <button
           onClick={message}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong"
+          disabled={opening}
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
         >
-          <Icon name="send" size={18} /> Send a message
+          <Icon name="send" size={18} /> {opening ? "Opening…" : "Send a message"}
         </button>
       </div>
     </Modal>

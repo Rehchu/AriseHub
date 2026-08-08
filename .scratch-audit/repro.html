@@ -1,0 +1,66 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>probe</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+  .sim { outline: 2px dashed #09f; }
+  h3 { font: 600 12px system-ui; margin: 16px 0 2px; }
+  body { padding: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Exact markup + class strings from components/admin/CareAccessAdmin.tsx:98-119,
+     wrapped in the admin layout's `mx-auto max-w-5xl px-4` at simulated phone widths. -->
+
+<div id="cases"></div>
+
+<script>
+const FORM = w => `
+<h3>viewport ${w}px</h3>
+<div class="sim" style="width:${w}px">
+  <div class="mx-auto max-w-5xl px-4">
+    <form class="mt-2 flex flex-wrap gap-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
+      <select class="ah-input flex-1">
+        <option value="">Choose a person…</option>
+        <option value="1">Bartholomew Fetherstonehaugh — Super Admin</option>
+        <option value="2">Ada Lovelace — Staff</option>
+      </select>
+      <input class="ah-input flex-1" placeholder="Why (optional)">
+      <button type="submit" class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60">Grant access</button>
+    </form>
+  </div>
+</div>`;
+document.getElementById('cases').innerHTML = [320,360,375,414,480,560,640,768].map(FORM).join('');
+
+window.measure = () => [...document.querySelectorAll('.sim')].map(sim => {
+  const f = sim.querySelector('form');
+  const kids = [...f.children];
+  const r = e => e.getBoundingClientRect();
+  const sel = kids[0], inp = kids[1], btn = kids[2];
+  return {
+    viewport: parseInt(sim.style.width),
+    formContent: +(f.clientWidth - 24).toFixed(1),
+    lines: new Set(kids.map(e => Math.round(r(e).top))).size,
+    select: +r(sel).width.toFixed(1),
+    selectMinContent: sel.scrollWidth,
+    selectClipped: sel.scrollWidth > Math.ceil(sel.clientWidth),
+    input: +r(inp).width.toFixed(1),
+    button: +r(btn).width.toFixed(1),
+  };
+});
+
+// also: what min-content the browser thinks these controls have
+window.intrinsic = () => {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;left:-9999px;width:min-content';
+  probe.innerHTML = `<select class="ah-input"><option value="">Choose a person…</option><option>Bartholomew Fetherstonehaugh — Super Admin</option></select>`;
+  document.body.appendChild(probe);
+  const selMin = probe.firstChild.getBoundingClientRect().width;
+  probe.innerHTML = `<input class="ah-input" placeholder="Why (optional)">`;
+  const inpMin = probe.firstChild.getBoundingClientRect().width;
+  const w = { selMinContent: +selMin.toFixed(1), inputMinContent: +inpMin.toFixed(1) };
+  probe.remove();
+  return w;
+};
+</script>
+</body></html>

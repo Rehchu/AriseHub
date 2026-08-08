@@ -67,16 +67,38 @@ export function CareBoard({
   const [items, setItems] = useState<CareItem[]>(initial);
   const [showNew, setShowNew] = useState(false);
 
+  // This is a pastoral follow-up board. A stage change that silently fails to
+  // save means someone in hospital is believed visited and never is — so both
+  // writes below check the result, put the card back where it was on failure,
+  // and say so. `.select("id")` makes the write authoritative: an RLS rejection
+  // returns no row and no error, which an unchecked update cannot tell from
+  // success.
+  const [writeError, setWriteError] = useState<string | null>(null);
+
   async function move(item: CareItem, dir: 1 | -1) {
     const idx = STAGES.findIndex((s) => s.key === item.stage);
     const next = STAGES[idx + dir];
     if (!next) return;
+    const previous = item.stage;
+    setWriteError(null);
     setItems((its) => its.map((x) => (x.id === item.id ? { ...x, stage: next.key } : x)));
-    await supabase.from("care_items").update({ stage: next.key }).eq("id", item.id);
+    const { data, error } = await supabase
+      .from("care_items")
+      .update({ stage: next.key })
+      .eq("id", item.id)
+      .select("id");
+    if (error || !data?.length) {
+      setItems((its) => its.map((x) => (x.id === item.id ? { ...x, stage: previous } : x)));
+      setWriteError(
+        error?.message ?? "That didn't save — you may not have permission to move this item.",
+      );
+    }
   }
 
   async function assign(item: CareItem, profileId: string) {
     const name = people.find((p) => p.id === profileId)?.full_name ?? null;
+    const previous = { assigned_to: item.assigned_to, assignee: item.assignee };
+    setWriteError(null);
     setItems((its) =>
       its.map((x) =>
         x.id === item.id
@@ -84,7 +106,16 @@ export function CareBoard({
           : x,
       ),
     );
-    await supabase.from("care_items").update({ assigned_to: profileId || null }).eq("id", item.id);
+    const { data, error } = await supabase
+      .from("care_items")
+      .update({ assigned_to: profileId || null })
+      .eq("id", item.id)
+      .select("id");
+    if (error || !data?.length) {
+      setItems((its) => its.map((x) => (x.id === item.id ? { ...x, ...previous } : x)));
+      setWriteError(error?.message ?? "Couldn't assign that — try again.");
+      return;
+    }
     if (profileId && profileId !== currentProfileId) {
       notify(profileId, "Care item assigned to you", item.title, "/care");
     }
@@ -108,6 +139,12 @@ export function CareBoard({
           <Icon name="heart" size={18} /> New care item
         </button>
       </div>
+
+      {writeError && (
+        <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
+          {writeError}
+        </p>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {STAGES.map((stage) => {

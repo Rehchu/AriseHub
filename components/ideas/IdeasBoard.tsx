@@ -121,15 +121,42 @@ export function IdeasBoard({
     }
   }
 
+  // Both writes are authoritative. RLS refusing a row is NOT an error — it
+  // returns zero rows and a null error, which an unchecked call cannot tell
+  // from success. An IT_Admin (whom the policy excludes) confirmed a delete,
+  // watched the card vanish, and found it back on the board next load, still
+  // there for everyone.
+  const [writeError, setWriteError] = useState<string | null>(null);
+
   async function setStatus(i: Idea, status: Idea["status"]) {
+    const previous = i.status;
+    setWriteError(null);
     setIdeas((list) => list.map((x) => (x.id === i.id ? { ...x, status } : x)));
-    await supabase.from("feature_requests").update({ status }).eq("id", i.id);
+    const { data, error } = await supabase
+      .from("feature_requests")
+      .update({ status })
+      .eq("id", i.id)
+      .select("id");
+    if (error || !data?.length) {
+      setIdeas((list) => list.map((x) => (x.id === i.id ? { ...x, status: previous } : x)));
+      setWriteError(error?.message ?? "You don't have permission to change that idea's status.");
+    }
   }
 
   async function remove(i: Idea) {
     if (!window.confirm(`Delete "${i.title}"?`)) return;
+    setWriteError(null);
+    const { data, error } = await supabase
+      .from("feature_requests")
+      .delete()
+      .eq("id", i.id)
+      .select("id");
+    if (error || !data?.length) {
+      setWriteError(error?.message ?? "You don't have permission to delete that idea.");
+      return;
+    }
+    // Removed only once the delete is confirmed.
     setIdeas((list) => list.filter((x) => x.id !== i.id));
-    await supabase.from("feature_requests").delete().eq("id", i.id);
   }
 
   return (
@@ -137,6 +164,11 @@ export function IdeasBoard({
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex-1">
           <h1 className="font-display text-2xl font-bold text-ink-900">Ideas & requests</h1>
+          {writeError && (
+            <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
+              {writeError}
+            </p>
+          )}
           <p className="mt-1 text-ink-500">
             Something missing or annoying? Say so — and vote for what matters most.
           </p>
