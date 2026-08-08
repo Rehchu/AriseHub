@@ -156,16 +156,30 @@ export interface SendResult {
   status: number;
   /** Subscription is gone — caller should delete it. */
   expired: boolean;
+  /** What the push service said. Apple puts a reason here; we used to bin it. */
+  detail?: string;
+  /** True when a retry was needed and worked. */
+  retried?: boolean;
 }
 
-/** Send one Web Push message. Never throws — returns a status the caller can act on. */
+/**
+ * Send one Web Push message. Never throws — returns a status the caller can act on.
+ *
+ * Retries once on 5xx. A 525 is Cloudflare's "TLS handshake to the upstream
+ * failed", which is a hop between our Worker and Apple rather than anything
+ * wrong with the subscription — one iPad saw it while an iPhone on the same
+ * push service and the same code path was fine. That class of failure is
+ * transient and a single retry is the correct response to it. 4xx is not
+ * retried: those are our fault or the subscription's, and repeating them just
+ * doubles the load.
+ */
 export async function sendPush(
   sub: PushSubscriptionRecord,
   payload: string,
   vapid: { publicKey: string; privateKey: string; subject: string },
   ttl = 60 * 60 * 24,
 ): Promise<SendResult> {
-  try {
+  const attempt = async (): Promise<SendResult> => {
     const body = await encryptPayload(payload, sub.p256dh, sub.auth);
     const auth = await vapidHeader(sub.endpoint, vapid.publicKey, vapid.privateKey, vapid.subject);
 
@@ -179,12 +193,32 @@ export async function sendPush(
       },
       body: body as BodyInit,
     });
+    // Read the body on failure. The push services explain themselves here and
+    // we were discarding it, which left a bare status number as the only clue.
+    let detail: string | undefined;
+    if (!res.ok) {
+      detail = (await res.text().catch(() => "")).trim().slice(0, 300) || undefined;
+    }
     return {
       ok: res.ok,
       status: res.status,
       expired: res.status === 404 || res.status === 410,
+      detail,
     };
-  } catch {
-    return { ok: false, status: 0, expired: false };
+  };
+
+  try {
+    const first = await attempt();
+    if (first.ok || first.status < 500) return first;
+    await new Promise((r) => setTimeout(r, 400));
+    const second = await attempt();
+    return { ...second, retried: true };
+  } catch (e) {
+    return {
+      ok: false,
+      status: 0,
+      expired: false,
+      detail: e instanceof Error ? e.message : "the request never completed",
+    };
   }
 }

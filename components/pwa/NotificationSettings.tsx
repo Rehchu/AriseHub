@@ -168,15 +168,30 @@ export function NotificationSettings({
       failed?: number;
       detail?: string;
       error?: string;
-      failureStatuses?: number[];
+      retried?: number;
+      failures?: { status: number; service: string; detail?: string }[];
     };
     if (!res.ok) setError(j.error ?? `Failed (${res.status})`);
     else if (j.detail) setNote(j.detail);
-    else if ((j.sent ?? 0) > 0) setNote(`Sent to ${j.sent} device${j.sent === 1 ? "" : "s"}.`);
-    else
-      setError(
-        `Not delivered${j.failureStatuses?.length ? ` — push service said ${j.failureStatuses.join(", ")}` : ""}.`,
+    else if ((j.sent ?? 0) > 0) {
+      setNote(
+        `Sent to ${j.sent} device${j.sent === 1 ? "" : "s"}.` +
+          (j.retried ? " (One needed a second attempt — the first was refused by the network.)" : ""),
       );
+    } else {
+      // Name the service and quote what it said. "push service said 525" gave
+      // nobody anything to act on — and 525 is Cloudflare's code for a failed
+      // handshake to the upstream, not something the push service returned.
+      const f = j.failures?.[0];
+      setError(
+        f
+          ? `Not delivered. ${f.service} returned ${f.status}${f.detail ? ` — ${f.detail}` : ""}.` +
+            (f.status >= 500
+              ? " That's a network fault between us and the push service rather than a problem with this device; it usually clears on its own."
+              : "")
+          : "Not delivered.",
+      );
+    }
   }
 
   async function disable() {

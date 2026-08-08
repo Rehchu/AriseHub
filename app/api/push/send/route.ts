@@ -86,8 +86,10 @@ export async function POST(req: NextRequest) {
   });
 
   let sent = 0;
+  let retried = 0;
   const dead: string[] = [];
-  const failures: number[] = [];
+  /** Status AND the push service's own explanation, plus which service it was. */
+  const failures: { status: number; service: string; detail?: string }[] = [];
 
   await Promise.all(
     subs.map(async (s) => {
@@ -96,9 +98,18 @@ export async function POST(req: NextRequest) {
         payload,
         { publicKey, privateKey, subject },
       );
+      if (r.retried) retried++;
       if (r.ok) sent++;
       else if (r.expired) dead.push(s.id);
-      else failures.push(r.status);
+      else {
+        let service = "unknown";
+        try {
+          service = new URL(s.endpoint).host;
+        } catch {
+          // A malformed endpoint is itself worth knowing about.
+        }
+        failures.push({ status: r.status, service, detail: r.detail });
+      }
     }),
   );
 
@@ -108,6 +119,11 @@ export async function POST(req: NextRequest) {
     sent,
     pruned: dead.length,
     failed: failures.length,
-    ...(failures.length ? { failureStatuses: failures } : {}),
+    ...(retried ? { retried } : {}),
+    // Reported so a failure can be diagnosed from the device that saw it. A
+    // bare status number told us nothing: 525 is Cloudflare's, not Apple's, and
+    // without the service host and the body there was no way to tell whether
+    // the problem was the subscription, our JWT, or the hop in between.
+    ...(failures.length ? { failures } : {}),
   });
 }
