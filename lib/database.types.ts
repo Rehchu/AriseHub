@@ -43,6 +43,9 @@ export interface Department {
   slug: string;
   description: string | null;
   campus_id: string | null;
+  /** Members may run child check-in regardless of role (0058). Not yet enforced
+   *  — is_checkin_role() still decides; this is the flag the role work reads. */
+  can_check_in?: boolean;
   created_at: string;
   updated_at: string;
 }

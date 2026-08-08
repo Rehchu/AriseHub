@@ -20,7 +20,7 @@ export default async function DepartmentsAdminPage() {
 
   const { data } = await supabase
     .from("departments")
-    .select("id, name, slug, description, campus_id, created_at, updated_at")
+    .select("id, name, slug, description, campus_id, can_check_in, created_at, updated_at")
     .order("name");
 
   // Member counts per department (visible to authenticated via RLS).

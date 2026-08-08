@@ -58,6 +58,22 @@ export function DepartmentsAdmin({
     setDepts((d) => d.map((x) => (x.id === id ? { ...x, name: next.trim() } : x)));
   }
 
+  async function setCanCheckIn(id: string, value: boolean) {
+    setError(null);
+    setDepts((d) => d.map((x) => (x.id === id ? { ...x, can_check_in: value } : x)));
+    const { data, error } = await supabase
+      .from("departments")
+      .update({ can_check_in: value })
+      .eq("id", id)
+      .select("id");
+    // RLS refusing a row returns no rows and no error, so an unchecked update
+    // cannot tell it from success.
+    if (error || !data?.length) {
+      setDepts((d) => d.map((x) => (x.id === id ? { ...x, can_check_in: !value } : x)));
+      setError(error?.message ?? "You don't have permission to change that.");
+    }
+  }
+
   async function remove(id: string, dname: string) {
     if (
       !window.confirm(
@@ -110,6 +126,16 @@ export function DepartmentsAdmin({
                 auto group chat
               </p>
             </div>
+            {/* A flag, not a hardcoded list of slugs — there are 17 departments
+                already and the set that runs check-in changes. */}
+            <label className="flex shrink-0 items-center gap-1.5 text-xs text-ink-600">
+              <input
+                type="checkbox"
+                checked={!!d.can_check_in}
+                onChange={(e) => setCanCheckIn(d.id, e.target.checked)}
+              />
+              <span className="hidden sm:inline">Runs check-in</span>
+            </label>
             <button
               onClick={() => rename(d.id, d.name)}
               className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
