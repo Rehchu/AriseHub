@@ -18,6 +18,7 @@ import {
   type TagElement,
   type TagTemplate,
 } from "@/lib/tag-design";
+import { hitsElement } from "@/lib/hit-test";
 import {
   CLIPART,
   CLIPART_CATEGORIES,
@@ -360,15 +361,28 @@ export function TagDesigner({
    * pointer is reachable in turn — the standard behaviour in a layout tool.
    */
   function pickAt(fx: number, fy: number, currentId: string | null): TagElement | null {
-    const under = current.design.elements.filter(
-      (el) =>
-        !el.hidden &&
-        !el.locked &&
-        fx >= Math.min(el.x, el.x + el.w) &&
-        fx <= Math.max(el.x, el.x + el.w) &&
-        fy >= Math.min(el.y, el.y + el.h) &&
-        fy <= Math.max(el.y, el.y + el.h),
+    const stage = stageRef.current;
+    // hitsElement asks the PIXELS for images: a sparkle is mostly transparent,
+    // and its empty corners should let a click through to whatever is beneath.
+    // Text, boxes, lines and codes are solid, and anything unsampleable falls
+    // back to its box.
+    let under = current.design.elements.filter(
+      (el) => !el.hidden && !el.locked && hitsElement(el, fx, fy, stage),
     );
+    // If the ink test excluded everything, fall back to plain boxes rather than
+    // leaving the click doing nothing — clicking near a thin line should still
+    // grab it.
+    if (under.length === 0) {
+      under = current.design.elements.filter(
+        (el) =>
+          !el.hidden &&
+          !el.locked &&
+          fx >= Math.min(el.x, el.x + el.w) &&
+          fx <= Math.max(el.x, el.x + el.w) &&
+          fy >= Math.min(el.y, el.y + el.h) &&
+          fy <= Math.max(el.y, el.y + el.h),
+      );
+    }
     if (under.length === 0) return null;
     // Last in the array paints on top, so search topmost-first.
     const top = [...under].reverse();
