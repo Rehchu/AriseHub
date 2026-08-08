@@ -58,11 +58,17 @@ export interface CheckinRow {
 
 // Unambiguous alphabet — no O/0, I/1, S/5, B/8 to avoid mis-reads at pickup.
 const CODE_ALPHABET = "ACDEFHJKLMNPRTUVWXY34679";
+// Six, not four. Four characters is 331,776 combinations; with ~60 children
+// present that is a ~0.5% chance per service that two share a code, and pickup
+// matches on code alone. Six is 191 million, which puts a collision beyond any
+// realistic Sunday. A unique index over currently-checked-in rows is the
+// backstop (migration 0040).
+const CODE_LENGTH = 6;
 function makeCode() {
   let s = "";
-  const buf = new Uint32Array(4);
+  const buf = new Uint32Array(CODE_LENGTH);
   crypto.getRandomValues(buf);
-  for (let i = 0; i < 4; i++) s += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
+  for (let i = 0; i < CODE_LENGTH; i++) s += CODE_ALPHABET[buf[i] % CODE_ALPHABET.length];
   return s;
 }
 
@@ -370,9 +376,18 @@ export function CheckinStation({
   }
 
   // Pickup: match the guardian's claim tag to a present child.
-  const claimMatch = claim.trim().length >= 3
-    ? present.find((c) => c.security_code?.toUpperCase() === claim.trim().toUpperCase())
-    : undefined;
+  //
+  // Deliberately `filter`, not `find`. If two present children somehow share a
+  // code, `find` silently hands over whichever was checked in first — a child
+  // released to the wrong adult, with the system showing no sign of a problem.
+  // Codes are now 6 characters and a unique index guards active check-ins, so
+  // this should be unreachable; if it ever fires, refusing is the right answer.
+  const claimQuery = claim.trim().toUpperCase();
+  const claimMatches = claimQuery.length >= 3
+    ? present.filter((c) => c.security_code?.toUpperCase() === claimQuery)
+    : [];
+  const claimAmbiguous = claimMatches.length > 1;
+  const claimMatch = claimMatches.length === 1 ? claimMatches[0] : undefined;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -673,14 +688,26 @@ export function CheckinStation({
             </h2>
             <input
               className="ah-input text-center font-mono text-2xl tracking-[0.3em] uppercase"
-              placeholder="ABCD"
-              maxLength={4}
+              placeholder="ABCDEF"
+              maxLength={CODE_LENGTH}
               value={claim}
               onChange={(e) => setClaim(e.target.value.toUpperCase())}
             />
             {claim.trim().length >= 3 && (
               <div className="mt-3">
-                {claimMatch ? (
+                {claimAmbiguous ? (
+                  // Refuse rather than guess. Releasing the wrong child is the
+                  // one failure this whole code system exists to prevent.
+                  <div className="rounded-xl border border-brand-300 bg-brand-50 p-4 text-center">
+                    <p className="font-display text-base font-bold text-brand-800">
+                      Two children share this code
+                    </p>
+                    <p className="mt-1 text-sm text-brand-700">
+                      Don&apos;t release anyone. Find a check-in lead and match the
+                      child by name and guardian instead.
+                    </p>
+                  </div>
+                ) : claimMatch ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
                     <p className="font-display text-lg font-bold text-ink-900">
                       {claimMatch.child?.full_name}

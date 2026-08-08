@@ -53,6 +53,32 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
 
   const admin = createAdminClient();
+
+  // A help-desk unlock must not be a route to the top.
+  //
+  // Authorization above is "any row in department_members for the IT
+  // department" — not a department role, not an app role. Anyone added to IT
+  // could previously mint a recovery link for ANY account, including
+  // Super_Admin, and the link comes straight back in the response with no email
+  // sent, so the target never learns. That is a complete account takeover, and
+  // it chains: the IT lead can add whoever they like to the department.
+  //
+  // Super_Admin keeps the unrestricted power. Everyone else is capped at
+  // unprivileged accounts, which is the actual help-desk job.
+  if (meRow.role !== "Super_Admin") {
+    const { data: target } = await admin
+      .from("profiles")
+      .select("role")
+      .ilike("email", email.trim())
+      .maybeSingle();
+    const targetRole = (target as { role?: string } | null)?.role;
+    if (targetRole === "Super_Admin" || targetRole === "IT_Admin") {
+      return NextResponse.json(
+        { error: "Only a Super_Admin can reset a privileged account." },
+        { status: 403 },
+      );
+    }
+  }
   const { data, error } = await admin.auth.admin.generateLink({
     type: "recovery",
     email: email.toLowerCase(),

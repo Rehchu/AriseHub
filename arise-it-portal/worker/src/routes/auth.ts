@@ -16,6 +16,29 @@ const auth = new Hono<{ Bindings: Env; Variables: Variables }>();
 
 const SESSION_DAYS = 7;
 
+/**
+ * Cookie options for the portal session.
+ *
+ * SameSite is Lax, not None. With None the browser attached this cookie to
+ * cross-site requests, and nothing else stopped them: index.ts installs CORS
+ * and security headers but no CSRF or Origin check, and Hono's c.req.json() is
+ * Request.json(), which ignores Content-Type. A hostile page could therefore
+ * POST a `<form enctype="text/plain">` whose body parses as JSON and, with a
+ * super_admin's cookie riding along, mint itself an account at POST /api/users.
+ * CORS does not help — it blocks reading the response, not sending the request.
+ *
+ * Lax still works for the live SSO flow, which is a top-level GET navigation
+ * (/api/auth/sso-code). It was already Lax there; the other three paths were
+ * left on None.
+ */
+const SESSION_COOKIE_OPTS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "Lax",
+  path: "/",
+  maxAge: SESSION_DAYS * 24 * 60 * 60,
+} as const;
+
 auth.post("/login", async (c) => {
   const { email, password } = await c.req.json<{ email: string; password: string }>();
   if (!email || !password) return c.json({ error: "Email and password required" }, 400);
@@ -52,7 +75,7 @@ auth.post("/login", async (c) => {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,
-    sameSite: "None",
+    sameSite: "Lax",
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
@@ -112,7 +135,7 @@ auth.post("/sso", async (c) => {
   setCookie(c, SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,
-    sameSite: "None",
+    sameSite: "Lax",
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
@@ -173,7 +196,7 @@ auth.post("/sso-redirect", async (c) => {
   setCookie(c, SESSION_COOKIE, sessionToken, {
     httpOnly: true,
     secure: true,
-    sameSite: "None",
+    sameSite: "Lax",
     path: "/",
     maxAge: SESSION_DAYS * 24 * 60 * 60,
   });
