@@ -19,3 +19,9 @@ supabase/.temp/
 
 # tsc incremental cache — machine-local, not a build output worth tracking
 tsconfig.tsbuildinfo
+
+# Throwaway harnesses used to measure layout/CSS without booting the app.
+# One of these got committed and served publicly from /public.
+__tmp_*
+__probe.*
+public/__probe.*
