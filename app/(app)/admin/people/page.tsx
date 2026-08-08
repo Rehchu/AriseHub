@@ -43,8 +43,10 @@ export default async function PeopleAdminPage() {
   // Clearance lives on `profiles`, not on people_directory — read separately
   // rather than widening the view, which exists to REDACT rather than to carry
   // more sensitive fields.
+  // Through people_directory, which CASE-gates these on is_super_admin() —
+  // profiles no longer grants them to `authenticated` at all (0049).
   const { data: clearanceRows } = await supabase
-    .from("profiles")
+    .from("people_directory")
     .select("id, background_check_date, background_check_expires, safeguarding_training_date");
   const clearance: Record<string, Clearance> = {};
   for (const c of (clearanceRows ?? []) as (Clearance & { id: string })[]) {

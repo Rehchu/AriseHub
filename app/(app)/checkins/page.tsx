@@ -28,22 +28,35 @@ export default async function CheckinsPage() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  // Reads go through `checkin_people`, not `profiles`. date_of_birth and
+  // has_allergy are no longer granted church-wide (0049) — the view gates them
+  // on is_checkin_role(), which is exactly who is standing here.
   const [{ data: rooms }, { data: checkins }, { data: people }] = await Promise.all([
     supabase.from("rooms").select("id, name, capacity, min_age, max_age, active, max_children_per_adult").order("name"),
     supabase
       .from("checkins")
-      .select(
-        "id, profile_id, room_id, status, security_code, checked_in_at, checked_out_at, notes, child:profiles!checkins_profile_id_fkey(full_name, has_allergy)",
-      )
+      .select("id, profile_id, room_id, status, security_code, checked_in_at, checked_out_at, notes")
       .gte("checked_in_at", todayStart.toISOString())
       .order("checked_in_at", { ascending: false }),
     supabase
-      .from("profiles")
+      .from("checkin_people")
       .select("id, full_name, has_allergy, date_of_birth")
       .is("archived_at", null)
       .order("full_name")
       .limit(500),
   ]);
+
+  // Names for today's roster, resolved separately rather than embedded — an
+  // embed would read those columns off `profiles` as the caller and no longer
+  // resolves. Includes archived children, who the search list excludes.
+  const childIds = [...new Set(((checkins ?? []) as { profile_id: string }[]).map((c) => c.profile_id))];
+  const { data: kids } = childIds.length
+    ? await supabase.from("checkin_people").select("id, full_name, has_allergy").in("id", childIds)
+    : { data: [] };
+  const kidById: Record<string, { full_name: string; has_allergy: boolean }> = {};
+  for (const k of (kids ?? []) as { id: string; full_name: string; has_allergy: boolean }[]) {
+    kidById[k.id] = { full_name: k.full_name, has_allergy: k.has_allergy };
+  }
 
   // Sibling map, so three children from one family are one action rather than
   // three. Sunday morning with a queue behind you is where a check-in system
@@ -62,10 +75,10 @@ export default async function CheckinsPage() {
     }
   }
 
-  const one = <T,>(v: T[] | T | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
-  const rows: CheckinRow[] = ((checkins ?? []) as unknown as Array<
-    Omit<CheckinRow, "child"> & { child: { full_name: string; has_allergy: boolean }[] | { full_name: string; has_allergy: boolean } | null }
-  >).map((c) => ({ ...c, child: one(c.child) }));
+  const rows: CheckinRow[] = ((checkins ?? []) as Omit<CheckinRow, "child">[]).map((c) => ({
+    ...c,
+    child: kidById[c.profile_id] ?? null,
+  }));
 
   return (
     <CheckinStation

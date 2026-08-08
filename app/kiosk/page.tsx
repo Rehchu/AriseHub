@@ -32,22 +32,31 @@ export default async function KioskPage() {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
+  // Via checkin_people — date_of_birth and has_allergy are no longer granted
+  // on profiles church-wide (0049).
   const [{ data: rooms }, { data: checkins }, { data: people }] = await Promise.all([
     supabase.from("rooms").select("id, name, capacity, min_age, max_age, active, max_children_per_adult").order("name"),
     supabase
       .from("checkins")
-      .select(
-        "id, profile_id, room_id, status, security_code, checked_in_at, checked_out_at, notes, child:profiles!checkins_profile_id_fkey(full_name, has_allergy)",
-      )
+      .select("id, profile_id, room_id, status, security_code, checked_in_at, checked_out_at, notes")
       .gte("checked_in_at", todayStart.toISOString())
       .order("checked_in_at", { ascending: false }),
     supabase
-      .from("profiles")
+      .from("checkin_people")
       .select("id, full_name, has_allergy, date_of_birth")
       .is("archived_at", null)
       .order("full_name")
       .limit(500),
   ]);
+
+  const childIds = [...new Set(((checkins ?? []) as { profile_id: string }[]).map((c) => c.profile_id))];
+  const { data: kids } = childIds.length
+    ? await supabase.from("checkin_people").select("id, full_name, has_allergy").in("id", childIds)
+    : { data: [] };
+  const kidById: Record<string, { full_name: string; has_allergy: boolean }> = {};
+  for (const k of (kids ?? []) as { id: string; full_name: string; has_allergy: boolean }[]) {
+    kidById[k.id] = { full_name: k.full_name, has_allergy: k.has_allergy };
+  }
 
   // Siblings matter more here than at the staffed desk: this is the tablet a
   // parent uses themselves, with their own three children in tow.
@@ -65,12 +74,10 @@ export default async function KioskPage() {
     }
   }
 
-  const one = <T,>(v: T[] | T | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
-  const rows: CheckinRow[] = ((checkins ?? []) as unknown as Array<
-    Omit<CheckinRow, "child"> & {
-      child: { full_name: string; has_allergy: boolean }[] | { full_name: string; has_allergy: boolean } | null;
-    }
-  >).map((c) => ({ ...c, child: one(c.child) }));
+  const rows: CheckinRow[] = ((checkins ?? []) as Omit<CheckinRow, "child">[]).map((c) => ({
+    ...c,
+    child: kidById[c.profile_id] ?? null,
+  }));
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-ink-50">
