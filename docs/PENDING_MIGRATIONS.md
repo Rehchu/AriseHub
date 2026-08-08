@@ -1,8 +1,22 @@
 # Supabase migrations
 
-**Nothing is pending.** All 36 migrations (`0001`–`0034`, `0036`, `0037` — there
-is no `0035`) are applied and recorded in `supabase_migrations.schema_migrations`,
-verified 2026-08-07.
+**Nothing is pending.** Everything through `0043` is applied and recorded in
+`supabase_migrations.schema_migrations`, verified 2026-08-08 (`migration list`
+reports 0 pending). There is no `0035`.
+
+## If you apply a migration through the Supabase MCP connector
+
+`apply_migration` records it under a **timestamp** version (`20260808044711`),
+not the file's number. The repo's `0038`–`0043` would then look unapplied to
+`supabase migration up`, which would try to replay them against a live
+database. After using the connector, reconcile:
+
+```bash
+npx supabase migration repair --status applied 0038 0039 --db-url "<connection string>"
+```
+
+Both versions end up in the history, which is harmless — what matters is that
+nothing numbered is left looking pending.
 
 ## How to apply the next one
 
