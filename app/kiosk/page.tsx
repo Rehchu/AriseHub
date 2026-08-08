@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CheckinStation, type CheckinRow, type RoomRow, type PersonRow } from "@/components/checkins/CheckinStation";
+import { canRunCheckin } from "@/lib/roles";
 import { Logo } from "@/components/Logo";
 
 // KIOSK MODE — the check-in station view for tablets.
@@ -25,7 +26,8 @@ export default async function KioskPage() {
     campus_id: string | null;
     is_checkin_lead: boolean;
   } | null;
-  if (!p || !["Super_Admin", "IT_Admin", "Staff"].includes(p.role)) redirect("/dashboard");
+  // Matches public.is_checkin_role() — see lib/roles.ts.
+  if (!p || !canRunCheckin(p.role)) redirect("/dashboard");
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);

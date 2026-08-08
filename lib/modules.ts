@@ -1,4 +1,5 @@
 import type { UserRole } from "@/lib/database.types";
+import { CHECKIN_ROLES } from "@/lib/roles";
 
 export type ModuleKey =
   | "dashboard"
@@ -33,7 +34,9 @@ export const MODULES: ModuleDef[] = [
   { key: "messages", label: "Messages", href: "/messages", icon: "chat", accent: "#2563eb", ready: true },
   { key: "tasks", label: "Tasks", href: "/tasks", icon: "task", accent: "#0891b2", ready: true },
   { key: "people", label: "People", href: "/people", icon: "users", accent: "#7c3aed", ready: true },
-  { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
+  // Must match public.is_checkin_role(), or the menu offers a page whose
+  // queries RLS refuses — or hides one somebody is entitled to work on.
+  { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: true, roles: CHECKIN_ROLES },
   { key: "forms", label: "Forms", href: "/forms", icon: "form", accent: "#0d9488", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
   // Visibility is decided by is_pastoral() in the Shell, not by role.
   { key: "care", label: "Care", href: "/care", icon: "heart", accent: "#be123c", ready: true },

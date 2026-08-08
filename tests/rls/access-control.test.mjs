@@ -603,6 +603,61 @@ describe("calendar", () => {
   });
 });
 
+describe("check-in access agrees between app and database", () => {
+  // There were three lists and they disagreed: the page guard admitted
+  // IT_Admin (whose inserts RLS then refused) and redirected Volunteers away
+  // from the desk the whole check-in schema is written for.
+  test("lib/roles.ts CHECKIN_ROLES matches public.is_checkin_role()", async (t) => {
+    if (!requireDb(t)) return;
+    const src = (
+      await db.query(`select prosrc from pg_proc where proname = 'is_checkin_role'`)
+    ).rows[0].prosrc;
+    const fromSql = [...src.matchAll(/'([A-Za-z_]+)'/g)]
+      .map((m) => m[1])
+      .filter((r) => ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"].includes(r));
+
+    // lib/roles.ts is TypeScript; read it as text rather than importing.
+    const fs = await import("node:fs");
+    const text = fs.readFileSync(new URL("../../lib/roles.ts", import.meta.url), "utf8");
+    const fromApp = [...text.matchAll(/"([A-Za-z_]+)"/g)]
+      .map((m) => m[1])
+      .filter((r) => ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"].includes(r));
+
+    assert.deepEqual(
+      [...new Set(fromApp)].sort(),
+      [...new Set(fromSql)].sort(),
+      "the app and the database disagree about who may run check-in",
+    );
+  });
+
+  test("a Volunteer can actually insert a check-in", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `insert into public.checkins (profile_id, campus_id, security_code, status)
+       values ($1, $2, 'ZZROLE', 'checked_in')`,
+      [fx.child, fx.campus],
+    );
+    assert.ok(res.ok, `the role that works the desk cannot check anyone in: ${res.error}`);
+  });
+
+  test("an IT_Admin cannot", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.IT_Admin,
+      `insert into public.checkins (profile_id, campus_id, security_code, status)
+       values ($1, $2, 'ZZROLE2', 'checked_in')`,
+      [fx.child, fx.campus],
+    );
+    assert.ok(
+      deniedByPolicy(res),
+      "IT_Admin can insert check-ins — then the nav should offer it, not hide it",
+    );
+  });
+});
+
 describe("room staffing", () => {
   test("check-in staff can record how many adults are in a room", async (t) => {
     if (!requireDb(t)) return;
