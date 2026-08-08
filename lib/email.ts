@@ -5,10 +5,26 @@
 
 const FROM = process.env.FROM_EMAIL || "AriseHub <arisehub@myfaithtech.com>";
 
+/**
+ * Who an email comes from.
+ *
+ * Two identities on one verified domain, because they mean different things to
+ * whoever opens them. Anything about someone's ACCOUNT — a password reset, an
+ * invitation — is AriseHub. Anything about a support ticket is AriseIT, so a
+ * status change lands in the same conversation as the rest of their IT history
+ * rather than looking like a login email.
+ */
+export const SENDERS = {
+  hub: FROM,
+  it: process.env.IT_FROM_EMAIL || "AriseIT <ariseit@myfaithtech.com>",
+} as const;
+
 export async function sendEmail(opts: {
   to: string;
   subject: string;
   html: string;
+  /** Defaults to AriseHub. Pass SENDERS.it for anything ticket-related. */
+  from?: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const key = process.env.RESEND_API_KEY;
   if (!key) return { ok: false, error: "email not configured" };
@@ -20,7 +36,7 @@ export async function sendEmail(opts: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: FROM,
+        from: opts.from || SENDERS.hub,
         to: [opts.to],
         subject: opts.subject,
         html: opts.html,
