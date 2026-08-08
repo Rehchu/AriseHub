@@ -618,6 +618,59 @@ export function TagDesigner({
     setSelectedId(null);
   }
 
+  /**
+   * The church logo, stored once and reused on every template.
+   *
+   * The flame mark goes on every badge, and "+ Image" meant finding the file
+   * again for each template on each device. Loaded here, dropped with one tap.
+   */
+  const [churchLogo, setChurchLogo] = useState<string | null>(null);
+  useEffect(() => {
+    supabase
+      .from("app_settings")
+      .select("church_logo_url")
+      .maybeSingle()
+      .then(({ data }) => setChurchLogo((data as { church_logo_url: string | null } | null)?.church_logo_url ?? null));
+  }, [supabase]);
+
+  function addLogo() {
+    if (!churchLogo) return;
+    pushHistory();
+    const el: TagElement = {
+      id: newElementId(),
+      kind: "image",
+      name: "Church logo",
+      x: 0.04,
+      y: 0.08,
+      w: 0.16,
+      h: 0.5,
+      src: churchLogo,
+      fit: "contain",
+    };
+    setElements((els) => [...els, el]);
+    setSelectedId(el.id);
+  }
+
+  /** Remember the selected image as THE church logo. Super admins only (RLS). */
+  async function saveAsChurchLogo(src: string) {
+    const { data, error } = await supabase
+      .from("app_settings")
+      .update({ church_logo_url: src, updated_at: new Date().toISOString() })
+      .eq("id", true)
+      .select("id");
+    // RLS refusing a row returns no rows and no error, which an unchecked update
+    // cannot tell from success.
+    if (error || !data?.length) {
+      setMsg({
+        text: error?.message ?? "Only a super admin can set the church logo.",
+        bad: true,
+      });
+      return;
+    }
+    setChurchLogo(src);
+    setMsg({ text: "Saved as the church logo — it's one tap on any template now." });
+  }
+
   async function uploadImage(file: File, target: "background" | "element") {
     // Designs live in a jsonb column and images are inlined as data URLs, so an
     // unbounded upload becomes an unbounded row that every check-in station then
@@ -1049,6 +1102,42 @@ export function TagDesigner({
             </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
+              {churchLogo ? (
+                <button
+                  onClick={addLogo}
+                  className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={churchLogo} alt="" className="h-4 w-4 object-contain" />
+                  + Church logo
+                </button>
+              ) : (
+                <label
+                  className="cursor-pointer rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                  title="Upload it once — after that it's one tap on any template"
+                >
+                  + Set church logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      if (f.size > 400_000) {
+                        setMsg({
+                          text: `That image is ${(f.size / 1024).toFixed(0)}KB. Please use one under 400KB.`,
+                          bad: true,
+                        });
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = () => saveAsChurchLogo(String(reader.result));
+                      reader.readAsDataURL(f);
+                    }}
+                  />
+                </label>
+              )}
               <AddBtn onClick={() => addEl("text")}>+ Text</AddBtn>
               <AddBtn onClick={() => addEl("rect")}>+ Box</AddBtn>
               <AddBtn onClick={() => addEl("line")}>+ Line</AddBtn>
@@ -1449,6 +1538,16 @@ export function TagDesigner({
                       <option value="stretch">Stretch</option>
                     </select>
                   </Row>
+                )}
+                {selected.kind === "image" && selected.src && selected.src !== churchLogo && (
+                  // Promote whatever is selected to THE church logo, so it is
+                  // one tap on every future template rather than a file hunt.
+                  <button
+                    onClick={() => saveAsChurchLogo(selected.src!)}
+                    className="ah-tight w-full rounded-lg bg-ink-100 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-200"
+                  >
+                    Use this as the church logo
+                  </button>
                 )}
 
                 {selected.kind === "rect" && (

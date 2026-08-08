@@ -788,3 +788,54 @@ describe("IT support threads", () => {
     assert.ok(reply.ok, `IT could not reply: ${reply.error}`);
   });
 });
+
+describe("church branding", () => {
+  // The logo is the least secret thing the church owns, so everyone reads it —
+  // but only a super admin decides what it is. A volunteer at a check-in desk
+  // must not be able to change what prints on every badge.
+  test("anyone signed in can read the church logo", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(db, fx.ids.Member, `select church_logo_url from public.app_settings`);
+    assert.ok(res.ok, `the designer could not load branding: ${res.error}`);
+  });
+
+  for (const role of ["Member", "Volunteer", "Staff", "IT_Admin"]) {
+    test(`${role} cannot change the church logo`, async (t) => {
+      if (!requireDb(t)) return;
+      const res = await asUser(
+        db,
+        fx.ids[role],
+        `update public.app_settings set church_logo_url = 'zz-not-allowed' where id`,
+      );
+      const after = await db.query(`select church_logo_url from public.app_settings where id`);
+      assert.notEqual(
+        after.rows[0]?.church_logo_url,
+        "zz-not-allowed",
+        `${role} changed what prints on every badge`,
+      );
+    });
+  }
+
+  test("a super admin can set it", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `update public.app_settings set church_logo_url = 'zz-logo' where id returning id`,
+    );
+    assert.ok(res.ok && res.count === 1, `super admin blocked from setting the logo: ${res.error}`);
+  });
+
+  test("there can only ever be one settings row", async (t) => {
+    if (!requireDb(t)) return;
+    // `id boolean primary key check (id)` — a second row is impossible, so the
+    // designer never has to ask which one is real.
+    let threw = false;
+    try {
+      await db.query(`insert into public.app_settings (id) values (true)`);
+    } catch {
+      threw = true;
+    }
+    assert.ok(threw, "a second app_settings row was accepted");
+  });
+});
