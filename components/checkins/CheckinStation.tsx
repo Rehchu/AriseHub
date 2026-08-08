@@ -110,6 +110,10 @@ export function CheckinStation({
   const [guardiansLoading, setGuardiansLoading] = useState(false);
   const [releaseTo, setReleaseTo] = useState("");
   const [releaseNote, setReleaseNote] = useState("");
+  // Defaults to ON: if the setting hasn't loaded yet, ask who is collecting.
+  // The failure mode of guessing wrong in the other direction is a child handed
+  // to the wrong person.
+  const [requirePickup, setRequirePickup] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastBadge, setLastBadge] = useState<
@@ -196,6 +200,20 @@ export function CheckinStation({
       .from("nametag_templates")
       .select("id, name, width_in, height_in, design, is_default, kind")
       .then(({ data }) => setTemplates((data ?? []) as TagTemplate[]));
+  }, [supabase]);
+
+  // Kids' ministry on a Sunday wants pickup verified. A midweek service where
+  // the child just leaves with their parents does not. Super_Admin decides in
+  // Admin -> Check-in rather than it being a code change.
+  useEffect(() => {
+    supabase
+      .from("checkin_settings")
+      .select("require_pickup_verification")
+      .maybeSingle()
+      .then(({ data }) => {
+        const row = data as { require_pickup_verification: boolean } | null;
+        if (row) setRequirePickup(row.require_pickup_verification);
+      });
   }, [supabase]);
 
   // Print chain: designed template (rendered to an image) if one exists, then
@@ -455,9 +473,10 @@ export function CheckinStation({
 
   const allowedGuardians = guardians.filter((g) => g.canPickup);
   const blockedGuardians = guardians.filter((g) => !g.canPickup);
-  // Release is permitted either to a named authorised guardian, or to somebody
-  // else with a written reason. Never on the code alone.
-  const canRelease = !!releaseTo || releaseNote.trim().length >= 3;
+  // With verification on, release is permitted either to a named authorised
+  // guardian or to somebody else with a written reason — never on the code
+  // alone. With it off, the code IS the check.
+  const canRelease = !requirePickup || !!releaseTo || releaseNote.trim().length >= 3;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -786,11 +805,13 @@ export function CheckinStation({
                       {rooms.find((r) => r.id === claimMatch.room_id)?.name ?? "—"}
                     </p>
 
-                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
-                      Who is collecting?
-                    </p>
+                    {requirePickup && (
+                      <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                        Who is collecting?
+                      </p>
+                    )}
 
-                    {guardiansLoading ? (
+                    {!requirePickup ? null : guardiansLoading ? (
                       <p className="py-2 text-center text-sm text-ink-400">Checking pickup list…</p>
                     ) : (
                       <>
@@ -859,11 +880,13 @@ export function CheckinStation({
                       }}
                       className="mt-2 w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      {releaseTo
-                        ? `Release to ${allowedGuardians.find((g) => g.id === releaseTo)?.name ?? "guardian"}`
-                        : releaseNote.trim().length >= 3
-                          ? "Release — reason recorded"
-                          : "Choose who is collecting"}
+                      {!requirePickup
+                        ? "Check out"
+                        : releaseTo
+                          ? `Release to ${allowedGuardians.find((g) => g.id === releaseTo)?.name ?? "guardian"}`
+                          : releaseNote.trim().length >= 3
+                            ? "Release — reason recorded"
+                            : "Choose who is collecting"}
                     </button>
                   </div>
                 ) : (

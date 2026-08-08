@@ -18,9 +18,16 @@ const APP = "https://arisehub.myfaithtech.com";
 // fired by anyone who finds it.
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  const provided =
-    req.headers.get("x-cron-secret") ?? new URL(req.url).searchParams.get("key");
-  if (!secret || provided !== secret) {
+  // Header only. This also accepted `?key=`, which puts the secret into
+  // Cloudflare access logs, Referer headers and browser history — and
+  // /api/cron/ is on the middleware's public allowlist, so the URL is reachable
+  // by anyone. Compared in constant time rather than with !==.
+  const provided = req.headers.get("x-cron-secret") ?? "";
+  const ok =
+    !!secret &&
+    provided.length === secret.length &&
+    provided.split("").reduce((d, c, i) => d | (c.charCodeAt(0) ^ secret.charCodeAt(i)), 0) === 0;
+  if (!ok) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

@@ -1,7 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "arisehub",
-  "main": ".open-next/worker.js",
+  // Wraps .open-next/worker.js to add a `scheduled` handler — the generated
+  // worker only exports `fetch`, so no Cron Trigger could ever have run.
+  "main": "worker-entry.js",
   "compatibility_date": "2025-03-25",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "assets": {
@@ -10,6 +12,20 @@
   },
   "observability": {
     "enabled": true
+  },
+  // Cron expressions are UTC and cannot express "Sunday 1:30pm Central" without
+  // drifting an hour at each DST change. So auto-checkout runs every 15 minutes
+  // and decides for itself, comparing each campus's LOCAL wall clock against
+  // the cutoffs in checkin_auto_checkout_rules. Cheap: two queries, and it
+  // exits immediately when no cutoff has passed.
+  //
+  // worker-entry.js maps each expression to a route — keep the two in sync.
+  "triggers": {
+    "crons": [
+      "*/15 * * * *", // auto-checkout sweep
+      "0 23 * * *", // nightly "you're serving tomorrow"
+      "0 13 * * 6" // Saturday 7am Central week-ahead digest
+    ]
   },
   // Canonical hostname. Added in the dashboard; declared here so redeploys and
   // any future rebuild of this Worker keep the binding.
