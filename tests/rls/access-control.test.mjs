@@ -207,12 +207,81 @@ describe("children's data", () => {
     assert.equal(read.ok ? read.count : 0, 0, "recording an allergy also granted read access");
   });
 
-  test("the allergy flag still reaches the badge", async (t) => {
+  test("the allergy flag still reaches the badge, via checkin_people", async (t) => {
     if (!requireDb(t)) return;
-    const res = await asUser(db, fx.ids.Volunteer, `select has_allergy from public.profiles where id = $1`, [
+    const res = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `select has_allergy from public.checkin_people where id = $1`,
+      [fx.child],
+    );
+    assert.ok(res.ok && res.rows[0]?.has_allergy === true, "the red flag vanished from the roster");
+  });
+
+  // 0049. profiles_select stays `using (true)` because the directory and every
+  // embedded profiles(full_name) lookup depend on it — so the gate is the
+  // COLUMN grant, not the row policy.
+  for (const col of [
+    "date_of_birth",
+    "has_allergy",
+    "hidden_from_directory",
+    "background_check_expires",
+    "membership_status",
+    "elvanto_id",
+  ]) {
+    test(`nobody reads profiles.${col} directly`, async (t) => {
+      if (!requireDb(t)) return;
+      for (const role of [...ROLES, "Lead"]) {
+        const res = await asUser(db, fx.ids[role], `select ${col} from public.profiles limit 1`);
+        assert.ok(
+          !res.ok && /permission denied|does not exist/i.test(res.error),
+          `${role} can still read profiles.${col} church-wide`,
+        );
+      }
+    });
+  }
+
+  test("a Volunteer still gets ages through checkin_people", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `select date_of_birth from public.checkin_people where id = $1`,
+      [fx.child],
+    );
+    assert.ok(res.ok && res.rows[0]?.date_of_birth, "check-in lost the ages it needs for room assignment");
+  });
+
+  test("a plain Member does not", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(db, fx.ids.Member, `select count(*)::int n from public.checkin_people`);
+    assert.equal(res.ok ? res.rows[0].n : 0, 0, "checkin_people leaked to a non-check-in role");
+  });
+
+  test("Super_Admin still sees clearance through people_directory", async (t) => {
+    if (!requireDb(t)) return;
+    await db.query(`update public.profiles set background_check_expires = '2099-01-01' where id = $1`, [
       fx.child,
     ]);
-    assert.ok(res.ok && res.rows[0]?.has_allergy === true, "the red flag vanished from the roster");
+    const admin = await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `select background_check_expires from public.people_directory where id = $1`,
+      [fx.child],
+    );
+    assert.ok(admin.ok && admin.rows[0]?.background_check_expires, "Admin > People lost clearance dates");
+
+    const member = await asUser(
+      db,
+      fx.ids.Member,
+      `select background_check_expires from public.people_directory where id = $1`,
+      [fx.child],
+    );
+    assert.equal(
+      member.rows?.[0]?.background_check_expires ?? null,
+      null,
+      "a member can read everyone's safeguarding status",
+    );
   });
 });
 
