@@ -264,7 +264,7 @@ export function InvitePanel({
                   <button onClick={() => toggleActive(l)} className="text-xs font-medium text-ink-600 underline">
                     {l.active ? "Turn off" : "Turn on"}
                   </button>
-                  <button onClick={() => remove(l.id)} className="text-ink-300 hover:text-brand-500" aria-label="Delete">
+                  <button onClick={() => remove(l.id)} className="text-ink-400 hover:text-brand-600" aria-label="Delete">
                     <Icon name="trash" size={15} />
                   </button>
                 </div>

@@ -260,7 +260,7 @@ export function PlanDetail({
                   <span className="text-xs text-ink-400">{i.duration_minutes}m</span>
                 )}
                 {canManage && (
-                  <button onClick={() => removeItem(i.id)} className="text-ink-300 hover:text-brand-500" aria-label="Remove item">
+                  <button onClick={() => removeItem(i.id)} className="text-ink-400 hover:text-brand-600" aria-label="Remove item">
                     <Icon name="trash" size={15} />
                   </button>
                 )}
@@ -362,7 +362,7 @@ export function PlanDetail({
                     </div>
                     <StatusBadge status={a.status} />
                     {canManage && (
-                      <button onClick={() => removePosition(a.id)} className="text-ink-300 hover:text-brand-500" aria-label="Remove">
+                      <button onClick={() => removePosition(a.id)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
                         <Icon name="x" size={14} />
                       </button>
                     )}

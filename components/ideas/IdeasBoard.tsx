@@ -258,7 +258,7 @@ export function IdeasBoard({
                       </option>
                     ))}
                   </select>
-                  <button onClick={() => remove(i)} className="text-ink-300 hover:text-brand-500" aria-label="Delete">
+                  <button onClick={() => remove(i)} className="text-ink-400 hover:text-brand-600" aria-label="Delete">
                     <Icon name="trash" size={15} />
                   </button>
                 </div>

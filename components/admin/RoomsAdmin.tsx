@@ -196,7 +196,7 @@ export function RoomsAdmin({
                 />
                 Active
               </label>
-              <button onClick={() => remove(r)} className="text-ink-300 hover:text-brand-500" aria-label="Delete room">
+              <button onClick={() => remove(r)} className="text-ink-400 hover:text-brand-600" aria-label="Delete room">
                 <Icon name="trash" size={16} />
               </button>
             </div>

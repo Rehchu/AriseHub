@@ -33,6 +33,8 @@ const SCRIPT = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=exp
 export function Turnstile({ onToken }: { onToken: (token: string | null) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
+  /** Bumped by "Try loading it again" to re-run the whole effect. */
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY || !ref.current) return;
@@ -102,7 +104,8 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
         }
       }
     };
-  }, [onToken]);
+    // `attempt` is in the deps so the retry button genuinely re-runs this.
+  }, [onToken, attempt]);
 
   if (!TURNSTILE_SITE_KEY) return null;
 
@@ -110,9 +113,24 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
     <div>
       <div ref={ref} />
       {failed && (
-        <p className="mt-1 text-xs text-ink-400">
-          Verification couldn&apos;t load — you can still submit.
-        </p>
+        // This used to say "you can still submit", which is false the moment a
+        // Turnstile secret is configured: /api/forms/submit rejects a missing
+        // token, so a guest was reassured, pressed Submit, and got "Please
+        // complete the verification" with no widget on screen to complete. A
+        // dead end, and their Connect Card details went with it.
+        <div className="mt-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <p>The security check couldn&apos;t load, so this form can&apos;t be sent yet.</p>
+          <button
+            type="button"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+            className="mt-1 font-semibold underline"
+          >
+            Try loading it again
+          </button>
+        </div>
       )}
     </div>
   );

@@ -176,7 +176,12 @@ export function Thread({
     inFlight.current = false;
     setSending(false);
     if (error) {
-      setBody(text); // restore on failure
+      // Restoring the text was the ONLY signal that anything went wrong: the
+      // message vanished, reappeared a moment later, and nothing said why. You
+      // cannot tell that from a slow send, so you either send it twice or walk
+      // away believing it went out.
+      setBody(text);
+      setUploadError(error.message || "Couldn't send that — tap send to try again.");
       return;
     }
     setFile(null);
@@ -208,10 +213,24 @@ export function Thread({
   }
 
   async function softDelete(id: string) {
-    await supabase
+    if (!window.confirm("Delete this message? Everyone in the conversation will see it removed."))
+      return;
+    // Authoritative, and applied locally. This fired and forgot: if the write
+    // was rejected the bubble just sat there unchanged, so you tapped the x
+    // again and again with no idea whether it had registered — while the
+    // message stayed visible to everyone else.
+    const { data, error } = await supabase
       .from("messages")
       .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+      .eq("id", id)
+      .select("id, deleted_at")
+      .maybeSingle();
+    if (error || !data) {
+      setUploadError(error?.message ?? "Couldn't delete that message — try again.");
+      return;
+    }
+    const row = data as { id: string; deleted_at: string };
+    setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, deleted_at: row.deleted_at } : r)));
   }
 
   return (

@@ -166,7 +166,7 @@ export function GroupDetail({
                   <span className="text-xs capitalize text-ink-400">{m.role}</span>
                 )}
                 {canManage && (
-                  <button onClick={() => removeMember(m)} className="text-ink-300 hover:text-brand-500" aria-label="Remove">
+                  <button onClick={() => removeMember(m)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
                     <Icon name="x" size={14} />
                   </button>
                 )}
@@ -294,7 +294,16 @@ function Attendance({
                 >
                   <span
                     className={`flex h-5 w-5 items-center justify-center rounded border ${
-                      on ? "border-emerald-500 bg-emerald-700 text-onaccent" : "border-ink-300 text-transparent"
+                      // ink-400, not ink-300. This box IS the control and its
+                      // border is the only thing on screen when unticked —
+                      // ink-300 measured 2.76:1 in light and 2.10:1 in dark,
+                      // under the 3:1 a control boundary needs. Taking
+                      // attendance in dark mode you saw green boxes next to the
+                      // people already marked and nothing at all next to
+                      // everyone else. ink-300 stays for hairline dividers.
+                      on
+                        ? "border-emerald-500 bg-emerald-700 text-onaccent"
+                        : "border-ink-400 text-transparent"
                     }`}
                   >
                     <Icon name="check" size={14} />

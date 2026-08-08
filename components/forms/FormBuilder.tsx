@@ -179,7 +179,7 @@ export function FormBuilder({
                   <input type="checkbox" checked={f.required} onChange={() => toggleRequired(f)} />
                   Required
                 </label>
-                <button onClick={() => removeField(f.id)} className="text-ink-300 hover:text-brand-500" aria-label="Delete field">
+                <button onClick={() => removeField(f.id)} className="text-ink-400 hover:text-brand-600" aria-label="Delete field">
                   <Icon name="trash" size={16} />
                 </button>
               </div>

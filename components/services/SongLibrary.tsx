@@ -169,7 +169,7 @@ export function SongLibrary({
               </a>
             )}
             {canManage && (
-              <button onClick={() => archive(s)} className="text-ink-300 hover:text-brand-500" aria-label="Remove">
+              <button onClick={() => archive(s)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
                 <Icon name="trash" size={16} />
               </button>
             )}

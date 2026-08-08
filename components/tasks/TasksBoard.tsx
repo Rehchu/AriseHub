@@ -136,10 +136,13 @@ function Section({
   );
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  high: "#d2303b",
-  normal: "#6d6e76",
-  low: "#9a9ba1",
+/** Same hand-copied light-theme literals as the care board had — same fix.
+ *  `normal` and `low` are ink-400 and ink-300 frozen at their light values, so
+ *  they stopped inverting with the card and the ranking flattened in dark mode. */
+const PRIORITY_BORDER: Record<string, string> = {
+  high: "border-l-accent",
+  normal: "border-l-ink-400",
+  low: "border-l-ink-200",
 };
 
 function TaskCard({
@@ -157,8 +160,9 @@ function TaskCard({
       : "—";
   return (
     <div
-      className="flex items-start gap-3 rounded-xl border border-ink-100 bg-white p-4"
-      style={{ borderLeftWidth: 4, borderLeftColor: PRIORITY_COLOR[t.priority] }}
+      className={`flex items-start gap-3 rounded-xl border border-l-4 border-ink-100 bg-white p-4 ${
+        PRIORITY_BORDER[t.priority] ?? "border-l-ink-200"
+      }`}
     >
       <button
         onClick={() => onStatus(t.id, done ? "open" : "done")}

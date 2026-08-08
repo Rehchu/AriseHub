@@ -123,8 +123,12 @@ export function GroupsList({
               <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
                 {TYPE_LABEL[g.group_type] ?? "Group"}
               </span>
+              {/* brand-700 on brand-50, not brand-600: the tint pair is what the
+                  scale inverts together (7.55:1 light, 7.30:1 dark). brand-600 is
+                  tuned to sit on a CARD, and on the tint it fell to 4.36:1 in
+                  dark — under AA for 10px uppercase text. */}
               {g.isMember && (
-                <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-600">
+                <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-700">
                   Member
                 </span>
               )}

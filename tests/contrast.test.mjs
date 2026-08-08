@@ -41,6 +41,27 @@ const STOCK = {
 const LIGHT = { white: "#ffffff", ...base, ...STOCK };
 const DARK = { ...LIGHT, ...darkOverride };
 
+/** Every .tsx/.ts under components/ and app/, as [path, source]. */
+function sources() {
+  const out = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = `${dir}/${e.name}`;
+      if (e.isDirectory()) {
+        if (e.name === "node_modules" || e.name === ".next") continue;
+        walk(p);
+      } else if (/\.tsx?$/.test(e.name)) {
+        out.push([p, fs.readFileSync(p, "utf8")]);
+      }
+    }
+  };
+  const abs = (rel) =>
+    new URL(rel, import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1");
+  walk(abs("../components"));
+  walk(abs("../app"));
+  return out;
+}
+
 const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 function luminance(hex) {
   const [r, g, b] = [1, 3, 5].map((i) => lin(parseInt(hex.slice(i, i + 2), 16) / 255));
@@ -85,7 +106,23 @@ const TEXT_PAIRS = [
 ];
 
 /** Non-text UI parts only need 3:1 (WCAG 1.4.11). */
-const UI_PAIRS = [["focus ring against a card", "accent", "white"]];
+const UI_PAIRS = [
+  ["focus ring against a card", "accent", "white"],
+  // The care/task board priority stripe. These were three hardcoded hex values
+  // and the ranking inverted in dark mode: high fell to 2.82:1 while low rose
+  // to 6.40:1, so urgent hospital visits receded exactly where low-priority
+  // items stood out.
+  // Only the two that carry an "act on this" signal are held to 3:1. `low` is
+  // deliberately the quiet end — it means no emphasis — and sits at ink-200,
+  // which is a hairline by design. What matters is that high is the loudest of
+  // the three in BOTH themes, which is the property that broke.
+  ["priority stripe — high", "accent", "white"],
+  ["priority stripe — normal", "ink-400", "white"],
+  // An unticked checkbox's border is the whole control. ink-300 is a hairline
+  // colour and measured 2.10:1 in dark.
+  ["unticked checkbox border", "ink-400", "white"],
+  ["ticked checkbox fill", "emerald-700", "white"],
+];
 
 for (const [themeName, theme] of [["light", LIGHT], ["dark", DARK]]) {
   describe(`contrast — ${themeName} mode`, () => {
@@ -159,6 +196,72 @@ describe("token discipline", () => {
     walk(new URL("../components", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
     walk(new URL("../app", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1"));
     assert.deepEqual(offenders, [], `use hover:bg-accent-strong instead:\n  ${offenders.join("\n  ")}`);
+  });
+
+  test("no literal colours in style props", () => {
+    // A hex in a style prop cannot participate in token redefinition, so it
+    // holds still while the surface under it flips. That is how the care board
+    // ended up with its priority ranking inverted in dark mode.
+    //
+    // A colour that comes from DATA is fine — an event type's colour is chosen
+    // by a person and stored in a row, so it is not the theme's business.
+    const offenders = [];
+    for (const [p, src] of sources()) {
+      src.split("\n").forEach((line, i) => {
+        if (!/style=\{\{/.test(line)) return;
+        if (!/#[0-9a-fA-F]{6}\b/.test(line)) return;
+        // `?? "#d97706"` style fallbacks behind a data-driven value.
+        if (/\?\?\s*"#[0-9a-fA-F]{6}"/.test(line)) return;
+        offenders.push(`${p}:${i + 1}`);
+      });
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      `use a token class instead — a literal here won't invert in dark mode:\n  ${offenders.join("\n  ")}`,
+    );
+  });
+
+  test("ink-300 is never the whole of a control's boundary", () => {
+    // ink-300 is the hairline/divider step: 2.76:1 light, 2.10:1 dark. Fine for
+    // a rule between rows, not for the border that IS an unticked checkbox or
+    // the colour of an icon-only button.
+    const offenders = [];
+    for (const [p, src] of sources()) {
+      src.split("\n").forEach((line, i) => {
+        if (!/\b(border-ink-300|text-ink-300)\b/.test(line)) return;
+        if (!/<button|role="button"|cursor-pointer|onClick/.test(line)) return;
+        offenders.push(`${p}:${i + 1}`);
+      });
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      `ink-300 is a hairline colour and misses the 3:1 a control needs — use ink-400:\n  ${offenders.join("\n  ")}`,
+    );
+  });
+
+  test("the priority stripe survives both themes", () => {
+    // What actually broke: with hardcoded hex, `high` fell to 2.82:1 in dark —
+    // under the 3:1 a 3px non-text indicator needs — while `low` rose to 6.40:1
+    // and became the loudest line on the board.
+    //
+    // Note what is NOT asserted. In light mode accent measures 4.97 and ink-400
+    // measures 5.07, so `high` is not the higher contrast ratio of the two.
+    // That is fine: what makes the red stripe read as urgent is hue, and
+    // contrast ratio cannot see hue. The measurable properties are that high
+    // clears the non-text minimum everywhere, and that low stays the quiet one.
+    for (const [themeName, theme] of [["light", LIGHT], ["dark", DARK]]) {
+      const on = (tok) => ratio(theme[tok], theme.white);
+      assert.ok(
+        on("accent") >= 3,
+        `${themeName}: high-priority stripe is ${on("accent").toFixed(2)}:1, under the 3:1 a non-text indicator needs`,
+      );
+      assert.ok(
+        on("ink-200") < on("ink-400"),
+        `${themeName}: low (${on("ink-200").toFixed(2)}) is louder than normal (${on("ink-400").toFixed(2)}) — the ranking has inverted`,
+      );
+    }
   });
 
   test("the viewport does not disable pinch-zoom", () => {

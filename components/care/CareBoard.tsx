@@ -33,10 +33,25 @@ const CATEGORIES: CareItem["category"][] = [
   "benevolence",
   "other",
 ];
-const PRIORITY_COLOR: Record<string, string> = {
-  high: "#be123c",
-  normal: "#6d6e76",
-  low: "#9a9ba1",
+/**
+ * Priority stripe, as classes rather than hex.
+ *
+ * These were three literals — #be123c, #6d6e76, #9a9ba1 — set through a style
+ * prop. Literals cannot participate in token redefinition, so the stripe held
+ * still while the card under it flipped from #ffffff to #17181c, and the
+ * ranking inverted: high measured 6.30:1 in light but 2.82:1 in dark (under the
+ * 3:1 WCAG 1.4.11 wants of a non-text indicator, at 3px wide), while low went
+ * from 2.77:1 to 6.40:1 and became the most eye-catching line on the board. The
+ * urgent hospital visits receded exactly where the low-priority items stood out.
+ *
+ * `normal` and `low` were the LIGHT-theme values of ink-400 and ink-300 copied
+ * in by hand, which is precisely why they stopped tracking the theme. Whole
+ * class names so Tailwind's scanner can see them.
+ */
+const PRIORITY_BORDER: Record<string, string> = {
+  high: "border-l-accent",
+  normal: "border-l-ink-400",
+  low: "border-l-ink-200",
 };
 
 export function CareBoard({
@@ -107,8 +122,9 @@ export function CareBoard({
                 {col.map((item) => (
                   <div
                     key={item.id}
-                    className="rounded-lg bg-white p-3 shadow-sm"
-                    style={{ borderLeft: `3px solid ${PRIORITY_COLOR[item.priority]}` }}
+                    className={`rounded-lg border-l-[3px] bg-white p-3 shadow-sm ${
+                      PRIORITY_BORDER[item.priority] ?? "border-l-ink-200"
+                    }`}
                   >
                     <p className="font-medium text-ink-900">{item.title}</p>
                     {(item.about_name || item.assignee) && (
