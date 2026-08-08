@@ -103,6 +103,13 @@ export function CheckinStation({
   const [tab, setTab] = useState<"checkin" | "roster">("checkin");
   const [q, setQ] = useState("");
   const [claim, setClaim] = useState("");
+  // Pickup authorisation for the child whose code was just entered.
+  const [guardians, setGuardians] = useState<
+    { id: string; name: string; canPickup: boolean; notes: string | null }[]
+  >([]);
+  const [guardiansLoading, setGuardiansLoading] = useState(false);
+  const [releaseTo, setReleaseTo] = useState("");
+  const [releaseNote, setReleaseNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastBadge, setLastBadge] = useState<
@@ -355,7 +362,15 @@ export function CheckinStation({
     print(badge);
   }
 
-  async function checkOut(c: CheckinRow) {
+  /**
+   * Release a child.
+   *
+   * `releasedTo` is the authorised guardian who collected them. When nobody on
+   * the pickup list is present the volunteer must say who took the child and
+   * why — that note is the only record it happened, so it is required rather
+   * than optional.
+   */
+  async function checkOut(c: CheckinRow, releasedTo?: string | null, note?: string | null) {
     setError(null);
     setCheckins((cs) =>
       cs.map((x) =>
@@ -370,6 +385,8 @@ export function CheckinStation({
         status: "checked_out",
         checked_out_at: new Date().toISOString(),
         checked_out_by: currentProfileId,
+        released_to_profile_id: releasedTo ?? null,
+        release_note: note?.trim() || null,
       })
       .eq("id", c.id);
     if (error) setError(error.message);
@@ -388,6 +405,59 @@ export function CheckinStation({
     : [];
   const claimAmbiguous = claimMatches.length > 1;
   const claimMatch = claimMatches.length === 1 ? claimMatches[0] : undefined;
+
+  // Who is actually allowed to collect this child.
+  //
+  // `guardians` has carried can_pickup since 0001 — "a grandparent may pick up;
+  // a non-custodial parent may not" — and pickup never once read it. Matching
+  // the code alone means whoever holds the tag takes the child.
+  const claimChildId = claimMatch?.profile_id;
+  useEffect(() => {
+    if (!claimChildId) {
+      setGuardians([]);
+      setReleaseTo("");
+      setReleaseNote("");
+      return;
+    }
+    let live = true;
+    setGuardiansLoading(true);
+    (async () => {
+      const { data: links } = await supabase
+        .from("guardians")
+        .select("guardian_profile_id, can_pickup, notes")
+        .eq("child_profile_id", claimChildId);
+      const rows = (links ?? []) as {
+        guardian_profile_id: string;
+        can_pickup: boolean;
+        notes: string | null;
+      }[];
+      const ids = rows.map((r) => r.guardian_profile_id);
+      const names: Record<string, string> = {};
+      if (ids.length) {
+        const { data: ps } = await supabase.from("profiles").select("id, full_name").in("id", ids);
+        for (const p of (ps ?? []) as { id: string; full_name: string }[]) names[p.id] = p.full_name;
+      }
+      if (!live) return;
+      setGuardians(
+        rows.map((r) => ({
+          id: r.guardian_profile_id,
+          name: names[r.guardian_profile_id] ?? "Unknown person",
+          canPickup: r.can_pickup,
+          notes: r.notes,
+        })),
+      );
+      setGuardiansLoading(false);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [claimChildId, supabase]);
+
+  const allowedGuardians = guardians.filter((g) => g.canPickup);
+  const blockedGuardians = guardians.filter((g) => !g.canPickup);
+  // Release is permitted either to a named authorised guardian, or to somebody
+  // else with a written reason. Never on the code alone.
+  const canRelease = !!releaseTo || releaseNote.trim().length >= 3;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -708,21 +778,92 @@ export function CheckinStation({
                     </p>
                   </div>
                 ) : claimMatch ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
-                    <p className="font-display text-lg font-bold text-ink-900">
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="text-center font-display text-lg font-bold text-ink-900">
                       {claimMatch.child?.full_name}
                     </p>
-                    <p className="mb-3 text-sm text-ink-500">
+                    <p className="mb-3 text-center text-sm text-ink-500">
                       {rooms.find((r) => r.id === claimMatch.room_id)?.name ?? "—"}
                     </p>
+
+                    <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-500">
+                      Who is collecting?
+                    </p>
+
+                    {guardiansLoading ? (
+                      <p className="py-2 text-center text-sm text-ink-400">Checking pickup list…</p>
+                    ) : (
+                      <>
+                        {allowedGuardians.map((g) => (
+                          <button
+                            key={g.id}
+                            onClick={() => {
+                              setReleaseTo(g.id);
+                              setReleaseNote("");
+                            }}
+                            className={
+                              "mb-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition " +
+                              (releaseTo === g.id
+                                ? "border-emerald-600 bg-emerald-600 font-semibold text-white"
+                                : "border-ink-200 bg-white text-ink-800 hover:border-emerald-400")
+                            }
+                          >
+                            <span className="flex-1">{g.name}</span>
+                            {g.notes && (
+                              <span className={releaseTo === g.id ? "text-xs text-emerald-50" : "text-xs text-ink-400"}>
+                                {g.notes}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+
+                        {/* Someone explicitly barred from collecting is worth
+                            naming, so a volunteer recognises the face. */}
+                        {blockedGuardians.length > 0 && (
+                          <p className="mb-1.5 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
+                            <span className="font-semibold">Not authorised to collect:</span>{" "}
+                            {blockedGuardians.map((g) => g.name).join(", ")}
+                          </p>
+                        )}
+
+                        {allowedGuardians.length === 0 && (
+                          <p className="mb-1.5 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                            No pickup list on file for this child. Confirm who they
+                            are with a check-in lead before releasing.
+                          </p>
+                        )}
+
+                        <input
+                          className="ah-input mt-1 py-2 text-sm"
+                          placeholder={
+                            allowedGuardians.length
+                              ? "Someone else? Type their name and why"
+                              : "Who is collecting, and how was it confirmed?"
+                          }
+                          value={releaseNote}
+                          onChange={(e) => {
+                            setReleaseNote(e.target.value);
+                            if (e.target.value.trim()) setReleaseTo("");
+                          }}
+                        />
+                      </>
+                    )}
+
                     <button
+                      disabled={!canRelease}
                       onClick={() => {
-                        checkOut(claimMatch);
+                        checkOut(claimMatch, releaseTo || null, releaseNote || null);
                         setClaim("");
+                        setReleaseTo("");
+                        setReleaseNote("");
                       }}
-                      className="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-700"
+                      className="mt-2 w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      Release to guardian
+                      {releaseTo
+                        ? `Release to ${allowedGuardians.find((g) => g.id === releaseTo)?.name ?? "guardian"}`
+                        : releaseNote.trim().length >= 3
+                          ? "Release — reason recorded"
+                          : "Choose who is collecting"}
                     </button>
                   </div>
                 ) : (

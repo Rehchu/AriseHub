@@ -112,10 +112,13 @@ export function FamilyRegister({
 
       // 4. Household membership.
       const memberRows = [
-        ...parentIds.map((id) => ({
+        // "Parent" is not a value of the relationship_type enum — it is
+        // ('Head of Household', 'Spouse', 'Child', 'Other') — so this insert
+        // failed outright and took the whole registration with it.
+        ...parentIds.map((id, i) => ({
           family_id: familyId,
           profile_id: id,
-          relationship_type: "Parent" as const,
+          relationship_type: i === 0 ? ("Head of Household" as const) : ("Spouse" as const),
         })),
         ...(kidProfiles ?? []).map((k) => ({
           family_id: familyId,
@@ -140,12 +143,30 @@ export function FamilyRegister({
       }
 
       // 6. Medical notes go in the gated table, not the general profile.
+      // The column is `allergy_notes`, not `allergies` — the old name does not
+      // exist, so this insert always failed. Its error was never checked, so
+      // what a parent told the desk about their child's allergy was silently
+      // thrown away while the form reported success.
+      //
+      // Also records the row whenever the allergy box is ticked, notes or not:
+      // "has an allergy, details not given" is itself worth knowing at pickup.
       const medical = kids
         .map((c, i) => ({ c, k: (kidProfiles ?? [])[i] as { id: string } | undefined }))
-        .filter((x) => x.c.allergy && x.c.allergyNotes.trim() && x.k)
-        .map((x) => ({ profile_id: x.k!.id, allergies: x.c.allergyNotes.trim() }));
+        .filter((x) => x.c.allergy && x.k)
+        .map((x) => ({
+          profile_id: x.k!.id,
+          has_allergy: true,
+          allergy_notes: x.c.allergyNotes.trim() || null,
+        }));
       if (medical.length) {
-        await supabase.from("profile_medical").insert(medical);
+        const { error: medErr } = await supabase.from("profile_medical").insert(medical);
+        // Not fatal — the child is registered and profiles.has_allergy already
+        // carries the red flag onto the badge. But it must not fail silently.
+        if (medErr) {
+          setError(
+            `Registered, but the allergy details could not be saved (${medErr.message}). Tell a check-in lead.`,
+          );
+        }
       }
 
       // Photos upload last: they need the profile ids, and a failed upload
