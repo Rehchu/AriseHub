@@ -1,20 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Profile } from "@/lib/database.types";
 import { Icon } from "./Icon";
 import { Modal } from "@/components/ui/Modal";
+import {
+  IT_PORTAL,
+  TICKET_CATEGORIES as CATEGORIES,
+  TICKET_PRIORITIES as PRIORITIES,
+  fetchPortalCampuses,
+  guessCampusId,
+  raiseTicket,
+  type PortalCampus,
+} from "@/lib/it-tickets";
 
 // The "easier support ticket" requirement: a logged-in user opens this, and
 // their name + email are already filled from their profile — they just describe
-// the problem. It posts to the live Arise-IT public ticket API. (Phase 2's auth
-// bridge will upgrade this to an authenticated POST attributed to the D1 user;
-// until then the public endpoint carries the prefilled identity.)
-const IT_PORTAL =
-  process.env.NEXT_PUBLIC_IT_PORTAL_URL ?? "https://itportal.myfaithtech.com";
-
-const CATEGORIES = ["hardware", "software", "network", "account", "other"] as const;
-const PRIORITIES = ["low", "medium", "high"] as const;
+// the problem. It posts to the live Arise-IT public ticket API.
 
 export function GetITHelp({
   profile,
@@ -37,35 +39,40 @@ export function GetITHelp({
   const name = profile?.full_name || email;
   const contactEmail = profile?.email || email;
 
+  // The portal REQUIRES a campus and this form never sent one, so every ticket
+  // it has ever submitted was rejected with a 400 and never created. The portal
+  // keeps its own campus table with its own ids, unrelated to AriseHub's, so the
+  // list has to come from there.
+  const [campuses, setCampuses] = useState<PortalCampus[]>([]);
+  const [campusId, setCampusId] = useState<number | null>(null);
+  useEffect(() => {
+    fetchPortalCampuses().then((list) => {
+      setCampuses(list);
+      setCampusId(guessCampusId(list, profile?.campus_id ? undefined : undefined));
+    });
+  }, [profile?.campus_id]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setBusy(true);
-    try {
-      const res = await fetch(`${IT_PORTAL}/api/public/tickets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requesterName: name,
-          requesterEmail: contactEmail,
-          category,
-          priority,
-          subject,
-          description,
-          website, // honeypot — server drops if filled
-        }),
-      });
-      if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      setDone(true);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? `${err.message}. You can also submit at ${IT_PORTAL}/request`
-          : "Something went wrong.",
-      );
-    } finally {
-      setBusy(false);
+    if (!campusId) {
+      setError("Choose a campus so the right team picks this up.");
+      return;
     }
+    setBusy(true);
+    const res = await raiseTicket({
+      requesterName: name,
+      requesterEmail: contactEmail,
+      campusId,
+      category,
+      priority,
+      subject,
+      description,
+      website, // honeypot — the portal drops the request if it's filled
+    });
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
+    setDone(true);
   }
 
   return (
@@ -124,6 +131,25 @@ export function GetITHelp({
                 placeholder="e.g. Sanctuary projector won't connect"
                 required
               />
+            </label>
+
+            {/* Required by the portal. Its campuses, its ids — AriseHub's
+                campus table is a different thing entirely. */}
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-ink-600">Campus</span>
+              <select
+                className="ah-input"
+                value={campusId ?? ""}
+                onChange={(e) => setCampusId(Number(e.target.value) || null)}
+                required
+              >
+                {campuses.length === 0 && <option value="">Loading…</option>}
+                {campuses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <div className="grid grid-cols-2 gap-3">

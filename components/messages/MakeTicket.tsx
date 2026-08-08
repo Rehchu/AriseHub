@@ -1,14 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "@/components/shell/Icon";
 import { Modal } from "@/components/ui/Modal";
-
-const IT_PORTAL =
-  process.env.NEXT_PUBLIC_IT_PORTAL_URL ?? "https://itportal.myfaithtech.com";
-
-const CATEGORIES = ["Account", "Hardware", "Software", "Network", "Other"];
-const PRIORITIES = ["low", "normal", "high", "urgent"];
+import {
+  IT_PORTAL,
+  TICKET_CATEGORIES as CATEGORIES,
+  TICKET_PRIORITIES as PRIORITIES,
+  fetchPortalCampuses,
+  guessCampusId,
+  raiseTicket,
+  type PortalCampus,
+  type TicketCategory,
+  type TicketPriority,
+} from "@/lib/it-tickets";
 
 export interface TicketMessage {
   senderName: string;
@@ -51,45 +56,51 @@ export function MakeTicket({
   const [subject, setSubject] = useState(
     firstLine.length > 72 ? firstLine.slice(0, 69) + "…" : firstLine || "Support request",
   );
-  const [category, setCategory] = useState("Other");
-  const [priority, setPriority] = useState("normal");
+  // These were "Other"/"normal" — neither of which the portal recognises. It
+  // silently coerces anything unknown to other/medium, so every ticket raised
+  // from here would have arrived miscategorised even once the campus was fixed.
+  const [category, setCategory] = useState<TicketCategory>("other");
+  const [priority, setPriority] = useState<TicketPriority>("medium");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // Required by the portal, and never sent — so this would have failed with a
+  // 400 on every attempt, exactly as Get IT Help has been doing.
+  const [campuses, setCampuses] = useState<PortalCampus[]>([]);
+  const [campusId, setCampusId] = useState<number | null>(null);
+  useEffect(() => {
+    fetchPortalCampuses().then((list) => {
+      setCampuses(list);
+      setCampusId(guessCampusId(list));
+    });
+  }, []);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setError(null);
+    if (!campusId) {
+      setError("Choose a campus so the right team picks this up.");
+      return;
+    }
+    setBusy(true);
     const description =
       (notes.trim() ? notes.trim() + "\n\n" : "") +
       "--- Conversation from AriseHub ---\n" +
       transcript;
-    try {
-      const res = await fetch(`${IT_PORTAL}/api/public/tickets`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          requesterName,
-          requesterEmail,
-          category,
-          priority,
-          subject,
-          description,
-        }),
-      });
-      if (!res.ok) throw new Error(`The portal refused it (${res.status})`);
-      setDone(true);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? `${err.message}. You can also raise it at ${IT_PORTAL}/request`
-          : "Something went wrong.",
-      );
-    } finally {
-      setBusy(false);
-    }
+    const res = await raiseTicket({
+      requesterName,
+      requesterEmail,
+      campusId,
+      category,
+      priority,
+      subject,
+      description,
+    });
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
+    setDone(true);
   }
 
   if (done) {
@@ -139,20 +150,43 @@ export function MakeTicket({
           />
         </label>
 
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium text-ink-600">Campus</span>
+          <select
+            className="ah-input"
+            value={campusId ?? ""}
+            onChange={(e) => setCampusId(Number(e.target.value) || null)}
+            required
+          >
+            {campuses.length === 0 && <option value="">Loading…</option>}
+            {campuses.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-ink-600">Category</span>
-            <select className="ah-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+            <select
+              className="ah-input capitalize"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as TicketCategory)}
+            >
               {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c} className="capitalize">{c}</option>
               ))}
             </select>
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-ink-600">Priority</span>
-            <select className="ah-input" value={priority} onChange={(e) => setPriority(e.target.value)}>
+            <select
+              className="ah-input capitalize"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as TicketPriority)}
+            >
               {PRIORITIES.map((p) => (
-                <option key={p} value={p}>{p}</option>
+                <option key={p} value={p} className="capitalize">{p}</option>
               ))}
             </select>
           </label>
