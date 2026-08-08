@@ -25,6 +25,39 @@ declare global {
   }
 }
 
+function xmlEscape(v: string): string {
+  return v
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Which roll DYMO should expect for a given label size.
+ *
+ * This used to be hardcoded to "30252 Address" for every template, so a
+ * 4 × 2.31in name badge was printed as a 3.5 × 1.125in address label — the
+ * design was squashed onto the wrong stock. Sizes are matched with a small
+ * tolerance because templates store inches as numerics.
+ */
+function paperStockFor(widthIn: number, heightIn: number): { id: string; paperName: string } {
+  const table: { w: number; h: number; id: string; paperName: string }[] = [
+    { w: 3.5, h: 1.125, id: "Address", paperName: "30252 Address" },
+    { w: 3.5, h: 1.4375, id: "LargeAddress", paperName: "30321 Large Address" },
+    { w: 4, h: 2.3125, id: "Shipping", paperName: "30256 Shipping" },
+    { w: 4, h: 2.125, id: "Shipping", paperName: "30323 Shipping" },
+    { w: 2.25, h: 1.25, id: "MultiPurpose", paperName: "30334 Multipurpose" },
+    { w: 2.125, h: 1, id: "MultiPurpose", paperName: "30336 Multipurpose" },
+    { w: 1, h: 1, id: "MultiPurpose", paperName: "30333 Multipurpose 1/2" },
+  ];
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.02;
+  const hit = table.find((t) => near(t.w, widthIn) && near(t.h, heightIn));
+  // Unknown stock: fall back to the most common roll rather than emitting a
+  // paper name DYMO doesn't recognise. The Bounds still carry the real size.
+  return hit ?? table[0];
+}
+
 let loading: Promise<DymoFramework | null> | null = null;
 
 /** Loads + initialises the SDK once. Resolves null if it isn't available. */
@@ -157,17 +190,22 @@ export async function printImageViaDymo(
  * receives finished XML, so the text is inlined here instead.
  */
 export function buildTextLabelXml(d: NameTagData, o: NameTagOptions): string {
-  const esc = (v: string) =>
-    v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const header = o.churchName ?? "";
   const meta = [o.showRoom ? d.room : "", o.showDate ? new Date().toLocaleDateString() : ""]
     .filter(Boolean)
     .join("  ");
-  return labelXml(o, "child")
-    .replace(/>Header</g, ">" + esc(header) + "<")
-    .replace(/>ChildName</g, ">" + esc(d.name) + "<")
-    .replace(/>Meta</g, ">" + esc(meta) + "<")
-    .replace(/>Code</g, ">" + esc(o.showCode ? d.code : "") + "<");
+  // Values are passed into the builder, which puts them inside <String>.
+  //
+  // This used to string-replace `>Header<` on finished XML. That pattern also
+  // matches `<Name>Header</Name>`, so it renamed the object instead of filling
+  // it — and the actual `<String></String>` stayed empty. Every label printed
+  // through the agent came out blank.
+  return labelXml(o, "child", {
+    Header: header,
+    ChildName: d.name,
+    Meta: meta,
+    Code: o.showCode ? d.code : "",
+  });
 }
 
 /**
@@ -183,11 +221,16 @@ export function buildImageLabelXml(
   // DYMO uses twips (1/1440 in) for bounds.
   const w = Math.round(widthIn * 1440);
   const h = Math.round(heightIn * 1440);
+  const stock = paperStockFor(widthIn, heightIn);
+  // Note on the two rectangles below: DrawCommands describes the die-cut in the
+  // roll's own orientation (short edge first), while Bounds is in the rotated
+  // landscape space. They are supposed to look transposed — the 30252 XML that
+  // ships from DYMO does exactly this.
   return `<?xml version="1.0" encoding="utf-8"?>
 <DieCutLabel Version="8.0" Units="twips">
   <PaperOrientation>Landscape</PaperOrientation>
-  <Id>Address</Id>
-  <PaperName>30252 Address</PaperName>
+  <Id>${stock.id}</Id>
+  <PaperName>${stock.paperName}</PaperName>
   <DrawCommands><RoundRectangle X="0" Y="0" Width="${h}" Height="${w}" Rx="0" Ry="0" /></DrawCommands>
   <ObjectInfo>
     <ImageObject>
@@ -256,12 +299,16 @@ export function printImageViaBrowser(pngDataUrl: string, widthIn: number, height
 
 // Label XML for a 30252 Address label (landscape). Object names are referenced
 // by setObjectText below, so keep them in sync.
-function labelXml(o: NameTagOptions, variant: "child" | "guardian") {
+function labelXml(
+  o: NameTagOptions,
+  variant: "child" | "guardian",
+  values: Partial<Record<"Header" | "ChildName" | "Meta" | "Code", string>> = {},
+) {
   const nameSize = Math.round((variant === "guardian" ? 16 : 22) * o.fontScale);
   const metaSize = Math.round(9 * o.fontScale);
   const codeSize = Math.round((variant === "guardian" ? 24 : 15) * o.fontScale);
 
-  const text = (name: string, x: number, y: number, w: number, h: number, size: number, bold: boolean, align: string) => `
+  const text = (name: "Header" | "ChildName" | "Meta" | "Code", x: number, y: number, w: number, h: number, size: number, bold: boolean, align: string) => `
   <ObjectInfo>
     <TextObject>
       <Name>${name}</Name>
@@ -278,7 +325,7 @@ function labelXml(o: NameTagOptions, variant: "child" | "guardian") {
       <Verticalized>False</Verticalized>
       <StyledText>
         <Element>
-          <String></String>
+          <String>${xmlEscape(values[name] ?? "")}</String>
           <Attributes>
             <Font Family="Segoe UI" Size="${size}" Bold="${bold ? "True" : "False"}" Italic="False" Underline="False" Strikeout="False" />
             <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
