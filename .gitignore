@@ -6,6 +6,11 @@ dist/
 .env.local
 .env*.local
 .dev.vars
+# Postgres password, used to run migrations from the CLI. `supabase link` is
+# broken on 2.112.0 (its API-keys call fails schema validation), so commands
+# take --db-url instead, built from this.
+.supabase-db-password
+.supabase-db-url
 .wrangler/
 supabase/.temp/
 *.log
