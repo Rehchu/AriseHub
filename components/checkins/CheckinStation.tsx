@@ -875,7 +875,7 @@ export function CheckinStation({
           {activeRooms.length > 0 && (
             <section className="mb-5">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
-                Rooms
+                Rooms — tap ± as adults arrive or leave
               </h2>
               <div className="space-y-1.5">
                 {activeRooms.map((r) => {

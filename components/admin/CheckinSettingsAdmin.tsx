@@ -3,6 +3,16 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+export interface RoomRatio {
+  id: string;
+  name: string;
+  min_age: number | null;
+  max_age: number | null;
+  capacity: number | null;
+  max_children_per_adult: number | null;
+  active: boolean;
+}
+
 export interface AutoCheckoutRule {
   id: string;
   day_of_week: number;
@@ -28,6 +38,7 @@ export function CheckinSettingsAdmin({
   requireClearance: initialClearance,
   lapsedCount,
   rules: initialRules,
+  rooms: initialRooms,
   campuses,
 }: {
   requirePickup: boolean;
@@ -35,9 +46,21 @@ export function CheckinSettingsAdmin({
   requireClearance: boolean;
   lapsedCount: number;
   rules: AutoCheckoutRule[];
+  rooms: RoomRatio[];
   campuses: { name: string; timezone: string | null }[];
 }) {
   const supabase = createClient();
+  const [rooms, setRooms] = useState<RoomRatio[]>(initialRooms);
+
+  async function setRatio(id: string, value: number | null) {
+    setError(null);
+    setRooms((rs) => rs.map((r) => (r.id === id ? { ...r, max_children_per_adult: value } : r)));
+    const { error } = await supabase
+      .from("rooms")
+      .update({ max_children_per_adult: value })
+      .eq("id", id);
+    if (error) setError(error.message);
+  }
   const [requireClearance, setRequireClearance] = useState(initialClearance);
   const [requirePickup, setRequirePickup] = useState(initialRequirePickup);
   const [autoCheckout, setAutoCheckout] = useState(initialAuto);
@@ -134,6 +157,61 @@ export function CheckinSettingsAdmin({
             </span>
           </span>
         </label>
+      </section>
+
+      <section className="rounded-xl border border-ink-100 bg-white p-4">
+        <h2 className="font-display text-base font-bold text-ink-900">Classroom ratios</h2>
+        <p className="mt-1 text-xs text-ink-500">
+          How many children one adult may supervise. Capacity is a fire-code
+          number; this is the safeguarding one, and it&apos;s what insurers and
+          licensing rules are written against — a nursery with 12 babies and one
+          adult is well under a capacity of 15 and badly wrong.
+        </p>
+        <p className="mt-1 text-xs text-ink-400">
+          Per room, because an infant room and a school-age room are not the
+          same number. The check-in station counts adults present and warns when
+          a room is short. Blank means no warning for that room.
+        </p>
+
+        <ul className="mt-3 space-y-1.5">
+          {rooms.filter((r) => r.active).map((r) => (
+            <li
+              key={r.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-ink-100 px-3 py-2 text-sm"
+            >
+              <span className="font-medium text-ink-900">{r.name}</span>
+              <span className="text-xs text-ink-400">
+                {r.min_age != null || r.max_age != null
+                  ? `ages ${r.min_age ?? 0}–${r.max_age ?? "+"}`
+                  : "not age-restricted"}
+                {r.capacity != null && ` · holds ${r.capacity}`}
+              </span>
+              <span className="flex-1" />
+              <label className="flex items-center gap-1.5 text-xs text-ink-500">
+                1 adult per
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="—"
+                  className="ah-input w-16 py-1 text-center text-sm"
+                  value={r.max_children_per_adult ?? ""}
+                  onChange={(e) =>
+                    setRatio(r.id, e.target.value === "" ? null : Number(e.target.value))
+                  }
+                />
+                children
+              </label>
+            </li>
+          ))}
+          {rooms.filter((r) => r.active).length === 0 && (
+            <li className="rounded-lg border border-dashed border-ink-200 px-3 py-3 text-sm text-ink-400">
+              No active rooms. Add your classrooms in Admin → Rooms.
+            </li>
+          )}
+        </ul>
+        <p className="mt-2 text-xs text-ink-400">
+          Age ranges and capacity live in Admin → Rooms, alongside these.
+        </p>
       </section>
 
       <section className="rounded-xl border border-ink-100 bg-white p-4">
