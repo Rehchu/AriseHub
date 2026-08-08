@@ -76,7 +76,10 @@ export function TagDesigner({
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [showGrid, setShowGrid] = useState(false);
+  // On by default. You are laying things out on a 3.5in label — the grid is the
+  // whole reason the result comes out straight, and off-by-default meant nobody
+  // knew it existed.
+  const [showGrid, setShowGrid] = useState(true);
 
   const [past, setPast] = useState<TagTemplate[]>([]);
   const [future, setFuture] = useState<TagTemplate[]>([]);
@@ -105,13 +108,16 @@ export function TagDesigner({
     setFuture([]);
   }, [current]);
 
+  // Selection survives undo/redo. Both used to clear it, so stepping back one
+  // nudge threw away what you were working on and collapsed the properties
+  // panel. `selected` is derived by id lookup, so if the step removed the
+  // element it falls to null on its own.
   const undo = useCallback(() => {
     setPast((p) => {
       if (p.length === 0) return p;
       const prev = p[p.length - 1];
       setFuture((f) => [current, ...f].slice(0, MAX_HISTORY));
       setCurrent(prev);
-      setSelectedId(null);
       return p.slice(0, -1);
     });
   }, [current]);
@@ -121,7 +127,6 @@ export function TagDesigner({
       if (f.length === 0) return f;
       setPast((p) => [...p, current]);
       setCurrent(f[0]);
-      setSelectedId(null);
       return f.slice(1);
     });
   }, [current]);
@@ -276,11 +281,45 @@ export function TagDesigner({
     updateEl(selected.id, { text: `${selected.text ?? ""}${token}` });
   }
 
+  /**
+   * Shrink a text box to hug its glyphs.
+   *
+   * A text element is sized to the slot it was drawn in, not to its text — the
+   * stock template's {church} and {name} are both 92% wide for text that inks
+   * about a third of that. An oversized box is what makes an element feel stuck
+   * when you drag it, so this is the one-click way out.
+   */
+  function fitToContent(el: TagElement) {
+    if (el.kind !== "text") return;
+    const stage = stageRef.current;
+    const node = stage?.querySelector<HTMLElement>(`[data-el-id="${el.id}"] > div`);
+    if (!stage || !node) return;
+    const cs = getComputedStyle(node);
+    const probe = document.createElement("span");
+    probe.style.cssText =
+      `position:absolute;visibility:hidden;white-space:pre;left:-9999px;` +
+      `font:${cs.font};letter-spacing:${cs.letterSpacing};text-transform:${cs.textTransform}`;
+    probe.textContent = node.textContent ?? "";
+    document.body.appendChild(probe);
+    const inkW = probe.offsetWidth;
+    const inkH = probe.offsetHeight;
+    probe.remove();
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height || !inkW) return;
+    // A hair of slack so the last glyph is never clipped by a rounding error.
+    const w = Math.max(MIN_SIZE, (inkW + 2) / rect.width);
+    const h = Math.max(MIN_SIZE, Math.max(inkH + 2, parseFloat(cs.fontSize) * 1.35) / rect.height);
+    updateEl(el.id, { w, h, x: clampX(el.x, w), y: clampY(el.y, h) });
+  }
+
   // ---- drag / resize on the stage ------------------------------------------
+  // Snapping defaults ON — `?? true`, not `?? false`. Straight is what you want
+  // on a printed label, and Snap in the toolbar turns it off when you don't.
+  const snapOn = current.design.snapToGrid ?? true;
   const snap = useCallback(
     (v: number) => {
-      const g = current.design.gridSize ?? 0.05;
-      return current.design.snapToGrid ? Math.round(v / g) * g : v;
+      const g = current.design.gridSize ?? 0.025;
+      return (current.design.snapToGrid ?? true) ? Math.round(v / g) * g : v;
     },
     [current.design.gridSize, current.design.snapToGrid],
   );
@@ -290,7 +329,15 @@ export function TagDesigner({
     e.stopPropagation();
     // Capture on the STAGE, not the element: capturing on the element meant a
     // fast drag that outran the pointer dropped the gesture entirely.
-    stageRef.current?.setPointerCapture(e.pointerId);
+    //
+    // Guarded, because this throws if the pointer is no longer active — and it
+    // ran BEFORE drag.current was set, so a throw here left the element selected
+    // and completely undraggable, with nothing in the console to say why.
+    try {
+      stageRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // Capture is an optimisation for fast drags, not a requirement.
+    }
     const rect = stageRef.current!.getBoundingClientRect();
     pushHistory();
     drag.current = {
@@ -310,18 +357,18 @@ export function TagDesigner({
     const fy = (e.clientY - rect.top) / rect.height;
     const el = current.design.elements.find((x) => x.id === d.id);
     if (!el) return;
-    // Everything stays inside the label. Dragging something half off the edge
-    // just prints it cropped, and you cannot see that on screen — the stage
-    // clips it exactly like the printer does.
+    movedDuringDrag.current = true;
     if (d.mode === "move") {
       updateEl(d.id, {
-        x: snap(clamp(fx - d.dx, 0, Math.max(0, 1 - el.w))),
-        y: snap(clamp(fy - d.dy, 0, Math.max(0, 1 - el.h))),
+        x: snap(clampX(fx - d.dx, el.w)),
+        y: snap(clampY(fy - d.dy, el.h)),
       });
     } else {
+      // Resize may run past the edge for the same reason a move may — the
+      // overhang is clipped, not printed.
       updateEl(d.id, {
-        w: snap(clamp(fx - el.x, 0.03, 1 - el.x)),
-        h: snap(clamp(fy - el.y, 0.03, 1 - el.y)),
+        w: snap(Math.max(MIN_SIZE, fx - el.x)),
+        h: snap(Math.max(MIN_SIZE, fy - el.y)),
       });
     }
   }
@@ -329,6 +376,17 @@ export function TagDesigner({
   function endDrag() {
     drag.current = null;
   }
+
+  /**
+   * Did the pointer actually move during this gesture?
+   *
+   * The browser fires a `click` when the pointer goes up, and after a drag that
+   * click lands on the STAGE rather than on the element you were dragging — so
+   * the stage's "click empty space to deselect" handler fired and the thing you
+   * had just finished positioning deselected itself, taking the whole properties
+   * panel with it.
+   */
+  const movedDuringDrag = useRef(false);
 
   // ---- keyboard ------------------------------------------------------------
   useEffect(() => {
@@ -387,13 +445,13 @@ export function TagDesigner({
         return;
       }
       const step = e.shiftKey ? 0.05 : 0.005;
-      const maxX = Math.max(0, 1 - selected.w);
-      const maxY = Math.max(0, 1 - selected.h);
+      // Same containment as dragging — the keyboard and the mouse must not
+      // disagree about where an element is allowed to be.
       const nudge: Record<string, Partial<TagElement>> = {
-        ArrowLeft: { x: clamp(selected.x - step, 0, maxX) },
-        ArrowRight: { x: clamp(selected.x + step, 0, maxX) },
-        ArrowUp: { y: clamp(selected.y - step, 0, maxY) },
-        ArrowDown: { y: clamp(selected.y + step, 0, maxY) },
+        ArrowLeft: { x: clampX(selected.x - step, selected.w) },
+        ArrowRight: { x: clampX(selected.x + step, selected.w) },
+        ArrowUp: { y: clampY(selected.y - step, selected.h) },
+        ArrowDown: { y: clampY(selected.y + step, selected.h) },
       };
       if (nudge[e.key]) {
         e.preventDefault();
@@ -519,7 +577,7 @@ export function TagDesigner({
     reader.readAsDataURL(file);
   }
 
-  const gridSize = current.design.gridSize ?? 0.05;
+  const gridSize = current.design.gridSize ?? 0.025;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-ink-50">
@@ -642,14 +700,31 @@ export function TagDesigner({
               <span className="w-11 text-center text-xs tabular-nums text-ink-500">{Math.round(zoom * 100)}%</span>
               <ToolBtn onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} title="Zoom in">+</ToolBtn>
               <Sep />
-              <ToolBtn onClick={() => setShowGrid((g) => !g)} active={showGrid} title="Show grid">#</ToolBtn>
+              {/* These were a bare "#" and "⇥" with only a title tooltip, and
+                  both defaulted to off — so the grid and the snapping existed
+                  but nobody could find them. Spelled out and on by default. */}
+              <ToolBtn onClick={() => setShowGrid((g) => !g)} active={showGrid} title="Show the alignment grid">
+                Grid
+              </ToolBtn>
               <ToolBtn
                 onClick={() => updateDesign({ snapToGrid: !current.design.snapToGrid })}
-                active={!!current.design.snapToGrid}
-                title="Snap to grid"
+                active={snapOn}
+                title="Snap elements to the grid so they line up"
               >
-                ⇥
+                Snap
               </ToolBtn>
+              <select
+                className="ah-tight rounded-md border border-ink-200 bg-white px-1.5 py-1 text-xs text-ink-600"
+                value={String(gridSize)}
+                onChange={(e) => updateDesign({ gridSize: Number(e.target.value) })}
+                title="Grid spacing"
+                aria-label="Grid spacing"
+              >
+                <option value="0.01">Fine</option>
+                <option value="0.025">Small</option>
+                <option value="0.05">Medium</option>
+                <option value="0.1">Large</option>
+              </select>
               <div className="flex-1" />
               <span className="hidden text-xs text-ink-400 sm:inline">
                 Arrows nudge · Del removes · Ctrl+D duplicates
@@ -669,7 +744,17 @@ export function TagDesigner({
                 onPointerUp={endDrag}
                 onPointerCancel={endDrag}
                 onLostPointerCapture={endDrag}
-                onClick={() => setSelectedId(null)}
+                onClick={(e) => {
+                  // Only a real click on the empty label deselects. Not the
+                  // click the browser synthesises at the end of a drag, and not
+                  // one that bubbled up from an element.
+                  if (e.target !== e.currentTarget) return;
+                  if (movedDuringDrag.current) {
+                    movedDuringDrag.current = false;
+                    return;
+                  }
+                  setSelectedId(null);
+                }}
                 className="relative overflow-hidden rounded-lg bg-white shadow-sm ring-2 ring-ink-300"
                 style={{
                   width: stageW,
@@ -741,6 +826,7 @@ export function TagDesigner({
                   return (
                     <div
                       key={el.id}
+                      data-el-id={el.id}
                       style={common}
                       onPointerDown={(e) => onPointerDown(e, el, "move")}
                       onClick={(e) => {
@@ -812,10 +898,28 @@ export function TagDesigner({
                         </div>
                       )}
                       {sel && !el.locked && (
+                        // The handle rides the element's bottom-right corner, but
+                        // never past the label's edge.
+                        //
+                        // It used to sit at -bottom-1.5 -right-1.5, i.e. 6px
+                        // OUTSIDE the element — so for anything flush with the
+                        // label's right or bottom edge the stage's overflow:hidden
+                        // cropped it away and that element could not be resized at
+                        // all. The stock template's {name} spans to exactly 100%,
+                        // which is precisely that case.
+                        //
+                        // Clamping matters more now that an element may hang off
+                        // the edge: without it you could grow something past the
+                        // boundary and then never reach the handle to shrink it.
                         <span
                           onPointerDown={(e) => onPointerDown(e, el, "resize")}
-                          className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 cursor-se-resize rounded-full border border-white bg-brand-500"
-                          style={{ touchAction: "none" }}
+                          className="absolute h-4 w-4 cursor-se-resize rounded-full border-2 border-white bg-brand-500 shadow"
+                          style={{
+                            left: `${clamp((Math.min(1, el.x + el.w) - el.x) / (el.w || 1), 0, 1) * 100}%`,
+                            top: `${clamp((Math.min(1, el.y + el.h) - el.y) / (el.h || 1), 0, 1) * 100}%`,
+                            transform: "translate(-100%, -100%)",
+                            touchAction: "none",
+                          }}
                         />
                       )}
                     </div>
@@ -825,8 +929,8 @@ export function TagDesigner({
               </div>
             </div>
             <p className="mt-1 text-center text-xs text-ink-400">
-              {current.width_in}in × {current.height_in}in — the outlined area is
-              the label. Elements can&apos;t be moved outside it.
+              {current.width_in}in × {current.height_in}in — the outlined area is the
+              label. Anything past its edge is cropped, exactly as it prints.
             </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1268,18 +1372,27 @@ export function TagDesigner({
                   </>
                 )}
 
-                {/* Same containment as dragging — typing 120% would otherwise
-                    push an element off the label where the stage clips it. */}
+                {/* Same containment as dragging and as the arrow keys. Three
+                    places used to compute this independently. */}
                 <div className="grid grid-cols-4 gap-1.5">
                   <NumBox label="X %" value={selected.x} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { x: clamp(v, 0, Math.max(0, 1 - selected.w)) })} />
+                    onChange={(v) => updateEl(selected.id, { x: clampX(v, selected.w) })} />
                   <NumBox label="Y %" value={selected.y} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { y: clamp(v, 0, Math.max(0, 1 - selected.h)) })} />
+                    onChange={(v) => updateEl(selected.id, { y: clampY(v, selected.h) })} />
                   <NumBox label="W %" value={selected.w} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { w: clamp(v, 0.03, 1 - selected.x) })} />
+                    onChange={(v) => updateEl(selected.id, { w: Math.max(MIN_SIZE, v) })} />
                   <NumBox label="H %" value={selected.h} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { h: clamp(v, 0.03, 1 - selected.y) })} />
+                    onChange={(v) => updateEl(selected.id, { h: Math.max(MIN_SIZE, v) })} />
                 </div>
+                <button
+                  onClick={() => {
+                    pushHistory();
+                    fitToContent(selected);
+                  }}
+                  className="ah-tight w-full rounded-lg bg-ink-100 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-200"
+                >
+                  Shrink box to fit its content
+                </button>
 
                 <Row label="Align on label">
                   <div className="flex flex-wrap gap-1">
@@ -1372,6 +1485,34 @@ export function TagDesigner({
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
 }
+
+/** Smallest an element may be resized to, as a fraction of the label. */
+const MIN_SIZE = 0.03;
+
+/**
+ * How much of an element must stay on the label. Not 100%.
+ *
+ * Containment used to be `clamp(x, 0, 1 - w)` — the WHOLE box inside. That
+ * reads as safe and is actually a wall: a text box 92% wide (which the stock
+ * template's {church} and {name} both are, because a text box is sized to its
+ * slot rather than its glyphs) has 8% of the label to move in. With snapping on
+ * at 5% that is two reachable positions. {name} sat pinned at exactly its own
+ * maximum and could not go right at all.
+ *
+ * The no-overflow guarantee never needed that wall. renderTagToPng draws into a
+ * canvas that IS the label, so anything past the edge is simply not in the
+ * output, and the stage has overflow:hidden so the screen crops identically.
+ * All the clamp has to do is stop you losing an element off the edge entirely.
+ */
+const MIN_ON_LABEL = 0.08;
+
+/** Keep at least MIN_ON_LABEL of the element on the label, either edge. */
+function containAxis(v: number, size: number) {
+  const keep = Math.min(size, MIN_ON_LABEL);
+  return clamp(v, -(size - keep), 1 - keep);
+}
+const clampX = containAxis;
+const clampY = containAxis;
 function defaultLayerName(el: TagElement) {
   if (el.kind === "text") return (el.text ?? "Text").slice(0, 24) || "Text";
   if (el.kind === "qr") return "QR code";

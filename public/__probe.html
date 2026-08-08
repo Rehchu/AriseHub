@@ -1,0 +1,191 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/__probe.css"></head>
+<body>
+
+<!-- ===== Shell main column, 375px phone ===== -->
+<div class="flex h-[100dvh] overflow-hidden bg-ink-50">
+  <div class="flex min-w-0 flex-1 flex-col">
+    <main id="main" class="flex-1 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+
+      <!-- admin/layout.tsx -->
+      <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+
+        <!-- ===== PeopleAdmin person row (PeopleAdmin.tsx:190-273) ===== -->
+        <div id="peopleCard" class="overflow-hidden rounded-xl border border-ink-100 bg-white">
+          <div class="border-b border-ink-100 last:border-0">
+            <div id="personRow" class="flex flex-wrap items-center gap-3 px-4 py-3">
+              <span style="width:36px;height:36px;display:block;background:#ccc;border-radius:999px;flex:none"></span>
+              <div id="nameCell" class="min-w-0 flex-1">
+                <p class="font-medium text-ink-900">Adaeze Okonkwo-Williams</p>
+                <p class="truncate text-xs text-ink-400"><span class="mr-1.5 font-medium text-brand-600">Pastor</span>adaeze@arisechurch.org</p>
+              </div>
+              <select id="roleSel" class="ah-input w-auto py-1.5 text-sm" aria-label="Role">
+                <option>Super Admin</option><option>IT Admin</option><option>Staff</option>
+              </select>
+              <select id="campusSel" class="ah-input w-auto py-1.5 text-sm" aria-label="Campus">
+                <option>No campus</option><option>Pineville</option>
+              </select>
+              <button id="deptBtn" class="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50">Departments (3)</button>
+              <button class="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50">Reset password</button>
+              <button class="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50">Archive</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== CheckinSettingsAdmin ratio row (CheckinSettingsAdmin.tsx:190-219) ===== -->
+        <section id="ratioSection" class="rounded-xl border border-ink-100 bg-white p-4">
+          <ul class="mt-3 space-y-1.5">
+            <li id="ratioLi" class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-ink-100 px-3 py-2 text-sm">
+              <span class="font-medium text-ink-900">Nursery</span>
+              <span class="text-xs text-ink-400">ages 0–2 · holds 15</span>
+              <span class="flex-1"></span>
+              <label id="ratioLabel" class="flex items-center gap-1.5 text-xs text-ink-500">
+                1 adult per
+                <input id="ratioInput" type="number" min="1" placeholder="—" class="ah-input w-16 py-1 text-center text-sm" value="4">
+                children
+              </label>
+            </li>
+          </ul>
+        </section>
+
+        <!-- ===== CheckinSettingsAdmin PIN row (CheckinSettingsAdmin.tsx:252-284) ===== -->
+        <section id="pinSection" class="rounded-xl border border-ink-100 bg-white p-4">
+          <div id="pinRow" class="mt-3 flex flex-wrap items-end gap-2">
+            <label id="pinLabel" class="text-xs font-medium text-ink-500">
+              Exit PIN (4–8 digits)
+              <input id="pinInput" class="ah-input mt-0.5 w-40 py-1.5 text-center tracking-[0.3em]" inputmode="numeric" maxlength="8" placeholder="not set">
+            </label>
+            <button class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">Set PIN</button>
+            <span class="text-xs text-ink-400">No PIN — anyone can leave kiosk mode.</span>
+          </div>
+        </section>
+
+        <!-- ===== FieldsAdmin form row (FieldsAdmin.tsx:62-79) ===== -->
+        <form id="fieldsForm" class="mb-6 space-y-2 rounded-xl border border-ink-100 bg-white p-4">
+          <div id="fieldsRow" class="flex flex-wrap gap-2">
+            <input id="fLabel" class="ah-input flex-1" placeholder="Field label (e.g. Baptism date)">
+            <select id="fType" class="ah-input w-auto capitalize"><option>text</option><option>checkbox</option></select>
+            <button id="fBtn" type="submit" class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">Add field</button>
+          </div>
+        </form>
+
+        <!-- ===== CheckinSettingsAdmin add-cutoff row (:338-375) ===== -->
+        <div id="cutoffRow" class="mt-3 flex flex-wrap items-end gap-2">
+          <label class="text-xs font-medium text-ink-500">Day
+            <select id="daySel" class="ah-input mt-0.5 w-auto py-1.5 text-sm"><option>Wednesday</option></select>
+          </label>
+          <label class="text-xs font-medium text-ink-500">Time
+            <input id="timeIn" type="time" class="ah-input mt-0.5 w-auto py-1.5 text-sm" value="13:30">
+          </label>
+          <label class="flex-1 text-xs font-medium text-ink-500">Label (optional)
+            <input id="labIn" class="ah-input mt-0.5 py-1.5 text-sm" placeholder="Wednesday evening">
+          </label>
+          <button id="addBtn" class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">Add cutoff</button>
+        </div>
+
+        <!-- ===== CareAccess grant form (:98-120) ===== -->
+        <form id="careForm" class="mt-2 flex flex-wrap gap-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
+          <select id="careSel" class="ah-input flex-1"><option>Choose a person…</option><option>Emmanuella Adebayo-Nwachukwu — Department Head</option></select>
+          <input id="careNote" class="ah-input flex-1" placeholder="Why (optional)">
+          <button class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">Grant access</button>
+        </form>
+
+        <!-- ===== InvitePanel copy row (:272-284) ===== -->
+        <div class="rounded-xl border border-ink-100 bg-white"><div class="border-t border-ink-100 p-4">
+          <div class="mt-4 space-y-2"><div class="rounded-xl border border-ink-100 p-3">
+            <div id="copyRow" class="mt-2 flex gap-2">
+              <input id="copyIn" readonly class="ah-input text-xs" value="https://arisehub.myfaithtech.com/join/K7M3PQR2WX">
+              <button id="copyBtn" class="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-onaccent">Copy</button>
+            </div>
+          </div></div>
+        </div></div>
+
+        <!-- ===== PeopleAdmin reset-link row (:143-165) ===== -->
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <div id="resetRow" class="flex gap-2">
+            <input id="resetIn" readonly value="https://arisehub.myfaithtech.com/auth/v1/verify?token=pkce_9f3a2b&type=recovery" class="ah-input bg-white text-xs">
+            <button id="resetCopy" class="shrink-0 rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-onaccent">Copy</button>
+            <button id="resetX" class="shrink-0 rounded-lg px-2 text-amber-700" aria-label="Dismiss">✕</button>
+          </div>
+        </div>
+
+        <!-- ===== RoomsAdmin room row (:167-253) ===== -->
+        <div id="roomCard" class="rounded-xl border border-ink-100 bg-white p-3">
+          <div id="roomRow" class="flex flex-wrap items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-cyan-50 text-cyan-600">R</span>
+            <div id="roomNameCell" class="min-w-0 flex-1">
+              <input id="roomName" class="w-full border-0 bg-transparent p-0 font-medium text-ink-900 outline-none focus:ring-0" value="Nursery">
+              <p class="text-xs text-ink-400">Pineville · ages 0–2 · holds 15</p>
+            </div>
+            <label class="flex items-center gap-1.5 text-sm text-ink-600"><input type="checkbox">Active</label>
+            <button class="text-ink-300 hover:text-brand-500" aria-label="Delete room">🗑</button>
+          </div>
+          <div id="roomGrid" class="mt-2 grid grid-cols-2 gap-2 border-t border-ink-100 pt-2 sm:grid-cols-4">
+            <label class="block"><span class="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-400">Min age</span>
+              <input id="rMin" type="number" class="ah-input py-1 text-sm" value="0"></label>
+            <label class="block"><span class="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-400">Children per adult</span>
+              <input id="rRatio" type="number" class="ah-input py-1 text-sm" value="4"></label>
+          </div>
+        </div>
+
+        <!-- ===== admin tabs nav (layout.tsx:41) ===== -->
+        <nav id="tabs" class="-mx-4 mt-6 flex gap-2 overflow-x-auto border-b border-ink-100 px-4 sm:mx-0 sm:px-0">
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Rooms</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Check-in</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Audit log</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Campuses</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Departments</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">People</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Custom Fields</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Care Access</a>
+          <a href="#" class="shrink-0 whitespace-nowrap rounded-t-lg px-4 py-2 text-sm font-medium text-ink-600 hover:bg-ink-50">Elvanto</a>
+        </nav>
+
+        <!-- ===== ElvantoSync pre (:101) ===== -->
+        <pre id="elvPre" class="mt-2 overflow-x-auto rounded-lg bg-ink-900 p-3 text-xs text-ink-100">npx wrangler secret put ELVANTO_API_KEY</pre>
+
+        <!-- ===== ITPortal cards (:43-72) ===== -->
+        <div id="itGrid" class="mt-6 grid gap-4 sm:grid-cols-2">
+          <button class="flex flex-col rounded-xl border border-brand-100 bg-brand-50 p-5 text-left transition hover:shadow-md">
+            <span id="itIcon1" class="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-onaccent">?</span>
+            <h3 class="font-display font-semibold text-ink-900">Submit a request</h3>
+          </button>
+          <a href="#" class="flex flex-col rounded-xl border border-ink-100 bg-white p-5 transition hover:shadow-md">
+            <span id="itIcon2" class="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-ink-700 text-onaccent">T</span>
+            <h3 class="font-display font-semibold text-ink-900">My requests</h3>
+          </a>
+        </div>
+
+        <!-- ===== PeopleAdmin dept chip (:308-341) ===== -->
+        <div id="chips" class="flex flex-wrap gap-2">
+          <span class="inline-flex items-center overflow-hidden rounded-full ring-1 ring-brand-500">
+            <button class="px-3 py-1 text-sm transition bg-accent text-onaccent">Worship</button>
+            <button id="leadChip" class="px-2 py-1 text-xs font-semibold transition bg-brand-700 text-onaccent">LEAD</button>
+          </span>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<pre id="out" style="font:12px monospace;white-space:pre-wrap;background:#fff;color:#000;padding:8px"></pre>
+<script>
+function box(id){const e=document.getElementById(id);if(!e)return id+' MISSING';const r=e.getBoundingClientRect();return id+' w='+r.width.toFixed(1)+' h='+r.height.toFixed(1)+' x='+r.left.toFixed(1)+' right='+r.right.toFixed(1);}
+function run(){
+ const ids=['main','peopleCard','personRow','nameCell','roleSel','campusSel','deptBtn','ratioSection','ratioLi','ratioLabel','ratioInput','pinRow','pinLabel','pinInput','fieldsRow','fLabel','fType','fBtn','cutoffRow','daySel','timeIn','labIn','addBtn','careForm','careSel','careNote','copyRow','copyIn','copyBtn','resetRow','resetIn','resetCopy','resetX','roomCard','roomRow','roomNameCell','roomName','roomGrid','tabs','elvPre','itGrid','itIcon2','chips','leadChip'];
+ const lines=ids.map(box);
+ lines.push('--- doc scrollWidth='+document.documentElement.scrollWidth+' clientWidth='+document.documentElement.clientWidth);
+ const m=document.getElementById('main');
+ lines.push('--- main scrollWidth='+m.scrollWidth+' clientWidth='+m.clientWidth+' HORIZ_OVERFLOW='+(m.scrollWidth>m.clientWidth));
+ const t=document.getElementById('tabs');
+ lines.push('--- tabs scrollWidth='+t.scrollWidth+' clientWidth='+t.clientWidth);
+ const cs=getComputedStyle(document.getElementById('roleSel'));
+ lines.push('--- roleSel computed width='+cs.width+' padding='+cs.padding+' fontSize='+cs.fontSize);
+ const cs2=getComputedStyle(document.getElementById('ratioInput'));
+ lines.push('--- ratioInput computed width='+cs2.width+' padding='+cs2.padding+' fontSize='+cs2.fontSize);
+ document.getElementById('out').textContent=lines.join('\n');
+}
+run();
+</script>
+</body></html>
