@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Icon } from "@/components/shell/Icon";
+import { MyTickets } from "@/components/it/MyTickets";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -31,6 +32,12 @@ export default async function DashboardPage() {
       <p className="mt-1 text-ink-500">
         Here&apos;s your Arise Church hub — people, ministry, and IT in one place.
       </p>
+
+      {/* Renders nothing unless you actually have open tickets, so the
+          dashboard does not grow a permanent empty box. */}
+      <div className="mt-6">
+        <MyTickets />
+      </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card
