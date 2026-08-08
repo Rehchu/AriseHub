@@ -225,7 +225,6 @@ describe("children's data", () => {
     "date_of_birth",
     "has_allergy",
     "hidden_from_directory",
-    "background_check_expires",
     "membership_status",
     "elvanto_id",
   ]) {
@@ -258,31 +257,6 @@ describe("children's data", () => {
     assert.equal(res.ok ? res.rows[0].n : 0, 0, "checkin_people leaked to a non-check-in role");
   });
 
-  test("Super_Admin still sees clearance through people_directory", async (t) => {
-    if (!requireDb(t)) return;
-    await db.query(`update public.profiles set background_check_expires = '2099-01-01' where id = $1`, [
-      fx.child,
-    ]);
-    const admin = await asUser(
-      db,
-      fx.ids.Super_Admin,
-      `select background_check_expires from public.people_directory where id = $1`,
-      [fx.child],
-    );
-    assert.ok(admin.ok && admin.rows[0]?.background_check_expires, "Admin > People lost clearance dates");
-
-    const member = await asUser(
-      db,
-      fx.ids.Member,
-      `select background_check_expires from public.people_directory where id = $1`,
-      [fx.child],
-    );
-    assert.equal(
-      member.rows?.[0]?.background_check_expires ?? null,
-      null,
-      "a member can read everyone's safeguarding status",
-    );
-  });
 });
 
 describe("contact privacy", () => {
@@ -405,85 +379,6 @@ describe("audit trail", () => {
     );
     assert.equal(idx.rowCount, 1, "the unique index guarding pickup is gone");
     assert.match(idx.rows[0].indexdef, /CREATE UNIQUE INDEX/);
-  });
-});
-
-describe("volunteer clearance", () => {
-  // is_checkin_role() gates the whole check-in surface — roster, creating
-  // people at the desk, families, guardians, recording an allergy. Getting
-  // enforcement wrong locks out a Sunday morning, so both directions are
-  // pinned here.
-  const setEnforcement = (on) =>
-    db.query(`update public.checkin_settings set require_current_clearance = $1 where id = true`, [on]);
-  const setExpiry = (userId, date) =>
-    db.query(`update public.profiles set background_check_expires = $2 where user_id = $1`, [
-      userId,
-      date,
-    ]);
-  const hasAccess = async (userId) => {
-    const r = await asUser(db, userId, `select public.is_checkin_role() as v`);
-    return r.ok && r.rows[0].v === true;
-  };
-
-  test("enforcement is off by default", async (t) => {
-    if (!requireDb(t)) return;
-    const row = await db.query(`select require_current_clearance from public.checkin_settings`);
-    assert.equal(row.rows[0]?.require_current_clearance, false, "clearance enforcement shipped ON");
-  });
-
-  test("a lapsed check does not block while enforcement is off", async (t) => {
-    if (!requireDb(t)) return;
-    await setEnforcement(false);
-    await setExpiry(fx.ids.Volunteer, "2020-01-01");
-    assert.ok(await hasAccess(fx.ids.Volunteer), "a lapsed date blocked with enforcement off");
-  });
-
-  test("a lapsed check blocks once enforcement is on", async (t) => {
-    if (!requireDb(t)) return;
-    await setEnforcement(true);
-    await setExpiry(fx.ids.Volunteer, "2020-01-01");
-    assert.equal(await hasAccess(fx.ids.Volunteer), false, "a lapsed volunteer kept check-in access");
-    await setEnforcement(false);
-  });
-
-  test("nothing on file never blocks — that would lock out the whole team", async (t) => {
-    if (!requireDb(t)) return;
-    await setEnforcement(true);
-    await setExpiry(fx.ids.Staff, null);
-    assert.ok(await hasAccess(fx.ids.Staff), "a missing clearance date blocked access");
-    await setEnforcement(false);
-  });
-
-  test("a current check keeps access", async (t) => {
-    if (!requireDb(t)) return;
-    await setEnforcement(true);
-    await setExpiry(fx.ids.Volunteer, "2099-01-01");
-    assert.ok(await hasAccess(fx.ids.Volunteer), "a valid clearance was rejected");
-    await setEnforcement(false);
-  });
-
-  test("Super_Admin cannot lock themselves out", async (t) => {
-    if (!requireDb(t)) return;
-    await setEnforcement(true);
-    await setExpiry(fx.ids.Super_Admin, "2020-01-01");
-    assert.ok(await hasAccess(fx.ids.Super_Admin), "the person who fixes this got locked out of it");
-    await setEnforcement(false);
-  });
-
-  test("nobody sets their own clearance date", async (t) => {
-    if (!requireDb(t)) return;
-    await setExpiry(fx.ids.Volunteer, null);
-    await asUser(
-      db,
-      fx.ids.Volunteer,
-      `update public.profiles set background_check_expires = '2099-01-01' where user_id = $1`,
-      [fx.ids.Volunteer],
-    );
-    const row = await db.query(
-      `select background_check_expires from public.profiles where user_id = $1`,
-      [fx.ids.Volunteer],
-    );
-    assert.equal(row.rows[0]?.background_check_expires, null, "a volunteer cleared themselves");
   });
 });
 

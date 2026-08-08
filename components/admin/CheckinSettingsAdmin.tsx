@@ -35,16 +35,12 @@ function pretty(t: string): string {
 export function CheckinSettingsAdmin({
   requirePickup: initialRequirePickup,
   autoCheckoutEnabled: initialAuto,
-  requireClearance: initialClearance,
-  lapsedCount,
   rules: initialRules,
   rooms: initialRooms,
   campuses,
 }: {
   requirePickup: boolean;
   autoCheckoutEnabled: boolean;
-  requireClearance: boolean;
-  lapsedCount: number;
   rules: AutoCheckoutRule[];
   rooms: RoomRatio[];
   campuses: { name: string; timezone: string | null }[];
@@ -61,7 +57,6 @@ export function CheckinSettingsAdmin({
       .eq("id", id);
     if (error) setError(error.message);
   }
-  const [requireClearance, setRequireClearance] = useState(initialClearance);
   const [requirePickup, setRequirePickup] = useState(initialRequirePickup);
   const [autoCheckout, setAutoCheckout] = useState(initialAuto);
   const [rules, setRules] = useState(initialRules);
@@ -75,7 +70,6 @@ export function CheckinSettingsAdmin({
   async function saveSettings(patch: {
     require_pickup_verification?: boolean;
     auto_checkout_enabled?: boolean;
-    require_current_clearance?: boolean;
   }) {
     setError(null);
     const { error } = await supabase.from("checkin_settings").update(patch).eq("id", true);
@@ -84,7 +78,6 @@ export function CheckinSettingsAdmin({
       // Put the switch back where it was rather than lying about the state.
       if (patch.require_pickup_verification !== undefined) setRequirePickup(!patch.require_pickup_verification);
       if (patch.auto_checkout_enabled !== undefined) setAutoCheckout(!patch.auto_checkout_enabled);
-      if (patch.require_current_clearance !== undefined) setRequireClearance(!patch.require_current_clearance);
       return;
     }
     setMsg("Saved.");
@@ -214,47 +207,6 @@ export function CheckinSettingsAdmin({
         </p>
       </section>
 
-      <section className="rounded-xl border border-ink-100 bg-white p-4">
-        <h2 className="font-display text-base font-bold text-ink-900">Safeguarding</h2>
-        <p className="mt-1 text-xs text-ink-500">
-          Background check dates are recorded per person in Admin → People. What
-          goes wrong is never &ldquo;nobody was checked&rdquo; — it&apos;s that nobody
-          noticed one lapsed in March.
-        </p>
-
-        {/* Switching this on blind, on a Sunday morning, is the failure mode
-            worth designing against. Say how many it would affect first. */}
-        {lapsedCount > 0 && (
-          <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-800">
-            <span className="font-semibold">
-              {lapsedCount} {lapsedCount === 1 ? "person has" : "people have"} a lapsed check.
-            </span>{" "}
-            Turning enforcement on now removes their check-in access immediately.
-          </p>
-        )}
-
-        <label className="mt-3 flex items-start gap-3 text-sm text-ink-800">
-          <input
-            type="checkbox"
-            className="mt-1"
-            checked={requireClearance}
-            onChange={(e) => {
-              setRequireClearance(e.target.checked);
-              saveSettings({ require_current_clearance: e.target.checked });
-            }}
-          />
-          <span>
-            Require a current background check for check-in access
-            <span className="mt-0.5 block text-xs text-ink-500">
-              A date in the past revokes access to the roster, registering
-              people at the desk, and recording allergies. Someone with{" "}
-              <em>nothing</em> on file is never blocked — that would lock out the
-              whole team the moment this is switched on — but they are flagged in
-              Admin → People. Super_Admin is always exempt.
-            </span>
-          </span>
-        </label>
-      </section>
 
       <section className="rounded-xl border border-ink-100 bg-white p-4">
         <h2 className="font-display text-base font-bold text-ink-900">Automatic check-out</h2>
