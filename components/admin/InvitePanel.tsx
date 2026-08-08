@@ -145,7 +145,7 @@ export function InvitePanel({
         className="flex w-full items-center justify-between px-4 py-3 text-left"
       >
         <span className="flex items-center gap-2 font-medium text-ink-900">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-onaccent">
             <Icon name="link" size={18} />
           </span>
           Invite links
@@ -226,7 +226,7 @@ export function InvitePanel({
                       key={d.id}
                       onClick={() => toggle(d.id)}
                       className={`rounded-full px-3 py-1 text-sm transition ${
-                        on ? "bg-brand-500 text-white" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-100"
+                        on ? "bg-accent text-onaccent" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-100"
                       }`}
                     >
                       {d.name}
@@ -241,7 +241,7 @@ export function InvitePanel({
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
             >
               {busy ? "Creating…" : "Create invite link"}
             </button>
@@ -277,7 +277,7 @@ export function InvitePanel({
                       setCopiedId(l.id);
                       setTimeout(() => setCopiedId(null), 1500);
                     }}
-                    className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-medium text-white"
+                    className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-onaccent"
                   >
                     {copiedId === l.id ? "Copied" : "Copy"}
                   </button>

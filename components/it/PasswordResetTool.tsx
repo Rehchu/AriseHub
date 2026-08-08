@@ -116,7 +116,7 @@ export function PasswordResetTool({ people }: { people: Person[] }) {
                       setCopied(true);
                       setTimeout(() => setCopied(false), 1500);
                     }}
-                    className="shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
+                    className="shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-sm font-medium text-onaccent"
                   >
                     {copied ? "Copied" : "Copy"}
                   </button>
@@ -155,7 +155,7 @@ export function PasswordResetTool({ people }: { people: Person[] }) {
             <button
               onClick={() => reset(p)}
               disabled={busyId === p.id || !p.email}
-              className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+              className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-50"
             >
               {busyId === p.id ? "Sending…" : "Send reset"}
             </button>

@@ -151,7 +151,7 @@ export function AvailabilityEditor({
                           onClick={() => toggleWeek(i, w)}
                           className={`rounded-full px-2.5 py-1 text-xs transition ${
                             on
-                              ? "bg-brand-500 text-white"
+                              ? "bg-accent text-onaccent"
                               : "bg-ink-100 text-ink-600 hover:bg-ink-200"
                           }`}
                         >
@@ -210,7 +210,7 @@ export function AvailabilityEditor({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
           >
             Add
           </button>

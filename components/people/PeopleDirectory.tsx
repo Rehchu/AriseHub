@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Campus, Department } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 import { Avatar } from "./Avatar";
+import { Modal } from "@/components/ui/Modal";
 
 export interface DirectoryPerson {
   id: string;
@@ -130,7 +131,7 @@ function PersonDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose}>
+    <Modal onClose={onClose} justify="end" dim="bg-black/40" label="Person details">
       <div
         className="h-full w-full max-w-sm overflow-y-auto bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -183,12 +184,12 @@ function PersonDrawer({
 
         <button
           onClick={message}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600"
+          className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong"
         >
           <Icon name="send" size={18} /> Send a message
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 

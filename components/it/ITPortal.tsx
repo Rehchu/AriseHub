@@ -45,7 +45,7 @@ export function ITPortal({
           onClick={() => setHelpOpen(true)}
           className="flex flex-col rounded-xl border border-brand-100 bg-brand-50 p-5 text-left transition hover:shadow-md"
         >
-          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-500 text-white">
+          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-onaccent">
             <Icon name="help" />
           </span>
           <h3 className="font-display font-semibold text-ink-900">Submit a request</h3>
@@ -61,7 +61,7 @@ export function ITPortal({
           rel="noopener noreferrer"
           className="flex flex-col rounded-xl border border-ink-100 bg-white p-5 transition hover:shadow-md"
         >
-          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-ink-700 text-white">
+          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-ink-700 text-onaccent">
             <Icon name="task" />
           </span>
           <h3 className="font-display font-semibold text-ink-900">My requests</h3>

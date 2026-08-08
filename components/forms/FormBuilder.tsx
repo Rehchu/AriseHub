@@ -150,7 +150,7 @@ export function FormBuilder({
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
           }}
-          className="shrink-0 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white"
+          className="shrink-0 rounded-lg bg-teal-700 px-3 py-2 text-sm font-medium text-onaccent"
         >
           {copied ? "Copied" : "Copy link"}
         </button>
@@ -209,7 +209,7 @@ export function FormBuilder({
                 </option>
               ))}
             </select>
-            <button type="submit" className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600">
+            <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">
               Add field
             </button>
           </form>

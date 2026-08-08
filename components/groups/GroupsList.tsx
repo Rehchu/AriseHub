@@ -90,7 +90,7 @@ export function GroupsList({
         </div>
         <button
           onClick={() => setCreating((c) => !c)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
         >
           <Icon name="group" size={18} /> New group
         </button>
@@ -108,7 +108,7 @@ export function GroupsList({
             </select>
             <input className="ah-input" placeholder="Meets (e.g. Wed 6:30pm)" value={schedule} onChange={(e) => setSchedule(e.target.value)} />
           </div>
-          <button type="submit" disabled={busy} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60">
+          <button type="submit" disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60">
             {busy ? "Creating…" : "Create group"}
           </button>
         </form>
@@ -141,7 +141,7 @@ export function GroupsList({
                 Open
               </Link>
               {!g.isMember && g.is_open && (
-                <button onClick={() => join(g)} className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-600">
+                <button onClick={() => join(g)} className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-onaccent hover:bg-accent-strong">
                   Join
                 </button>
               )}

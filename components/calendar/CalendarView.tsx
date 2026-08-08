@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { Modal } from "@/components/ui/Modal";
 import { occurrenceDates, REPEAT_LABELS, type RepeatRule } from "@/lib/recurrence";
 
 export interface RoomOpt {
@@ -75,7 +76,7 @@ function TypeChip({
     <button
       onClick={onClick}
       className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-        active ? "text-white" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
+        active ? "text-onaccent" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
       }`}
       style={active ? { backgroundColor: color } : undefined}
     >
@@ -146,7 +147,7 @@ export function CalendarView({
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
         >
           <Icon name="calendar" size={18} /> Request event
         </button>
@@ -214,7 +215,7 @@ export function CalendarView({
                       <div className="flex flex-wrap items-center gap-2">
                         {e.type && (
                           <span
-                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-onaccent"
                             style={{ backgroundColor: e.type.color }}
                           >
                             {e.type.name}
@@ -239,7 +240,7 @@ export function CalendarView({
                   </div>
                   {canApprove && e.status === "pending" && (
                     <div className="mt-3 flex gap-2">
-                      <button onClick={() => setStatus(e, "approved")} className="flex-1 rounded-lg bg-emerald-500 py-1.5 text-sm font-medium text-white hover:bg-emerald-600">
+                      <button onClick={() => setStatus(e, "approved")} className="flex-1 rounded-lg bg-emerald-700 py-1.5 text-sm font-medium text-onaccent hover:bg-emerald-800">
                         Approve
                       </button>
                       <button onClick={() => setStatus(e, "declined")} className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200">
@@ -416,7 +417,7 @@ function NewEvent({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-12">
+    <Modal onClose={onClose} align="start" className="p-4 pt-12" label="New event">
       <form onSubmit={submit} className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-bold">
@@ -452,7 +453,7 @@ function NewEvent({
           ) : (
             <div className="flex gap-2">
               <input className="ah-input" placeholder="Custom type (e.g. Men's Retreat)" value={newType} onChange={(e) => setNewType(e.target.value)} autoFocus />
-              <button type="button" onClick={addType} className="shrink-0 rounded-lg bg-brand-500 px-3 text-sm font-semibold text-white">
+              <button type="button" onClick={addType} className="shrink-0 rounded-lg bg-accent px-3 text-sm font-semibold text-onaccent">
                 Save
               </button>
               <button type="button" onClick={() => setAddingType(false)} className="shrink-0 text-ink-400">
@@ -561,10 +562,10 @@ function NewEvent({
         </div>
 
 
-        <button type="submit" disabled={busy} className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-60">
+        <button type="submit" disabled={busy} className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60">
           {busy ? "Saving…" : canApprove ? "Create event" : "Submit request"}
         </button>
       </form>
-    </div>
+    </Modal>
   );
 }

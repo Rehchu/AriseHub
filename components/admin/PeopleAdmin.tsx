@@ -150,7 +150,7 @@ export function PeopleAdmin({
             <input readOnly value={resetLink.link} className="ah-input bg-white text-xs" />
             <button
               onClick={() => navigator.clipboard.writeText(resetLink.link)}
-              className="shrink-0 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white"
+              className="shrink-0 rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-onaccent"
             >
               Copy
             </button>
@@ -315,7 +315,7 @@ export function PeopleAdmin({
                               onClick={() => toggleDept(p.id, d.id, !on)}
                               className={`px-3 py-1 text-sm transition ${
                                 on
-                                  ? "bg-brand-500 text-white"
+                                  ? "bg-accent text-onaccent"
                                   : "bg-white text-ink-600 hover:bg-ink-100"
                               }`}
                             >
@@ -331,7 +331,7 @@ export function PeopleAdmin({
                                 title={isLead ? "Department lead — click to demote" : "Make department lead"}
                                 className={`px-2 py-1 text-xs font-semibold transition ${
                                   isLead
-                                    ? "bg-brand-700 text-white"
+                                    ? "bg-brand-700 text-onaccent"
                                     : "bg-brand-100 text-brand-700 hover:bg-brand-200"
                                 }`}
                               >

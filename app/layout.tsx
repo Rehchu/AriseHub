@@ -21,7 +21,11 @@ export const viewport: Viewport = {
   themeColor: "#0b0b0c",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1, // avoid iOS input-focus zoom jump
+  // No maximumScale. It was set to 1 to stop iOS zooming when an input takes
+  // focus, but that also disables pinch-zoom for everybody — WCAG 1.4.4, and a
+  // real problem for the older members reading a service plan on a phone. The
+  // focus-jump is fixed properly in globals.css instead: iOS only zooms when
+  // the field's font is under 16px, so every control is pinned to 16px there.
   viewportFit: "cover", // extend under the iOS notch / safe areas
 };
 

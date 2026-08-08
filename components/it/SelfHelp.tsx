@@ -73,7 +73,7 @@ export function SelfHelp({
           onClick={() => setHelpOpen(true)}
           className="flex items-center gap-3 rounded-xl border border-brand-100 bg-brand-50 p-4 text-left transition hover:shadow-md"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-onaccent">
             <Icon name="help" />
           </span>
           <span>
@@ -92,7 +92,7 @@ export function SelfHelp({
           rel="noopener noreferrer"
           className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-4 transition hover:shadow-md"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-700 text-white">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-700 text-onaccent">
             <Icon name="link" />
           </span>
           <span>

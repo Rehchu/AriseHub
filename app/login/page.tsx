@@ -57,7 +57,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-ink-900 px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3 text-white">
+        <div className="mb-8 flex flex-col items-center gap-3 text-onaccent">
           <Logo size={56} />
           <h1 className="font-display text-2xl font-bold">
             Arise<span className="text-brand-500">Hub</span>
@@ -143,7 +143,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+            className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent transition hover:bg-accent-strong disabled:opacity-60"
           >
             {busy
               ? "Please wait…"

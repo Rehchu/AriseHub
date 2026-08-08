@@ -119,7 +119,7 @@ npx wrangler secret put ELVANTO_API_KEY
             <button
               onClick={() => run(false)}
               disabled={busy !== null}
-              className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+              className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
             >
               <Icon name="arrowRight" size={16} />
               {busy === "live" ? "Syncing…" : "Sync now"}

@@ -19,7 +19,7 @@ export function ITPortalLink({ onNavigate }: { onNavigate?: () => void }) {
     <a
       href={IT_PORTAL}
       onClick={open}
-      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-white"
+      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-onaccent"
     >
       <Icon name="wrench" />
       <span className="flex-1">IT Portal</span>

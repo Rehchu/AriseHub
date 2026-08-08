@@ -305,7 +305,7 @@ export function PlanDetail({
                   ))}
                 </select>
                 <input type="number" min={0} className="ah-input w-24" placeholder="min" value={itDur} onChange={(e) => setItDur(e.target.value)} />
-                <button type="submit" className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">
+                <button type="submit" className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">
                   Add
                 </button>
               </div>
@@ -331,7 +331,7 @@ export function PlanDetail({
                 <button
                   onClick={duplicate}
                   disabled={!dupDate || duplicating}
-                  className="rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                  className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-50"
                 >
                   {duplicating ? "Copying…" : "Duplicate"}
                 </button>
@@ -374,7 +374,7 @@ export function PlanDetail({
                   )}
                   {mine && a.status === "invited" && (
                     <div className="mt-2 flex gap-2">
-                      <button onClick={() => respond(a, "accepted")} className="flex-1 rounded-lg bg-emerald-500 py-1.5 text-sm font-medium text-white hover:bg-emerald-600">
+                      <button onClick={() => respond(a, "accepted")} className="flex-1 rounded-lg bg-emerald-700 py-1.5 text-sm font-medium text-onaccent hover:bg-emerald-800">
                         Accept
                       </button>
                       <button onClick={() => respond(a, "declined")} className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200">
@@ -406,7 +406,7 @@ export function PlanDetail({
                     );
                   })}
                 </select>
-                <button type="submit" className="shrink-0 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600">
+                <button type="submit" className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">
                   Add
                 </button>
               </div>

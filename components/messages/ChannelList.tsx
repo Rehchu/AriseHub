@@ -212,7 +212,7 @@ function Section({
             <Icon name={icon} size={18} className="text-ink-400" />
             <span className="flex-1 truncate">{c.label}</span>
             {c.unread > 0 && (
-              <span className="ml-auto shrink-0 rounded-full bg-brand-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              <span className="ml-auto shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-onaccent">
                 {c.unread > 99 ? "99+" : c.unread}
               </span>
             )}

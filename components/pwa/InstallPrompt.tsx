@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 import { Icon } from "@/components/shell/Icon";
+import { Modal } from "@/components/ui/Modal";
 
 interface BIPEvent extends Event {
   prompt: () => Promise<void>;
@@ -86,14 +87,17 @@ export function InstallPrompt() {
 
   return (
     <>
-      <div className="safe-x fixed inset-x-0 bottom-0 z-40 border-t border-ink-100 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg sm:inset-x-auto sm:right-4 sm:bottom-4 sm:max-w-sm sm:rounded-2xl sm:border">
+      {/* Sits ABOVE the bottom nav on phones, not on top of it. Pinned to
+          bottom-0 with z-40 this banner covered the whole nav bar (z-30) — the
+          app's primary navigation — until someone found the little x. */}
+      <div className="safe-x fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 border-t border-ink-100 bg-white p-3 shadow-lg sm:inset-x-auto sm:right-4 sm:bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:max-w-sm sm:rounded-2xl sm:border lg:bottom-4">
         <div className="flex items-center gap-3">
           <Logo size={32} />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-ink-900">Install AriseHub</p>
             <p className="text-xs text-ink-500">Add it to your home screen for quick access & notifications.</p>
           </div>
-          <button onClick={install} className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600">
+          <button onClick={install} className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong">
             Install
           </button>
           <button onClick={dismiss} className="shrink-0 text-ink-400 hover:text-ink-700" aria-label="Dismiss">
@@ -103,8 +107,8 @@ export function InstallPrompt() {
       </div>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-sm rounded-t-2xl bg-white p-5 sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+        <Modal onClose={() => setOpen(false)} align="end" className="sm:items-center sm:p-4" label="Add to Home Screen">
+          <div className="w-full max-w-sm rounded-t-2xl bg-white p-5 sm:rounded-2xl">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">Add to Home Screen</h2>
               <button onClick={() => setOpen(false)} className="text-ink-400"><Icon name="x" /></button>
@@ -127,7 +131,7 @@ export function InstallPrompt() {
               Got it
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );
@@ -135,7 +139,7 @@ export function InstallPrompt() {
 
 function Step({ n }: { n: number }) {
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-bold text-white">
+    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-onaccent">
       {n}
     </span>
   );

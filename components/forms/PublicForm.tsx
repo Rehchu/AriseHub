@@ -162,7 +162,7 @@ export function PublicForm({
       <button
         type="submit"
         disabled={busy || fields.length === 0}
-        className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+        className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
       >
         {busy ? "Submitting…" : "Submit"}
       </button>

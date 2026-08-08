@@ -107,7 +107,7 @@ export function SongLibrary({
         {canManage && (
           <button
             onClick={() => setAdding((a) => !a)}
-            className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+            className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
           >
             <Icon name="music" size={18} /> Add song
           </button>
@@ -131,7 +131,7 @@ export function SongLibrary({
           </div>
           <input className="ah-input" placeholder="Chart / lyrics link (optional)" value={chartUrl} onChange={(e) => setChartUrl(e.target.value)} />
           {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
-          <button type="submit" disabled={busy} className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60">
+          <button type="submit" disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60">
             {busy ? "Adding…" : "Add to library"}
           </button>
         </form>

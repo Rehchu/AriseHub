@@ -567,7 +567,7 @@ export function TagDesigner({
           <button
             onClick={save}
             disabled={saving}
-            className="rounded-lg bg-brand-500 px-4 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+            className="rounded-lg bg-accent px-4 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
           >
             {saving ? "Saving…" : "Save"}
           </button>
@@ -857,7 +857,7 @@ export function TagDesigner({
                       className={
                         "rounded-full px-3 py-1 text-sm transition " +
                         (artCat === c.key
-                          ? "bg-brand-500 text-white"
+                          ? "bg-accent text-onaccent"
                           : "bg-ink-100 text-ink-600 hover:bg-ink-200")
                       }
                     >
@@ -1400,7 +1400,7 @@ function ToolBtn({
       disabled={disabled}
       className={
         "h-8 w-8 rounded-md text-sm transition disabled:opacity-30 " +
-        (active ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-700 hover:bg-ink-200")
+        (active ? "bg-accent text-onaccent" : "bg-ink-100 text-ink-700 hover:bg-ink-200")
       }
     >
       {children}

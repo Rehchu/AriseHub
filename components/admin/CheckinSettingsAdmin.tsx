@@ -292,7 +292,7 @@ export function CheckinSettingsAdmin({
           </label>
           <button
             onClick={addRule}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
           >
             Add cutoff
           </button>

@@ -102,7 +102,7 @@ function Card({
   const inner = (
     <div className="flex h-full flex-col rounded-xl border border-ink-100 bg-white p-5 shadow-sm transition hover:shadow-md">
       <span
-        className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg text-white"
+        className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg text-onaccent"
         style={{ backgroundColor: accent }}
       >
         <Icon name={icon} />

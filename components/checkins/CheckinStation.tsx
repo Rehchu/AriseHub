@@ -640,7 +640,7 @@ export function CheckinStation({
             </span>
             <button
               onClick={() => setShowDesigner(true)}
-              className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600"
+              className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
             >
               Open designer
             </button>
@@ -839,7 +839,7 @@ export function CheckinStation({
           <div className="mt-3 flex justify-center gap-2">
             <button
               onClick={() => print(lastBadge)}
-              className="rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600"
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
             >
               Reprint name tag
             </button>
@@ -963,7 +963,7 @@ export function CheckinStation({
                       </span>
                       {p.has_allergy && (
                         <span
-                          className="rounded-full bg-brand-500 px-2 py-0.5 text-[10px] font-bold uppercase text-white"
+                          className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase text-onaccent"
                           title="Has an allergy on file — ask a check-in lead for details"
                         >
                           Allergy
@@ -998,7 +998,7 @@ export function CheckinStation({
                                     />
                                     {s.full_name}
                                     {s.has_allergy && (
-                                      <span className="rounded-full bg-brand-500 px-1.5 text-[9px] font-bold uppercase text-white">
+                                      <span className="rounded-full bg-accent px-1.5 text-[9px] font-bold uppercase text-onaccent">
                                         allergy
                                       </span>
                                     )}
@@ -1032,7 +1032,7 @@ export function CheckinStation({
                             const also = (siblings[p.id] ?? []).filter((id) => alsoSelected[id]);
                             checkInFamily(p, sel?.value ?? "", also);
                           }}
-                          className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+                          className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
                         >
                           {(() => {
                             const n = 1 + (siblings[p.id] ?? []).filter((id) => alsoSelected[id]).length;
@@ -1108,7 +1108,7 @@ export function CheckinStation({
                             className={
                               "mb-1.5 flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition " +
                               (releaseTo === g.id
-                                ? "border-emerald-600 bg-emerald-600 font-semibold text-white"
+                                ? "border-emerald-600 bg-emerald-700 font-semibold text-onaccent"
                                 : "border-ink-200 bg-white text-ink-800 hover:border-emerald-400")
                             }
                           >
@@ -1161,7 +1161,7 @@ export function CheckinStation({
                         setReleaseTo("");
                         setReleaseNote("");
                       }}
-                      className="mt-2 w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      className="mt-2 w-full rounded-lg bg-emerald-700 py-2.5 font-semibold text-onaccent hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {!requirePickup
                         ? "Check out"
@@ -1192,7 +1192,7 @@ export function CheckinStation({
                 <p className="flex items-center gap-2 font-medium text-ink-900">
                   {c.child?.full_name ?? "Unknown"}
                   {c.child?.has_allergy && (
-                    <span className="rounded-full bg-brand-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                    <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold uppercase text-onaccent">
                       Allergy
                     </span>
                   )}

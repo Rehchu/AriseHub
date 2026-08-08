@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Department } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
+import { Modal } from "@/components/ui/Modal";
 
 export interface TaskRow {
   id: string;
@@ -76,7 +77,7 @@ export function TasksBoard({
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
         >
           <Icon name="task" size={18} /> New task
         </button>
@@ -163,7 +164,7 @@ function TaskCard({
         onClick={() => onStatus(t.id, done ? "open" : "done")}
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
           done
-            ? "border-emerald-500 bg-emerald-500 text-white"
+            ? "border-emerald-500 bg-emerald-700 text-onaccent"
             : "border-ink-300 text-transparent hover:border-brand-400"
         }`}
         aria-label={done ? "Mark not done" : "Mark done"}
@@ -296,7 +297,7 @@ function NewTask({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-16">
+    <Modal onClose={onClose} align="start" className="p-4 pt-16" label="New task">
       <form
         onSubmit={submit}
         className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-2xl"
@@ -412,12 +413,12 @@ function NewTask({
         <button
           type="submit"
           disabled={busy || (target.kind === "person" && !target.id)}
-          className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+          className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
         >
           {busy ? "Saving…" : "Save task"}
         </button>
       </form>
-    </div>
+    </Modal>
   );
 }
 
@@ -439,7 +440,7 @@ function TargetChip({
       disabled={disabled}
       className={`rounded-full px-3 py-1 text-sm transition ${
         active
-          ? "bg-brand-500 text-white"
+          ? "bg-accent text-onaccent"
           : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
       } disabled:opacity-40`}
     >

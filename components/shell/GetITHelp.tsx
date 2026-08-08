@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Profile } from "@/lib/database.types";
 import { Icon } from "./Icon";
+import { Modal } from "@/components/ui/Modal";
 
 // The "easier support ticket" requirement: a logged-in user opens this, and
 // their name + email are already filled from their profile — they just describe
@@ -68,7 +69,7 @@ export function GetITHelp({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+    <Modal onClose={onClose} align="end" className="sm:items-center sm:p-4" label="Get IT Help">
       <div className="w-full max-w-md rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
         <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
           <h2 className="flex items-center gap-2 font-display text-lg font-bold">
@@ -90,7 +91,7 @@ export function GetITHelp({
             </p>
             <button
               onClick={onClose}
-              className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600"
+              className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong"
             >
               Done
             </button>
@@ -182,13 +183,13 @@ export function GetITHelp({
             <button
               type="submit"
               disabled={busy}
-              className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+              className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
             >
               {busy ? "Sending…" : "Send to Arise IT"}
             </button>
           </form>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { Modal } from "@/components/ui/Modal";
 
 export interface Member {
   id: string;
@@ -267,7 +268,7 @@ function Attendance({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-16">
+    <Modal onClose={onClose} align="start" className="p-4 pt-16" label="Attendance">
       <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
           <div>
@@ -293,7 +294,7 @@ function Attendance({
                 >
                   <span
                     className={`flex h-5 w-5 items-center justify-center rounded border ${
-                      on ? "border-emerald-500 bg-emerald-500 text-white" : "border-ink-300 text-transparent"
+                      on ? "border-emerald-500 bg-emerald-700 text-onaccent" : "border-ink-300 text-transparent"
                     }`}
                   >
                     <Icon name="check" size={14} />
@@ -307,6 +308,6 @@ function Attendance({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

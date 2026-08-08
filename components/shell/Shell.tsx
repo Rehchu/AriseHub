@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -78,7 +78,7 @@ export function Shell({
             aria-disabled={!m.ready}
             className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
               active
-                ? "bg-brand-500 text-chrome-50"
+                ? "bg-accent text-chrome-50"
                 : "text-chrome-200 hover:bg-chrome-700 hover:text-chrome-50"
             } ${m.ready ? "" : "cursor-default opacity-50"}`}
           >
@@ -117,6 +117,7 @@ export function Shell({
             className="absolute inset-0 bg-black/50"
             onClick={() => setDrawerOpen(false)}
           />
+          <Dismissible onDismiss={() => setDrawerOpen(false)} />
           <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-chrome-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
             <div className="mb-6 flex items-center justify-between px-5 text-chrome-50">
               <span className="flex items-center gap-2.5">
@@ -152,7 +153,7 @@ export function Shell({
           {!isIT && (
           <button
             onClick={() => setHelpOpen(true)}
-            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-brand-500 px-3 text-sm font-semibold text-chrome-50 transition hover:bg-brand-600 lg:h-9"
+            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-semibold text-chrome-50 transition hover:bg-accent-strong lg:h-9"
           >
             <Icon name="help" size={18} />
             <span className="hidden sm:inline">Get IT Help</span>
@@ -160,8 +161,12 @@ export function Shell({
           )}
         </header>
 
-        {/* pb-16 clears the fixed bottom bar on phones. */}
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">{children}</main>
+        {/* Clears the fixed bottom bar on phones. It is 56px (min-h-14) PLUS
+            pb-safe, which on a notched iPhone is another 34px — a flat pb-16
+            (64px) left the last row of every list sitting under the nav. */}
+        <main className="flex-1 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+          {children}
+        </main>
       </div>
 
       {helpOpen && (
@@ -175,6 +180,19 @@ export function Shell({
       <InstallPrompt />
     </div>
   );
+}
+
+/** Escape closes the phone drawer. It is a nav panel rather than a dialog, so
+ *  it doesn't want Modal's scroll lock or focus trap — just the key. */
+function Dismissible({ onDismiss }: { onDismiss: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+  return null;
 }
 
 function SidebarFooter({

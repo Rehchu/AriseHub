@@ -286,7 +286,7 @@ export function NotificationSettings({
                 {canTest && (
                   <button
                     onClick={test}
-                    className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+                    className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
                   >
                     Send a test
                   </button>
@@ -309,7 +309,7 @@ export function NotificationSettings({
               <button
                 onClick={enable}
                 disabled={busy}
-                className="mt-3 rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+                className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
               >
                 {busy ? "Enabling…" : "Turn on notifications"}
               </button>

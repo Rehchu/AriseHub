@@ -113,7 +113,7 @@ export function CareAccessAdmin({
         <button
           type="submit"
           disabled={busy || !pick}
-          className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
         >
           Grant access
         </button>

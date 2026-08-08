@@ -133,7 +133,7 @@ export function JoinForm({
       <button
         type="submit"
         disabled={busy}
-        className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
+        className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent transition hover:bg-accent-strong disabled:opacity-60"
       >
         {busy ? "Creating your account…" : "Join AriseHub"}
       </button>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
+import { Modal } from "@/components/ui/Modal";
 
 interface Person {
   id: string;
@@ -82,7 +83,7 @@ export function NewDialog({
   const memberList = deptMembers.filter((p) => p.id !== currentProfileId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-20">
+    <Modal onClose={onClose} align="start" className="p-4 pt-20" label="New message">
       <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
           <h2 className="font-display font-bold">New message</h2>
@@ -139,7 +140,7 @@ export function NewDialog({
           </>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

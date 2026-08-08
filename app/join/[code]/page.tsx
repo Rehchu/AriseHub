@@ -38,7 +38,7 @@ export default async function JoinPage({
 
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-ink-900 px-4 py-10">
-      <div className="mb-6 flex flex-col items-center gap-3 text-white">
+      <div className="mb-6 flex flex-col items-center gap-3 text-onaccent">
         <Logo size={52} />
         <h1 className="font-display text-2xl font-bold">
           Arise<span className="text-brand-500">Hub</span>

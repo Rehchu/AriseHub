@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import { notify } from "@/lib/notify";
 import { availabilityFor, type Blockout, type ServingPattern } from "@/lib/availability";
+import { Modal } from "@/components/ui/Modal";
 
 export interface SchedulePlan {
   id: string;
@@ -193,7 +194,7 @@ export function ScheduleCalendar({
               >
                 <span
                   className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                    isToday ? "bg-brand-500 font-bold text-white" : inMonth ? "text-ink-700" : "text-ink-300"
+                    isToday ? "bg-accent font-bold text-onaccent" : inMonth ? "text-ink-700" : "text-ink-300"
                   }`}
                 >
                   {d.getDate()}
@@ -321,7 +322,7 @@ function DayPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
+    <Modal onClose={onClose} align="end" className="sm:items-center sm:p-4" label="Service plan">
       <div
         className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
@@ -396,7 +397,7 @@ function DayPanel({
               <button
                 type="submit"
                 disabled={busy || !position.trim()}
-                className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+                className="w-full rounded-lg bg-accent py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
               >
                 {busy ? "Adding…" : "Add to schedule"}
               </button>
@@ -404,6 +405,6 @@ function DayPanel({
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

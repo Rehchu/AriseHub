@@ -143,7 +143,7 @@ export function IdeasBoard({
         </div>
         <button
           onClick={() => setAdding((a) => !a)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
         >
           <Icon name="chart" size={18} /> Suggest something
         </button>
@@ -158,7 +158,7 @@ export function IdeasBoard({
                 key={c}
                 onClick={() => setCategory(c)}
                 className={`rounded-full px-3 py-1 text-sm transition ${
-                  category === c ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+                  category === c ? "bg-accent text-onaccent" : "bg-ink-100 text-ink-600 hover:bg-ink-200"
                 }`}
               >
                 {CATEGORY_LABEL[c]}
@@ -183,7 +183,7 @@ export function IdeasBoard({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
           >
             {busy ? "Sending…" : "Submit"}
           </button>
@@ -196,7 +196,7 @@ export function IdeasBoard({
             key={f}
             onClick={() => setFilter(f)}
             className={`rounded-full px-3 py-1 text-sm transition ${
-              filter === f ? "bg-ink-900 text-white" : "bg-ink-100 text-ink-600 hover:bg-ink-200"
+              filter === f ? "bg-ink-900 text-onaccent" : "bg-ink-100 text-ink-600 hover:bg-ink-200"
             }`}
           >
             {f === "all" ? "All" : STATUS_LABEL[f]}

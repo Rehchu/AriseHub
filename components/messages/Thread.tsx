@@ -239,7 +239,7 @@ export function Thread({
                 <div
                   className={`group relative rounded-2xl px-3.5 py-2 text-sm ${
                     mine
-                      ? "bg-brand-500 text-white"
+                      ? "bg-accent text-onaccent"
                       : "bg-white text-ink-800 shadow-sm"
                   }`}
                 >
@@ -260,9 +260,13 @@ export function Thread({
                     </>
                   )}
                   {mine && !m.deleted_at && (
+                    // `hidden … group-hover:block` meant this only ever existed
+                    // on a mouse — on a phone, which is where the app mostly
+                    // gets used, you could not delete your own message at all.
+                    // Always present, faded until hover/focus.
                     <button
                       onClick={() => softDelete(m.id)}
-                      className="absolute -left-6 top-1/2 hidden -translate-y-1/2 text-ink-300 hover:text-brand-500 group-hover:block"
+                      className="ah-tight absolute -left-7 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-ink-400 opacity-60 transition hover:text-brand-600 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
                       aria-label="Delete message"
                     >
                       <Icon name="x" size={14} />
@@ -332,7 +336,7 @@ export function Thread({
         <button
           type="submit"
           disabled={sending || (!body.trim() && !file)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white transition hover:bg-brand-600 disabled:opacity-50"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-onaccent transition hover:bg-accent-strong disabled:opacity-50"
           aria-label="Send"
         >
           <Icon name="send" />

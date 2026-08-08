@@ -133,7 +133,7 @@ function Stat({
   return (
     <div className="rounded-xl border border-ink-100 bg-white p-4">
       <span
-        className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-white"
+        className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-onaccent"
         style={{ backgroundColor: accent }}
       >
         <Icon name={icon} size={18} />

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "./Icon";
+import { Modal } from "@/components/ui/Modal";
 
 interface Hit {
   id: string;
@@ -128,8 +129,8 @@ export function GlobalSearch() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-20" onClick={() => setOpen(false)}>
-          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <Modal onClose={() => setOpen(false)} align="start" className="p-4 pt-20" label="Search">
+          <div className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center gap-2 border-b border-ink-100 px-4 py-3">
               <Icon name="search" size={18} className="text-ink-400" />
               <input
@@ -166,7 +167,7 @@ export function GlobalSearch() {
                   }`}
                 >
                   <span
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-onaccent"
                     style={{ backgroundColor: h.accent }}
                   >
                     <Icon name={h.icon} size={16} />
@@ -182,7 +183,7 @@ export function GlobalSearch() {
               ))}
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

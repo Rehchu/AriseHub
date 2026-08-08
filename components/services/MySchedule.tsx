@@ -105,7 +105,7 @@ export function MySchedule({
                 <div className="mt-2 flex gap-2">
                   <button
                     onClick={() => respond(p.id, t.id, "accepted")}
-                    className="flex-1 rounded-lg bg-emerald-500 py-1.5 text-sm font-medium text-white hover:bg-emerald-600"
+                    className="flex-1 rounded-lg bg-emerald-700 py-1.5 text-sm font-medium text-onaccent hover:bg-emerald-800"
                   >
                     Accept
                   </button>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import { notify } from "@/lib/notify";
+import { Modal } from "@/components/ui/Modal";
 
 export interface CareItem {
   id: string;
@@ -87,7 +88,7 @@ export function CareBoard({
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 rounded-lg bg-brand-500 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-600"
+          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
         >
           <Icon name="heart" size={18} /> New care item
         </button>
@@ -221,7 +222,7 @@ function NewCare({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-16">
+    <Modal onClose={onClose} align="start" className="p-4 pt-16" label="New care item">
       <form onSubmit={submit} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-lg font-bold">New care item</h2>
@@ -264,10 +265,10 @@ function NewCare({
         </label>
         <textarea className="ah-input min-h-20" placeholder="Notes (kept private to pastoral staff)" value={notes} onChange={(e) => setNotes(e.target.value)} />
         {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
-        <button type="submit" disabled={busy} className="w-full rounded-lg bg-brand-500 py-2.5 font-semibold text-white hover:bg-brand-600 disabled:opacity-60">
+        <button type="submit" disabled={busy} className="w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60">
           {busy ? "Saving…" : "Add to board"}
         </button>
       </form>
-    </div>
+    </Modal>
   );
 }
