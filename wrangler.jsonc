@@ -19,13 +19,13 @@
   // the cutoffs in checkin_auto_checkout_rules. Cheap: two queries, and it
   // exits immediately when no cutoff has passed.
   //
-  // worker-entry.js maps each expression to a route — keep the two in sync.
+  // ONE trigger, not three. The Workers Free plan allows five cron triggers per
+  // ACCOUNT and this account is already at that limit — asking for three failed
+  // with code 10072. So a single tick fires and worker-entry.js decides what is
+  // due: auto-checkout every time, the nightly reminder at 23:00 UTC, the
+  // week-ahead digest on Saturday at 13:00 UTC.
   "triggers": {
-    "crons": [
-      "*/15 * * * *", // auto-checkout sweep
-      "0 23 * * *", // nightly "you're serving tomorrow"
-      "0 13 * * 6" // Saturday 7am Central week-ahead digest
-    ]
+    "crons": ["*/15 * * * *"]
   },
   // Canonical hostname. Added in the dashboard; declared here so redeploys and
   // any future rebuild of this Worker keep the binding.

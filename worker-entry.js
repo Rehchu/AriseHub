@@ -25,14 +25,26 @@ export { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-nex
 const SELF = "https://arisehub.myfaithtech.com";
 
 /**
- * Cron schedule -> route. Keep in sync with `triggers.crons` in wrangler.jsonc;
- * Cloudflare passes the matched cron expression as `event.cron`.
+ * Which jobs are due at this tick.
+ *
+ * There is ONE cron trigger, not three: the Workers Free plan allows five per
+ * ACCOUNT and this account is at the limit. So a single 15-minute tick decides
+ * for itself what is due.
+ *
+ * `scheduledTime` is the instant Cloudflare intended to fire, not when the
+ * handler happened to start, so the minute is exact and each daily/weekly job
+ * fires once — the tick at 23:00 has minute 0, the ones at :15/:30/:45 do not.
  */
-const JOBS = {
-  "*/15 * * * *": "/api/cron/auto-checkout",
-  "0 23 * * *": "/api/cron/reminders?job=tomorrow",
-  "0 13 * * 6": "/api/cron/reminders?job=weekly",
-};
+function dueJobs(scheduledTime) {
+  const t = new Date(scheduledTime);
+  const [h, m, dow] = [t.getUTCHours(), t.getUTCMinutes(), t.getUTCDay()];
+  const jobs = ["/api/cron/auto-checkout"]; // every tick
+  // 23:00 UTC — nightly "you're serving tomorrow".
+  if (h === 23 && m === 0) jobs.push("/api/cron/reminders?job=tomorrow");
+  // Saturday 13:00 UTC — week-ahead digest, 7am Central (8am in winter).
+  if (dow === 6 && h === 13 && m === 0) jobs.push("/api/cron/reminders?job=weekly");
+  return jobs;
+}
 
 export default {
   fetch(request, env, ctx) {
@@ -40,13 +52,7 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    const path = JOBS[event.cron];
-    if (!path) {
-      console.error(`No job mapped to cron "${event.cron}"`);
-      return;
-    }
-
-    const run = async () => {
+    const run = async (path) => {
       try {
         const res = await openNextWorker.fetch(
           new Request(SELF + path, {
@@ -59,14 +65,20 @@ export default {
           ctx,
         );
         const body = await res.text();
-        if (!res.ok) console.error(`${path} -> ${res.status} ${body.slice(0, 400)}`);
-        else console.log(`${path} -> ${res.status} ${body.slice(0, 400)}`);
+        if (!res.ok) console.error(`cron ${path} -> ${res.status} ${body.slice(0, 400)}`);
+        else console.log(`cron ${path} -> ${res.status} ${body.slice(0, 400)}`);
       } catch (e) {
-        console.error(`${path} threw`, e);
+        console.error(`cron ${path} threw`, e);
       }
     };
 
-    // waitUntil so a slow job isn't cut off when the handler returns.
-    ctx.waitUntil(run());
+    // waitUntil so a slow job isn't cut off when the handler returns. Sequential
+    // rather than parallel: the reminder job sends email and push, and it can
+    // wait a second behind a couple of roster updates.
+    ctx.waitUntil(
+      (async () => {
+        for (const path of dueJobs(event.scheduledTime)) await run(path);
+      })(),
+    );
   },
 };
