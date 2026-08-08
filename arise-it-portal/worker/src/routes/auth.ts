@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { setCookie, deleteCookie, getCookie } from "hono/cookie";
 import { drizzle } from "drizzle-orm/d1";
-import { eq } from "drizzle-orm";
+import { and, eq, lt } from "drizzle-orm";
 import { users, sessions } from "../db/schema";
 import { hashPassword, verifyPassword, randomToken, sha256Hex } from "../lib/crypto";
 import { signJwt } from "../lib/jwt";
@@ -70,6 +70,12 @@ auth.post("/login", async (c) => {
   );
   const tokenHash = await sha256Hex(token);
   await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  // Every hand-off mints a session and nothing ever cleaned up the dead ones —
+  // 27 rows had accumulated for a single user, 15 of them long expired. Purge
+  // this user's expired rows whenever they get a new one.
+  await db.delete(sessions).where(
+    and(eq(sessions.userId, user.id), lt(sessions.expiresAt, new Date().toISOString())),
+  );
   await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
 
   setCookie(c, SESSION_COOKIE, token, {
@@ -130,6 +136,12 @@ auth.post("/sso", async (c) => {
   );
   const tokenHash = await sha256Hex(token);
   await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  // Every hand-off mints a session and nothing ever cleaned up the dead ones —
+  // 27 rows had accumulated for a single user, 15 of them long expired. Purge
+  // this user's expired rows whenever they get a new one.
+  await db.delete(sessions).where(
+    and(eq(sessions.userId, user.id), lt(sessions.expiresAt, new Date().toISOString())),
+  );
   await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
 
   setCookie(c, SESSION_COOKIE, token, {
@@ -191,6 +203,12 @@ auth.post("/sso-redirect", async (c) => {
   );
   const tokenHash = await sha256Hex(sessionToken);
   await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  // Every hand-off mints a session and nothing ever cleaned up the dead ones —
+  // 27 rows had accumulated for a single user, 15 of them long expired. Purge
+  // this user's expired rows whenever they get a new one.
+  await db.delete(sessions).where(
+    and(eq(sessions.userId, user.id), lt(sessions.expiresAt, new Date().toISOString())),
+  );
   await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
 
   setCookie(c, SESSION_COOKIE, sessionToken, {
@@ -239,6 +257,12 @@ auth.get("/sso-code", async (c) => {
   );
   const tokenHash = await sha256Hex(sessionToken);
   await db.insert(sessions).values({ userId: user.id, tokenHash, expiresAt: expiresAt.toISOString() });
+  // Every hand-off mints a session and nothing ever cleaned up the dead ones —
+  // 27 rows had accumulated for a single user, 15 of them long expired. Purge
+  // this user's expired rows whenever they get a new one.
+  await db.delete(sessions).where(
+    and(eq(sessions.userId, user.id), lt(sessions.expiresAt, new Date().toISOString())),
+  );
   await db.update(users).set({ lastLoginAt: new Date().toISOString() }).where(eq(users.id, user.id));
 
   setCookie(c, SESSION_COOKIE, sessionToken, {

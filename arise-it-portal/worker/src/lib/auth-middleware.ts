@@ -61,7 +61,18 @@ export async function requireAuth(c: Context<{ Bindings: Env; Variables: Variabl
     return c.json({ error: "Session revoked" }, 401);
   }
 
-  c.set("user", { id: payload.sub, role: payload.role as Role, campusId: (payload.campusId as number) ?? null });
+  // Re-read role, campus and active from the database rather than trusting the
+  // token. This used to take role/campusId straight off the JWT, so
+  // deactivating or demoting someone had no effect until their 7-day token
+  // expired — and every SSO hand-off mints another session, so one person can
+  // hold a dozen at once. The Supabase path above already re-reads and checks
+  // `active`; the two identities disagreeing was the bug.
+  const [user] = await db.select().from(users).where(eq(users.id, payload.sub)).limit(1);
+  if (!user || !user.active) {
+    return c.json({ error: "Account is no longer active" }, 401);
+  }
+
+  c.set("user", { id: user.id, role: user.role as Role, campusId: user.campusId ?? null });
   await next();
 }
 
