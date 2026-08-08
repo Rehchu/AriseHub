@@ -653,13 +653,24 @@ describe("room staffing", () => {
 
   test("every children's room has a ratio", async (t) => {
     if (!requireDb(t)) return;
+    // A ROOM IS NOT A CLASSROOM. This asserted that every active room carried a
+    // child:adult ratio, which was wrong the moment Fellowship Hall and the
+    // Dream Team Room were added — a room gets booked for adult meetings and
+    // events as readily as for children's ministry, and a safeguarding ratio is
+    // meaningless there.
+    //
+    // The age range is what makes a room a classroom, so that is what the ratio
+    // requirement hangs off. No age limits means no ratio expected.
     const res = await db.query(
-      `select name from public.rooms where active and max_children_per_adult is null`,
+      `select name from public.rooms
+        where active
+          and (min_age is not null or max_age is not null)
+          and max_children_per_adult is null`,
     );
     assert.equal(
       res.rowCount,
       0,
-      `no ratio set for: ${res.rows.map((r) => r.name).join(", ")} — those rooms warn about nothing`,
+      `these rooms take children by age but warn about nothing: ${res.rows.map((r) => r.name).join(", ")}`,
     );
   });
 });
