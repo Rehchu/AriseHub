@@ -339,6 +339,122 @@ describe("audit trail", () => {
   });
 });
 
+describe("audit trail actually records", () => {
+  // chms_audit_log sat empty since 0001 — carefully protected, never written
+  // to. These assert the triggers fire, because a tamper-proof log that records
+  // nothing still looks like a control.
+  const auditCount = async (action) =>
+    (await db.query(`select count(*)::int n from public.chms_audit_log where action = $1`, [action]))
+      .rows[0].n;
+
+  test("a role change is recorded", async (t) => {
+    if (!requireDb(t)) return;
+    const before = await auditCount("profile.privileged_change");
+    await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `update public.profiles set role = 'Staff' where user_id = $1`,
+      [fx.ids.Volunteer],
+    );
+    assert.ok((await auditCount("profile.privileged_change")) > before, "role change went unrecorded");
+  });
+
+  test("granting pickup authorisation is recorded", async (t) => {
+    if (!requireDb(t)) return;
+    const before = await auditCount("guardian.insert");
+    await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `insert into public.guardians (child_profile_id, guardian_profile_id, can_pickup)
+       select $1, p.id, true from public.profiles p where p.user_id = $2`,
+      [fx.child, fx.ids.Lead],
+    );
+    assert.ok((await auditCount("guardian.insert")) > before, "pickup authorisation went unrecorded");
+  });
+
+  test("releasing a child to nobody named is recorded", async (t) => {
+    if (!requireDb(t)) return;
+    const chk = (
+      await db.query(
+        `insert into public.checkins (profile_id, campus_id, security_code, status)
+         values ($1, $2, 'ZZAUD1', 'checked_in') returning id`,
+        [fx.child, fx.campus],
+      )
+    ).rows[0].id;
+    const before = await auditCount("checkin.released_without_authorisation");
+    await db.query(
+      `update public.checkins set status = 'checked_out', checked_out_at = now(),
+         release_note = 'aunt collected, mother phoned' where id = $1`,
+      [chk],
+    );
+    assert.ok(
+      (await auditCount("checkin.released_without_authorisation")) > before,
+      "an override release left no trace",
+    );
+  });
+
+  test("a normal release to an authorised guardian is NOT logged as an override", async (t) => {
+    if (!requireDb(t)) return;
+    const chk = (
+      await db.query(
+        `insert into public.checkins (profile_id, campus_id, security_code, status)
+         values ($1, $2, 'ZZAUD2', 'checked_in') returning id`,
+        [fx.child, fx.campus],
+      )
+    ).rows[0].id;
+    const before = await auditCount("checkin.released_without_authorisation");
+    await db.query(
+      `update public.checkins set status = 'checked_out', checked_out_at = now(),
+         released_to_profile_id = (select id from public.profiles where user_id = $2)
+       where id = $1`,
+      [chk, fx.ids.Lead],
+    );
+    assert.equal(
+      await auditCount("checkin.released_without_authorisation"),
+      before,
+      "ordinary pickups are being logged as exceptions — the log will be noise",
+    );
+  });
+
+  test("an auto-checkout is NOT logged as an override", async (t) => {
+    if (!requireDb(t)) return;
+    const chk = (
+      await db.query(
+        `insert into public.checkins (profile_id, campus_id, security_code, status)
+         values ($1, $2, 'ZZAUD3', 'checked_in') returning id`,
+        [fx.child, fx.campus],
+      )
+    ).rows[0].id;
+    const before = await auditCount("checkin.released_without_authorisation");
+    await db.query(
+      `update public.checkins set status = 'checked_out', checked_out_at = now(),
+         auto_checked_out = true where id = $1`,
+      [chk],
+    );
+    assert.equal(await auditCount("checkin.released_without_authorisation"), before);
+  });
+
+  test("issuing an invite link is recorded", async (t) => {
+    if (!requireDb(t)) return;
+    const before = await auditCount("invite_link.created");
+    await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `insert into public.invite_links (code, label, role, department_ids)
+       values ('ZZAUDLINK', 'zz', 'Member', '{}'::uuid[])`,
+    );
+    assert.ok((await auditCount("invite_link.created")) > before, "invite link went unrecorded");
+  });
+
+  test("only Super_Admin can read the log", async (t) => {
+    if (!requireDb(t)) return;
+    for (const role of ["Member", "Volunteer", "Staff", "IT_Admin"]) {
+      const res = await asUser(db, fx.ids[role], `select count(*)::int n from public.chms_audit_log`);
+      assert.equal(res.ok ? res.rows[0].n : 0, 0, `${role} could read the audit trail`);
+    }
+  });
+});
+
 describe("messaging", () => {
   test("a member can mark their own channel read", async (t) => {
     if (!requireDb(t)) return;

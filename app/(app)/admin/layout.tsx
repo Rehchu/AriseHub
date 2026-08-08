@@ -39,6 +39,7 @@ export default async function AdminLayout({
         {isSuper && (
           <>
             <AdminTab href="/admin/checkin" label="Check-in" />
+            <AdminTab href="/admin/audit" label="Audit log" />
             <AdminTab href="/admin/campuses" label="Campuses" />
             <AdminTab href="/admin/departments" label="Departments" />
             <AdminTab href="/admin/people" label="People" />
