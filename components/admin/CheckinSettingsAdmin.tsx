@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export interface RoomRatio {
@@ -120,6 +120,27 @@ export function CheckinSettingsAdmin({
     }
   }
 
+  // Kiosk exit PIN. The hash never leaves the database — all the UI can know is
+  // whether one exists.
+  const [pinSet, setPinSet] = useState<boolean | null>(null);
+  const [newPin, setNewPin] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
+  useEffect(() => {
+    supabase.rpc("kiosk_exit_pin_is_set").then(({ data }) => setPinSet(data === true));
+  }, [supabase]);
+
+  async function savePin(value: string | null) {
+    setPinBusy(true);
+    setError(null);
+    const { error } = await supabase.rpc("kiosk_set_exit_pin", { pin: value });
+    setPinBusy(false);
+    if (error) return setError(error.message);
+    setPinSet(!!value);
+    setNewPin("");
+    setMsg(value ? "Kiosk PIN set." : "Kiosk PIN removed.");
+    setTimeout(() => setMsg(null), 2500);
+  }
+
   const tz = campuses[0]?.timezone ?? "America/Chicago";
 
   return (
@@ -207,6 +228,61 @@ export function CheckinSettingsAdmin({
         </p>
       </section>
 
+
+      <section className="rounded-xl border border-ink-100 bg-white p-4">
+        <h2 className="font-display text-base font-bold text-ink-900">Tablet lockdown</h2>
+        <p className="mt-1 text-xs text-ink-500">
+          Open <span className="font-medium">/kiosk</span> on the check-in tablet
+          and tap <span className="font-medium">Lock this tablet</span>. Locked, it
+          keeps the screen awake, goes full-screen and refuses to leave the
+          check-in page — including the back button and a reload. Unlocking asks
+          for this PIN.
+        </p>
+        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <span className="font-semibold">This locks the app, not the tablet.</span>{" "}
+          Someone holding the device can still swipe to the home screen. For a
+          tablet left out in the lobby, also turn on{" "}
+          <span className="font-medium">Guided Access</span> (iPad: Settings →
+          Accessibility → Guided Access, then triple-click the side button) or{" "}
+          <span className="font-medium">Screen Pinning</span> (Android: Settings →
+          Security → App pinning). That is what actually stops someone leaving
+          the app.
+        </p>
+
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="text-xs font-medium text-ink-500">
+            Exit PIN (4–8 digits)
+            <input
+              className="ah-input mt-0.5 w-40 py-1.5 text-center tracking-[0.3em]"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={8}
+              placeholder={pinSet ? "••••••" : "not set"}
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ""))}
+            />
+          </label>
+          <button
+            onClick={() => savePin(newPin)}
+            disabled={pinBusy || newPin.length < 4}
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-50"
+          >
+            {pinSet ? "Change PIN" : "Set PIN"}
+          </button>
+          {pinSet && (
+            <button
+              onClick={() => savePin(null)}
+              disabled={pinBusy}
+              className="rounded-lg px-3 py-2 text-sm font-medium text-brand-600 hover:bg-brand-50"
+            >
+              Remove
+            </button>
+          )}
+          <span className="text-xs text-ink-400">
+            {pinSet === null ? "" : pinSet ? "A PIN is set." : "No PIN — anyone can leave kiosk mode."}
+          </span>
+        </div>
+      </section>
 
       <section className="rounded-xl border border-ink-100 bg-white p-4">
         <h2 className="font-display text-base font-bold text-ink-900">Automatic check-out</h2>

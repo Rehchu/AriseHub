@@ -102,6 +102,19 @@ export interface Database {
         Args: { other_profile: string };
         Returns: string;
       };
+      /** Tablet lockdown (0053). The hash itself is never exposed. */
+      kiosk_exit_pin_is_set: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      kiosk_check_exit_pin: {
+        Args: { pin: string };
+        Returns: boolean;
+      };
+      kiosk_set_exit_pin: {
+        Args: { pin: string | null };
+        Returns: void;
+      };
       current_profile_id: {
         Args: Record<string, never>;
         Returns: string;

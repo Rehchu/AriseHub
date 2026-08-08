@@ -675,3 +675,93 @@ describe("storage", () => {
     assert.equal(res.ok ? res.rows[0].n : 0, 0, "non-profile objects were listable");
   });
 });
+
+describe("kiosk exit PIN", () => {
+  // The tablet in the lobby is signed in as a real account. The PIN is what
+  // keeps a curious hand off the rest of the app, so it must not be readable
+  // by the very accounts it is meant to stop.
+  for (const role of ["Member", "Volunteer", "Staff", "IT_Admin", "Super_Admin"]) {
+    test(`${role} cannot read the stored kiosk PIN hash`, async (t) => {
+      if (!requireDb(t)) return;
+      const res = await asUser(
+        db,
+        fx.ids[role],
+        `select kiosk_exit_pin_hash from public.checkin_settings where id`,
+      );
+      assert.ok(
+        !res.ok && /permission denied/i.test(res.error),
+        `expected denial, got: ${res.ok ? "ALLOWED" : res.error}`,
+      );
+    });
+  }
+
+  test("select * on checkin_settings is refused, so a wildcard cannot leak it", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(db, fx.ids.Super_Admin, `select * from public.checkin_settings`);
+    assert.ok(!res.ok, "select * returned rows — a new secret column would leak by default");
+  });
+
+  test("the columns the app actually names still read", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `select require_pickup_verification, auto_checkout_enabled
+         from public.checkin_settings where id`,
+    );
+    assert.ok(res.ok, `check-in settings unreadable: ${res.error}`);
+  });
+
+  test("a super admin can still save the check-in settings", async (t) => {
+    if (!requireDb(t)) return;
+    // .eq("id", true) puts `id` in the WHERE clause, and column privileges are
+    // checked there too — this is the exact shape that 0049 broke elsewhere.
+    const res = await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `update public.checkin_settings
+          set require_pickup_verification = require_pickup_verification
+        where id = true`,
+    );
+    assert.ok(res.ok, `super admin cannot save settings: ${res.error}`);
+  });
+
+  for (const role of ["Member", "Volunteer", "Staff", "IT_Admin"]) {
+    test(`${role} cannot set the kiosk exit PIN`, async (t) => {
+      if (!requireDb(t)) return;
+      const res = await asUser(db, fx.ids[role], `select public.kiosk_set_exit_pin('1234')`);
+      assert.ok(!res.ok, "a non-admin was allowed to change the kiosk PIN");
+    });
+  }
+
+  test("the brute-force counter is not an endpoint", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(db, fx.ids.Member, `select * from public.kiosk_pin_attempts`);
+    assert.ok(
+      !res.ok && /permission denied/i.test(res.error),
+      `expected denial, got: ${res.ok ? "ALLOWED" : res.error}`,
+    );
+  });
+
+  test("with no PIN configured, unlocking is allowed rather than impossible", async (t) => {
+    if (!requireDb(t)) return;
+    // Fail-open is deliberate here: a tablet nobody can unlock is worse than a
+    // tablet with no PIN, and the admin screen says so out loud.
+    await db.query(`update public.checkin_settings set kiosk_exit_pin_hash = null where id`);
+    const res = await asUser(db, fx.ids.Volunteer, `select public.kiosk_check_exit_pin('0000') as ok`);
+    assert.equal(res.ok && res.rows[0].ok, true);
+  });
+
+  test("a wrong PIN is rejected and a right one accepted", async (t) => {
+    if (!requireDb(t)) return;
+    await db.query(
+      `update public.checkin_settings
+          set kiosk_exit_pin_hash = extensions.crypt('4821', extensions.gen_salt('bf', 6))
+        where id`,
+    );
+    const bad = await asUser(db, fx.ids.Volunteer, `select public.kiosk_check_exit_pin('0000') as ok`);
+    assert.equal(bad.ok && bad.rows[0].ok, false, "a wrong PIN unlocked the tablet");
+    const good = await asUser(db, fx.ids.Volunteer, `select public.kiosk_check_exit_pin('4821') as ok`);
+    assert.equal(good.ok && good.rows[0].ok, true, "the correct PIN did not unlock");
+  });
+});

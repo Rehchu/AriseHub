@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Shell } from "@/components/shell/Shell";
+import { KioskGuard } from "@/components/checkins/KioskGuard";
 import type { Profile } from "@/lib/database.types";
 
 // Server layout for the authenticated app: resolves the signed-in user's
@@ -51,6 +52,9 @@ export default async function AppLayout({
 
   return (
     <Shell profile={p ?? null} email={user.email ?? ""} isIT={isIT} canCare={!!canCare} canInvite={canInvite}>
+      {/* A tablet in lockdown never renders anything but /kiosk, however it
+          got here — bookmark, notification tap, or a reload. */}
+      <KioskGuard />
       {children}
     </Shell>
   );

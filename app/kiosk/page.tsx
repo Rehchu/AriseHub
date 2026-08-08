@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { CheckinStation, type CheckinRow, type RoomRow, type PersonRow } from "@/components/checkins/CheckinStation";
 import { canRunCheckin } from "@/lib/roles";
 import { Logo } from "@/components/Logo";
+import { KioskLock } from "@/components/checkins/KioskLock";
 
 // KIOSK MODE — the check-in station view for tablets.
 //
@@ -101,8 +102,14 @@ export default async function KioskPage() {
           isCheckinLead={p.is_checkin_lead || p.role === "Super_Admin"}
         />
       </main>
-      <footer className="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-xs text-ink-400">
-        Kiosk mode · <a href="/dashboard" className="underline">exit to full AriseHub</a>
+      <footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-center text-xs text-ink-400">
+        <span>Kiosk mode</span>
+        <span aria-hidden>·</span>
+        <a href="/dashboard" className="underline">
+          exit to full AriseHub
+        </a>
+        <span aria-hidden>·</span>
+        <KioskLock />
       </footer>
     </div>
   );
