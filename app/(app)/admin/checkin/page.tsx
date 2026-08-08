@@ -18,10 +18,10 @@ export default async function CheckinSettingsPage() {
     redirect("/dashboard");
   }
 
-  const [{ data: settings }, { data: rules }, { data: campuses }] = await Promise.all([
+  const [{ data: settings }, { data: rules }, { data: campuses }, { data: lapsed }] = await Promise.all([
     supabase
       .from("checkin_settings")
-      .select("require_pickup_verification, auto_checkout_enabled")
+      .select("require_pickup_verification, auto_checkout_enabled, require_current_clearance")
       .maybeSingle(),
     supabase
       .from("checkin_auto_checkout_rules")
@@ -29,6 +29,15 @@ export default async function CheckinSettingsPage() {
       .order("day_of_week")
       .order("at_time"),
     supabase.from("campuses").select("name, timezone").order("name"),
+    // Who would lose access the moment enforcement is switched on. Only people
+    // who actually work check-in — a lapsed check on someone who never goes
+    // near the desk is not a reason to hesitate.
+    supabase
+      .from("profiles")
+      .select("id")
+      .in("role", ["Staff", "Volunteer"])
+      .not("background_check_expires", "is", null)
+      .lt("background_check_expires", new Date().toISOString().slice(0, 10)),
   ]);
 
   return (
@@ -40,6 +49,10 @@ export default async function CheckinSettingsPage() {
       autoCheckoutEnabled={
         (settings as { auto_checkout_enabled?: boolean } | null)?.auto_checkout_enabled ?? true
       }
+      requireClearance={
+        (settings as { require_current_clearance?: boolean } | null)?.require_current_clearance ?? false
+      }
+      lapsedCount={(lapsed ?? []).length}
       rules={(rules ?? []) as AutoCheckoutRule[]}
       campuses={(campuses ?? []) as { name: string; timezone: string | null }[]}
     />

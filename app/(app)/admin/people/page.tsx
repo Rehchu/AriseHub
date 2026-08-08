@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PeopleAdmin, type PersonFieldDef } from "@/components/admin/PeopleAdmin";
+import { PeopleAdmin, type PersonFieldDef, type Clearance } from "@/components/admin/PeopleAdmin";
 import type { Campus, Department, Profile } from "@/lib/database.types";
 
 export default async function PeopleAdminPage() {
@@ -40,6 +40,21 @@ export default async function PeopleAdminPage() {
     supabase.from("person_field_values").select("profile_id, field_id, value"),
   ]);
 
+  // Clearance lives on `profiles`, not on people_directory — read separately
+  // rather than widening the view, which exists to REDACT rather than to carry
+  // more sensitive fields.
+  const { data: clearanceRows } = await supabase
+    .from("profiles")
+    .select("id, background_check_date, background_check_expires, safeguarding_training_date");
+  const clearance: Record<string, Clearance> = {};
+  for (const c of (clearanceRows ?? []) as (Clearance & { id: string })[]) {
+    clearance[c.id] = {
+      background_check_date: c.background_check_date,
+      background_check_expires: c.background_check_expires,
+      safeguarding_training_date: c.safeguarding_training_date,
+    };
+  }
+
   // profile_id -> { field_id -> value }
   const valueMap: Record<string, Record<string, string>> = {};
   for (const v of (values ?? []) as { profile_id: string; field_id: string; value: string | null }[]) {
@@ -67,6 +82,7 @@ export default async function PeopleAdminPage() {
       leadMap={leadMap}
       fields={(fields ?? []) as PersonFieldDef[]}
       valueMap={valueMap}
+      clearance={clearance}
     />
   );
 }

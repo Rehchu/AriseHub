@@ -7,6 +7,24 @@ import { Icon } from "@/components/shell/Icon";
 import { InvitePanel } from "./InvitePanel";
 import { Avatar } from "@/components/people/Avatar";
 
+/** Safeguarding record. Kept off people_directory — that view exists to redact. */
+export interface Clearance {
+  background_check_date: string | null;
+  background_check_expires: string | null;
+  safeguarding_training_date: string | null;
+}
+
+/**
+ * Lapsed is a problem; missing is a gap. They're different, and conflating them
+ * is why "everyone is fine" and "nobody has been checked" look the same.
+ */
+export function clearanceState(c: Clearance | undefined): "current" | "lapsed" | "missing" {
+  if (!c?.background_check_expires) return "missing";
+  return new Date(c.background_check_expires) >= new Date(new Date().toDateString())
+    ? "current"
+    : "lapsed";
+}
+
 // Suggestions only — the field is free text so unusual titles still work.
 const TITLES = [
   "Apostle",
@@ -38,6 +56,7 @@ export function PeopleAdmin({
   leadMap = {},
   fields = [],
   valueMap = {},
+  clearance: initialClearance = {},
 }: {
   profiles: Profile[];
   departments: Department[];
@@ -46,9 +65,18 @@ export function PeopleAdmin({
   leadMap?: Record<string, Record<string, string>>;
   fields?: PersonFieldDef[];
   valueMap?: Record<string, Record<string, string>>;
+  clearance?: Record<string, Clearance>;
 }) {
   const supabase = createClient();
   const [people, setPeople] = useState<Profile[]>(profiles);
+  const [clearance, setClearance] = useState<Record<string, Clearance>>(initialClearance);
+
+  async function patchClearance(id: string, patch: Partial<Clearance>) {
+    setError(null);
+    setClearance((c) => ({ ...c, [id]: { ...c[id], ...patch } }));
+    const { error } = await supabase.from("profiles").update(patch).eq("id", id);
+    if (error) setError(error.message);
+  }
   const [members, setMembers] = useState<Record<string, string[]>>(memberMap);
   const [leads, setLeads] = useState<Record<string, Record<string, string>>>(leadMap);
 
@@ -208,6 +236,17 @@ export function PeopleAdmin({
                           hidden
                         </span>
                       )}
+                      {/* Only meaningful for people who work with children. */}
+                      {p.is_checkin_lead && clearanceState(clearance[p.id]) === "lapsed" && (
+                        <span className="ml-2 rounded bg-brand-100 px-1.5 py-0.5 text-[10px] uppercase text-brand-800">
+                          check lapsed
+                        </span>
+                      )}
+                      {p.is_checkin_lead && clearanceState(clearance[p.id]) === "missing" && (
+                        <span className="ml-2 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase text-ink-500">
+                          no check on file
+                        </span>
+                      )}
                     </p>
                     <p className="truncate text-xs text-ink-400">
                       {p.title && (
@@ -352,6 +391,58 @@ export function PeopleAdmin({
                       />
                       Check-in lead (can view children&apos;s medical info)
                     </label>
+
+                    {/* Safeguarding. Shown for everyone rather than only
+                        check-in leads — you record the check before you give
+                        somebody the role, not after. */}
+                    <div className="mt-3 rounded-lg border border-ink-100 p-3">
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                        Safeguarding
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <label className="block text-xs">
+                          <span className="mb-0.5 block font-medium text-ink-500">Check completed</span>
+                          <input
+                            type="date"
+                            className="ah-input py-1 text-sm"
+                            value={clearance[p.id]?.background_check_date ?? ""}
+                            onChange={(e) =>
+                              patchClearance(p.id, { background_check_date: e.target.value || null })
+                            }
+                          />
+                        </label>
+                        <label className="block text-xs">
+                          <span className="mb-0.5 block font-medium text-ink-500">Expires</span>
+                          <input
+                            type="date"
+                            className="ah-input py-1 text-sm"
+                            value={clearance[p.id]?.background_check_expires ?? ""}
+                            onChange={(e) =>
+                              patchClearance(p.id, { background_check_expires: e.target.value || null })
+                            }
+                          />
+                        </label>
+                        <label className="block text-xs">
+                          <span className="mb-0.5 block font-medium text-ink-500">Training</span>
+                          <input
+                            type="date"
+                            className="ah-input py-1 text-sm"
+                            value={clearance[p.id]?.safeguarding_training_date ?? ""}
+                            onChange={(e) =>
+                              patchClearance(p.id, {
+                                safeguarding_training_date: e.target.value || null,
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                      {clearanceState(clearance[p.id]) === "lapsed" && (
+                        <p className="mt-2 text-xs text-brand-700">
+                          Lapsed. Blocks check-in access only once enforcement is
+                          switched on in Admin → Check-in.
+                        </p>
+                      )}
+                    </div>
                     {/* Migration 0036 added this column; nothing wrote to it
                         until now, so hidden accounts were not actually
                         reachable from the app. */}
