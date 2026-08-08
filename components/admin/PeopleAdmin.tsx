@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Campus, Department, Profile, UserRole } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
@@ -90,6 +90,15 @@ export function PeopleAdmin({
   const [values, setValues] = useState<Record<string, Record<string, string>>>(valueMap);
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  /** Managed titles from Admin > Titles, with the access each implies. */
+  const [titleRoles, setTitleRoles] = useState<{ name: string; role: UserRole | null }[]>([]);
+  useEffect(() => {
+    supabase
+      .from("ministry_titles")
+      .select("name, role")
+      .order("sort_order")
+      .then(({ data }) => setTitleRoles((data ?? []) as { name: string; role: UserRole | null }[]));
+  }, [supabase]);
   const [error, setError] = useState<string | null>(null);
   const [resetLink, setResetLink] = useState<{ name: string; link: string } | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
@@ -332,12 +341,31 @@ export function PeopleAdmin({
                         list="ah-titles"
                         onBlur={(e) => {
                           const v = e.target.value.trim();
-                          if (v !== (p.title ?? "")) patch(p.id, { title: v || null });
+                          if (v === (p.title ?? "")) return;
+                          patch(p.id, { title: v || null });
+                          // A managed title may carry an access level. OFFER it —
+                          // never apply it silently. Someone picking a word from
+                          // a dropdown must not change what another person can
+                          // reach without being told exactly what happened.
+                          const managed = titleRoles.find(
+                            (t) => t.name.toLowerCase() === v.toLowerCase(),
+                          );
+                          if (!managed?.role || managed.role === p.role) return;
+                          if (
+                            window.confirm(
+                              `"${managed.name}" is set up to grant ${managed.role.replace("_", " ")}.\n\n` +
+                                `${p.full_name} is currently ${p.role.replace("_", " ")}.\n\n` +
+                                `Change their access level to ${managed.role.replace("_", " ")} as well?`,
+                            )
+                          ) {
+                            patch(p.id, { role: managed.role });
+                          }
                         }}
                       />
                       <span className="mt-1 block text-xs text-ink-400">
-                        Shown throughout the app. Permissions still come from the
-                        role above.
+                        Shown throughout the app. Titles and what they grant are
+                        managed in <strong>Admin → Titles</strong>; permissions
+                        still come from the role above.
                       </span>
                     </label>
 

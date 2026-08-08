@@ -830,12 +830,86 @@ describe("church branding", () => {
     if (!requireDb(t)) return;
     // `id boolean primary key check (id)` — a second row is impossible, so the
     // designer never has to ask which one is real.
+    //
+    // SAVEPOINT, because this statement is MEANT to raise. A raise poisons the
+    // suite's shared transaction, and every later test then fails instantly on
+    // "current transaction is aborted" — which looks like eleven broken
+    // features rather than one missing savepoint.
     let threw = false;
+    await db.query("savepoint dup_probe");
     try {
       await db.query(`insert into public.app_settings (id) values (true)`);
+      await db.query("release savepoint dup_probe");
     } catch {
       threw = true;
+      await db.query("rollback to savepoint dup_probe");
     }
     assert.ok(threw, "a second app_settings row was accepted");
+  });
+});
+
+describe("ministry titles", () => {
+  // A title that grants Admin is a privilege decision, not a piece of copy — so
+  // everyone reads the list and only a super admin defines it.
+  test("anyone signed in can read the titles", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(db, fx.ids.Member, `select name, role from public.ministry_titles`);
+    assert.ok(res.ok && res.count > 0, `titles unreadable: ${res.error}`);
+  });
+
+  for (const role of ["Member", "Volunteer", "Staff", "IT_Admin"]) {
+    test(`${role} cannot invent a title that grants Super_Admin`, async (t) => {
+      if (!requireDb(t)) return;
+      const res = await asUser(
+        db,
+        fx.ids[role],
+        `insert into public.ministry_titles (name, role) values ('zz backdoor', 'Super_Admin')`,
+      );
+      assert.ok(!res.ok, `${role} created a title granting Super_Admin`);
+    });
+
+    test(`${role} cannot re-point an existing title at Super_Admin`, async (t) => {
+      if (!requireDb(t)) return;
+      // The subtler attack: leave the name alone, change what it grants.
+      await asUser(
+        db,
+        fx.ids[role],
+        `update public.ministry_titles set role = 'Super_Admin' where name = 'Usher'`,
+      );
+      const after = await db.query(`select role from public.ministry_titles where name = 'Usher'`);
+      assert.notEqual(after.rows[0]?.role, "Super_Admin", `${role} re-pointed a title at Super_Admin`);
+    });
+  }
+
+  test("a super admin can define one", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `insert into public.ministry_titles (name, role) values ('zz test title', 'Staff') returning id`,
+    );
+    assert.ok(res.ok, `super admin blocked from adding a title: ${res.error}`);
+  });
+
+  test("a title carrying a role does NOT change anyone's access by itself", async (t) => {
+    if (!requireDb(t)) return;
+    // The role on a title is an OFFER the UI makes and an admin confirms. If a
+    // trigger ever starts applying it, this catches it: setting the title alone
+    // must leave profiles.role untouched.
+    const before = await db.query(`select role from public.profiles where user_id = $1`, [
+      fx.ids.Member,
+    ]);
+    await db.query(`update public.profiles set title = 'Apostle' where user_id = $1`, [
+      fx.ids.Member,
+    ]);
+    const after = await db.query(`select role, title from public.profiles where user_id = $1`, [
+      fx.ids.Member,
+    ]);
+    assert.equal(after.rows[0].title, "Apostle", "the title did not save");
+    assert.equal(
+      after.rows[0].role,
+      before.rows[0].role,
+      "setting a title silently changed someone's access level",
+    );
   });
 });

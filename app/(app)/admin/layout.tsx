@@ -47,6 +47,7 @@ export default async function AdminLayout({
             <AdminTab href="/admin/campuses" label="Campuses" />
             <AdminTab href="/admin/departments" label="Departments" />
             <AdminTab href="/admin/people" label="People" />
+            <AdminTab href="/admin/titles" label="Titles" />
             <AdminTab href="/admin/fields" label="Custom Fields" />
           </>
         )}
