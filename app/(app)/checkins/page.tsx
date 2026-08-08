@@ -41,6 +41,23 @@ export default async function CheckinsPage() {
       .limit(500),
   ]);
 
+  // Sibling map, so three children from one family are one action rather than
+  // three. Sunday morning with a queue behind you is where a check-in system
+  // gets abandoned.
+  const { data: memberships } = await supabase
+    .from("family_members")
+    .select("family_id, profile_id");
+  const byFamily: Record<string, string[]> = {};
+  for (const m of (memberships ?? []) as { family_id: string; profile_id: string }[]) {
+    (byFamily[m.family_id] ??= []).push(m.profile_id);
+  }
+  const siblings: Record<string, string[]> = {};
+  for (const ids of Object.values(byFamily)) {
+    for (const id of ids) {
+      siblings[id] = [...(siblings[id] ?? []), ...ids.filter((x) => x !== id)];
+    }
+  }
+
   const one = <T,>(v: T[] | T | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
   const rows: CheckinRow[] = ((checkins ?? []) as unknown as Array<
     Omit<CheckinRow, "child"> & { child: { full_name: string; has_allergy: boolean }[] | { full_name: string; has_allergy: boolean } | null }
@@ -51,6 +68,7 @@ export default async function CheckinsPage() {
       initial={rows}
       rooms={(rooms ?? []) as RoomRow[]}
       people={(people ?? []) as PersonRow[]}
+      siblings={siblings}
       currentProfileId={p.id}
       campusId={p.campus_id}
       isCheckinLead={p.is_checkin_lead || p.role === "Super_Admin"}

@@ -86,6 +86,7 @@ export function CheckinStation({
   initial,
   rooms,
   people,
+  siblings = {},
   currentProfileId,
   campusId,
   isCheckinLead,
@@ -93,6 +94,8 @@ export function CheckinStation({
   initial: CheckinRow[];
   rooms: RoomRow[];
   people: PersonRow[];
+  /** profile id -> the other people in their household. Optional: /kiosk omits it. */
+  siblings?: Record<string, string[]>;
   currentProfileId: string;
   campusId: string | null;
   isCheckinLead: boolean;
@@ -114,6 +117,8 @@ export function CheckinStation({
   // The failure mode of guessing wrong in the other direction is a child handed
   // to the wrong person.
   const [requirePickup, setRequirePickup] = useState(true);
+  // Siblings ticked for the family currently being checked in.
+  const [alsoSelected, setAlsoSelected] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastBadge, setLastBadge] = useState<
@@ -292,6 +297,30 @@ export function CheckinStation({
       if (fit) return fit;
     }
     return activeRooms[0] ?? null;
+  }
+
+  /**
+   * Check in a whole household in one action.
+   *
+   * Siblings each get their own room (auto-assigned by age), their own code and
+   * their own badge — they are separate check-ins, not one group record. What's
+   * shared is the volunteer's single tap, which is the part that was costing
+   * time with a queue waiting.
+   *
+   * Sequential rather than parallel: each check-in prints, and firing three
+   * print jobs at once at a DYMO is how you get three labels in the wrong
+   * order or one lost.
+   */
+  async function checkInFamily(primary: PersonRow, primaryRoomId: string, alsoIds: string[]) {
+    const others = alsoIds
+      .map((id) => people.find((p) => p.id === id))
+      .filter((p): p is PersonRow => !!p && !checkedInIds.has(p.id));
+
+    await checkIn(primary, primaryRoomId);
+    for (const sib of others) {
+      await checkIn(sib, suggestRoom(sib)?.id ?? "");
+    }
+    setAlsoSelected({});
   }
 
   async function checkIn(person: PersonRow, roomId: string) {
@@ -733,7 +762,45 @@ export function CheckinStation({
                     {already ? (
                       <p className="mt-1 text-xs text-emerald-700">Already checked in</p>
                     ) : (
-                      <div className="mt-2 flex gap-2">
+                      <>
+                        {/* Siblings still to check in. Each still gets their own
+                            room, code and badge — what's shared is the tap. */}
+                        {(() => {
+                          const family = (siblings[p.id] ?? [])
+                            .map((id) => people.find((x) => x.id === id))
+                            .filter((x): x is PersonRow => !!x && !checkedInIds.has(x.id));
+                          if (family.length === 0) return null;
+                          return (
+                            <div className="mt-2 rounded-lg bg-ink-50 px-2.5 py-2">
+                              <p className="mb-1 text-xs font-medium text-ink-500">
+                                Same household — check in together?
+                              </p>
+                              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                {family.map((s) => (
+                                  <label key={s.id} className="flex items-center gap-1.5 text-sm text-ink-700">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!alsoSelected[s.id]}
+                                      onChange={(e) =>
+                                        setAlsoSelected((a) => ({ ...a, [s.id]: e.target.checked }))
+                                      }
+                                    />
+                                    {s.full_name}
+                                    {s.has_allergy && (
+                                      <span className="rounded-full bg-brand-500 px-1.5 text-[9px] font-bold uppercase text-white">
+                                        allergy
+                                      </span>
+                                    )}
+                                    <span className="text-xs text-ink-400">
+                                      {suggestRoom(s)?.name ?? "no room"}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                        <div className="mt-2 flex gap-2">
                         <select
                           className="ah-input py-1.5 text-sm"
                           defaultValue={suggested?.id ?? ""}
@@ -751,13 +818,18 @@ export function CheckinStation({
                           disabled={busy}
                           onClick={() => {
                             const sel = document.getElementById(`room-${p.id}`) as HTMLSelectElement | null;
-                            checkIn(p, sel?.value ?? "");
+                            const also = (siblings[p.id] ?? []).filter((id) => alsoSelected[id]);
+                            checkInFamily(p, sel?.value ?? "", also);
                           }}
                           className="shrink-0 rounded-lg bg-brand-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
                         >
-                          Check in
+                          {(() => {
+                            const n = 1 + (siblings[p.id] ?? []).filter((id) => alsoSelected[id]).length;
+                            return n > 1 ? `Check in ${n}` : "Check in";
+                          })()}
                         </button>
-                      </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 );

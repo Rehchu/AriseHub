@@ -47,6 +47,22 @@ export default async function KioskPage() {
       .limit(500),
   ]);
 
+  // Siblings matter more here than at the staffed desk: this is the tablet a
+  // parent uses themselves, with their own three children in tow.
+  const { data: memberships } = await supabase
+    .from("family_members")
+    .select("family_id, profile_id");
+  const byFamily: Record<string, string[]> = {};
+  for (const m of (memberships ?? []) as { family_id: string; profile_id: string }[]) {
+    (byFamily[m.family_id] ??= []).push(m.profile_id);
+  }
+  const siblings: Record<string, string[]> = {};
+  for (const ids of Object.values(byFamily)) {
+    for (const id of ids) {
+      siblings[id] = [...(siblings[id] ?? []), ...ids.filter((x) => x !== id)];
+    }
+  }
+
   const one = <T,>(v: T[] | T | null): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
   const rows: CheckinRow[] = ((checkins ?? []) as unknown as Array<
     Omit<CheckinRow, "child"> & {
@@ -70,6 +86,7 @@ export default async function KioskPage() {
           initial={rows}
           rooms={(rooms ?? []) as RoomRow[]}
           people={(people ?? []) as PersonRow[]}
+          siblings={siblings}
           currentProfileId={p.id}
           campusId={p.campus_id}
           isCheckinLead={p.is_checkin_lead || p.role === "Super_Admin"}
