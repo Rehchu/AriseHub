@@ -41,31 +41,32 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  const { data: link } = await admin
-    .from("invite_links")
-    .select("id, role, campus_id, department_ids, active, expires_at, max_uses, uses")
-    .eq("code", code)
-    .maybeSingle();
-
-  const l = link as {
-    id: string;
-    role: string;
-    campus_id: string | null;
-    department_ids: string[];
-    active: boolean;
-    expires_at: string | null;
-    max_uses: number | null;
-    uses: number;
-  } | null;
-
   // Deliberately vague: don't help someone probe for valid codes.
   const invalid = NextResponse.json(
     { error: "This invite link is no longer valid. Ask your leader for a new one." },
     { status: 403 },
   );
-  if (!l || !l.active) return invalid;
-  if (l.expires_at && new Date(l.expires_at) < new Date()) return invalid;
-  if (l.max_uses != null && l.uses >= l.max_uses) return invalid;
+
+  // Claim the use FIRST, in one statement (0056).
+  //
+  // This read the link, checked `uses >= max_uses` here in JS, created the
+  // account, and only then wrote `uses + 1` back. Two people opening a
+  // single-use link together both read uses=0, both passed, both got an
+  // account. A link is a bearer secret carrying a role — "one use" has to mean
+  // one, so the check and the increment happen in the same UPDATE and the
+  // loser matches no row.
+  const { data: claimedRows, error: claimErr } = await admin.rpc("claim_invite_link", {
+    p_code: code,
+  });
+  const l = (claimedRows as
+    | { id: string; role: string; campus_id: string | null; department_ids: string[] }[]
+    | null)?.[0];
+  if (claimErr || !l) return invalid;
+
+  /** Hand the use back when signup fails after the claim. */
+  const releaseClaim = async () => {
+    await admin.rpc("release_invite_link", { p_id: l.id });
+  };
 
   // Is this person already in the church's records without a login?
   //
@@ -91,6 +92,10 @@ export async function POST(req: NextRequest) {
   });
 
   if (createErr) {
+    // No account was created, so the use they claimed above is theirs to keep
+    // trying with — most of these are "that email already exists" and a typo
+    // must not burn a single-use link.
+    await releaseClaim();
     const already = /already|registered|exists/i.test(createErr.message);
     return NextResponse.json(
       {
@@ -161,10 +166,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await admin
-    .from("invite_links")
-    .update({ uses: l.uses + 1 })
-    .eq("id", l.id);
-
+  // The use was already recorded by claim_invite_link, before the account
+  // existed. Nothing to increment here.
   return NextResponse.json({ ok: true });
 }

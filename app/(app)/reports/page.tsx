@@ -21,7 +21,7 @@ export default async function ReportsPage() {
   const n = (r: { count: number | null }) => r.count ?? 0;
 
   const [
-    peopleRows,
+    peopleBreakdown,
     campuses,
     groupsCount,
     groupMembers,
@@ -32,7 +32,14 @@ export default async function ReportsPage() {
     upcomingPlans,
     submissions,
   ] = await Promise.all([
-    supabase.from("profiles").select("role, campus_id, archived_at").is("archived_at", null),
+    // Counted in the database, not here (0057).
+    //
+    // This fetched every profile row and tallied them in JavaScript — and
+    // PostgREST caps a response at 1000 rows. "People: 1000" was not a
+    // milestone, it was the ceiling, and every role and campus breakdown was
+    // wrong alongside it. The function is SECURITY INVOKER, so RLS still scopes
+    // the totals to what the viewer may see.
+    supabase.rpc("report_people_breakdown"),
     supabase.from("campuses").select("id, name"),
     supabase.from("groups").select("*", { count: "exact", head: true }),
     supabase.from("group_members").select("*", { count: "exact", head: true }),
@@ -44,48 +51,49 @@ export default async function ReportsPage() {
     supabase.from("form_submissions").select("*", { count: "exact", head: true }),
   ]);
 
-  const people = (peopleRows.data ?? []) as { role: string; campus_id: string | null }[];
+  const breakdown = (peopleBreakdown.data ?? []) as {
+    role: string;
+    campus_id: string | null;
+    n: number;
+  }[];
 
   // Trends: check-in attendance and new people over the last 8 weeks. Leadership
   // asks "are we growing?" far more often than "how many rows are there".
+  // Grouped in the database for the same reason as the head-count above — a
+  // busy eight weeks of check-ins comfortably exceeds the row cap.
   const eightWeeksAgo = new Date(Date.now() - 56 * 24 * 60 * 60 * 1000).toISOString();
-  const [{ data: recentCheckins }, { data: newPeople }] = await Promise.all([
-    supabase.from("checkins").select("checked_in_at").gte("checked_in_at", eightWeeksAgo),
-    supabase.from("profiles").select("created_at").gte("created_at", eightWeeksAgo),
+  const [{ data: checkinWeeks }, { data: newPeopleWeeks }] = await Promise.all([
+    supabase.rpc("report_checkins_weekly", { p_since: eightWeeksAgo }),
+    supabase.rpc("report_new_people_weekly", { p_since: eightWeeksAgo }),
   ]);
 
-  function weekly(rows: { d: string }[]) {
-    const buckets: Record<string, number> = {};
+  /** Fill the eight Sunday-anchored buckets the chart draws, in order. */
+  function weekly(rows: { week: string; n: number }[] | null) {
+    const byWeek = new Map((rows ?? []).map((r) => [r.week, Number(r.n)]));
+    const out: { week: string; count: number }[] = [];
     for (let i = 7; i >= 0; i--) {
       const d = new Date(Date.now() - i * 7 * 24 * 60 * 60 * 1000);
       d.setDate(d.getDate() - d.getDay());
-      buckets[d.toISOString().slice(0, 10)] = 0;
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      out.push({ week: k, count: byWeek.get(k) ?? 0 });
     }
-    const keys = Object.keys(buckets).sort();
-    for (const r of rows) {
-      const d = new Date(r.d);
-      d.setDate(d.getDate() - d.getDay());
-      const k = d.toISOString().slice(0, 10);
-      if (k in buckets) buckets[k]++;
-      else if (keys.length && k < keys[0]) buckets[keys[0]]++;
-    }
-    return keys.map((k) => ({ week: k, count: buckets[k] }));
+    return out;
   }
 
-  const attendanceTrend = weekly(
-    ((recentCheckins ?? []) as { checked_in_at: string }[]).map((r) => ({ d: r.checked_in_at })),
-  );
-  const growthTrend = weekly(
-    ((newPeople ?? []) as { created_at: string }[]).map((r) => ({ d: r.created_at })),
-  );
+  const attendanceTrend = weekly(checkinWeeks as { week: string; n: number }[] | null);
+  const growthTrend = weekly(newPeopleWeeks as { week: string; n: number }[] | null);
+
   const byRole: Record<string, number> = {};
   const byCampus: Record<string, number> = {};
   const campusName: Record<string, string> = {};
   for (const c of (campuses.data ?? []) as { id: string; name: string }[]) campusName[c.id] = c.name;
-  for (const p of people) {
-    byRole[p.role] = (byRole[p.role] ?? 0) + 1;
-    const key = p.campus_id ? campusName[p.campus_id] ?? "Unknown" : "No campus";
-    byCampus[key] = (byCampus[key] ?? 0) + 1;
+  let peopleTotal = 0;
+  for (const b of breakdown) {
+    const count = Number(b.n);
+    peopleTotal += count;
+    byRole[b.role] = (byRole[b.role] ?? 0) + count;
+    const key = b.campus_id ? campusName[b.campus_id] ?? "Unknown" : "No campus";
+    byCampus[key] = (byCampus[key] ?? 0) + count;
   }
 
   return (
@@ -94,7 +102,7 @@ export default async function ReportsPage() {
       <p className="mt-1 text-ink-500">A church-wide snapshot across every module.</p>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon="users" accent="#7c3aed" label="People" value={people.length} />
+        <Stat icon="users" accent="#7c3aed" label="People" value={peopleTotal} />
         <Stat icon="group" accent="#059669" label="Groups" value={n(groupsCount)} sub={`${n(groupMembers)} memberships`} />
         <Stat icon="task" accent="#0891b2" label="Open tasks" value={n(tasksOpen)} sub={`${n(tasksDone)} done`} />
         <Stat icon="heart" accent="#be123c" label="Open care items" value={n(careOpen)} />

@@ -765,3 +765,108 @@ describe("kiosk exit PIN", () => {
     assert.equal(good.ok && good.rows[0].ok, true, "the correct PIN did not unlock");
   });
 });
+
+describe("invite link redemption", () => {
+  // The check and the increment used to be two round trips with the account
+  // creation between them, so two people opening a single-use link together
+  // both passed the check and both got an account.
+  test("a single-use link can only be claimed once", async (t) => {
+    if (!requireDb(t)) return;
+    const code = "ZZONCE" + Math.floor(Math.random() * 100000);
+    await db.query(
+      `insert into public.invite_links (code, label, role, department_ids, max_uses, uses, expires_at)
+       values ($1, 'zz test', 'Member', '{}'::uuid[], 1, 0, now() + interval '1 hour')`,
+      [code],
+    );
+    const first = await db.query(`select * from public.claim_invite_link($1)`, [code]);
+    const second = await db.query(`select * from public.claim_invite_link($1)`, [code]);
+    assert.equal(first.rowCount, 1, "the first claim was refused");
+    assert.equal(second.rowCount, 0, "a single-use link was claimed twice");
+  });
+
+  test("an expired link cannot be claimed", async (t) => {
+    if (!requireDb(t)) return;
+    const code = "ZZOLD" + Math.floor(Math.random() * 100000);
+    await db.query(
+      `insert into public.invite_links (code, label, role, department_ids, max_uses, uses, expires_at)
+       values ($1, 'zz test', 'Member', '{}'::uuid[], null, 0, now() - interval '1 minute')`,
+      [code],
+    );
+    const res = await db.query(`select * from public.claim_invite_link($1)`, [code]);
+    assert.equal(res.rowCount, 0, "an expired link was still claimable");
+  });
+
+  test("a switched-off link cannot be claimed", async (t) => {
+    if (!requireDb(t)) return;
+    const code = "ZZOFF" + Math.floor(Math.random() * 100000);
+    await db.query(
+      `insert into public.invite_links (code, label, role, department_ids, active, expires_at)
+       values ($1, 'zz test', 'Member', '{}'::uuid[], false, now() + interval '1 hour')`,
+      [code],
+    );
+    const res = await db.query(`select * from public.claim_invite_link($1)`, [code]);
+    assert.equal(res.rowCount, 0, "a deactivated link was still claimable");
+  });
+
+  test("releasing a failed signup hands the use back", async (t) => {
+    if (!requireDb(t)) return;
+    const code = "ZZREL" + Math.floor(Math.random() * 100000);
+    await db.query(
+      `insert into public.invite_links (code, label, role, department_ids, max_uses, uses, expires_at)
+       values ($1, 'zz test', 'Member', '{}'::uuid[], 1, 0, now() + interval '1 hour')`,
+      [code],
+    );
+    const claimed = await db.query(`select * from public.claim_invite_link($1)`, [code]);
+    await db.query(`select public.release_invite_link($1)`, [claimed.rows[0].id]);
+    const again = await db.query(`select * from public.claim_invite_link($1)`, [code]);
+    assert.equal(again.rowCount, 1, "a released use did not become available again");
+  });
+
+  for (const role of ["Member", "Volunteer", "Staff", "IT_Admin", "Super_Admin"]) {
+    test(`${role} cannot claim links directly and burn every invite`, async (t) => {
+      if (!requireDb(t)) return;
+      const res = await asUser(db, fx.ids[role], `select * from public.claim_invite_link('ZZANY')`);
+      assert.ok(!res.ok, "claim_invite_link is callable from the browser");
+    });
+  }
+});
+
+describe("report aggregates", () => {
+  test("the people breakdown totals the actual head count", async (t) => {
+    if (!requireDb(t)) return;
+    // The page used to fetch rows and count them in JS, which silently stopped
+    // at PostgREST's 1000-row cap.
+    const res = await db.query(
+      `select (select coalesce(sum(n),0) from public.report_people_breakdown()) as grouped,
+              (select count(*) from public.profiles where archived_at is null) as actual`,
+    );
+    assert.equal(Number(res.rows[0].grouped), Number(res.rows[0].actual));
+  });
+
+  test("weekly buckets are Sunday-anchored in Central time", async (t) => {
+    if (!requireDb(t)) return;
+    // Every day from Sunday to Saturday must land on the same Sunday, and the
+    // Saturday before must not.
+    const res = await db.query(
+      `with days as (
+         select generate_series(timestamptz '2026-08-02 09:00:00-05',
+                                timestamptz '2026-08-08 21:00:00-05',
+                                interval '1 day') ts)
+       select count(distinct (date_trunc('week', (ts at time zone 'America/Chicago') + interval '1 day')
+                              - interval '1 day')::date) as buckets from days`,
+    );
+    assert.equal(Number(res.rows[0].buckets), 1, "one week spanned more than one bucket");
+  });
+
+  test("a member cannot aggregate people they cannot see", async (t) => {
+    if (!requireDb(t)) return;
+    // SECURITY INVOKER, so the same RLS that scoped the old row fetch applies.
+    const mine = await asUser(db, fx.ids.Member, `select coalesce(sum(n),0)::int t from public.report_people_breakdown()`);
+    const all = await db.query(`select count(*)::int t from public.profiles where archived_at is null`);
+    assert.ok(mine.ok, `breakdown unusable for a member: ${mine.error}`);
+    assert.ok(
+      mine.rows[0].t <= all.rows[0].t,
+      "a member aggregated more people than exist",
+    );
+  });
+});

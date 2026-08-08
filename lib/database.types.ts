@@ -115,6 +115,28 @@ export interface Database {
         Args: { pin: string | null };
         Returns: void;
       };
+      /** Counted in the database so the 1000-row response cap can't skew it (0057). */
+      report_people_breakdown: {
+        Args: Record<string, never>;
+        Returns: { role: UserRole; campus_id: string | null; n: number }[];
+      };
+      report_checkins_weekly: {
+        Args: { p_since: string };
+        Returns: { week: string; n: number }[];
+      };
+      report_new_people_weekly: {
+        Args: { p_since: string };
+        Returns: { week: string; n: number }[];
+      };
+      /** service_role only — checks and increments a link's uses atomically (0056). */
+      claim_invite_link: {
+        Args: { p_code: string };
+        Returns: { id: string; role: UserRole; campus_id: string | null; department_ids: string[] }[];
+      };
+      release_invite_link: {
+        Args: { p_id: string };
+        Returns: void;
+      };
       current_profile_id: {
         Args: Record<string, never>;
         Returns: string;

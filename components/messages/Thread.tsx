@@ -33,6 +33,8 @@ export function Thread({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const nameCache = useRef<Record<string, string>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
+  /** Guards against a second Enter landing while the first send is in flight. */
+  const inFlight = useRef(false);
 
   const nameFor = useCallback(
     async (profileId: string): Promise<string> => {
@@ -120,6 +122,13 @@ export function Thread({
     e.preventDefault();
     const text = body.trim();
     if (!text && !file) return;
+    // `sending` is set below, but React batches state and this function is also
+    // reachable from Enter in the textarea — which stays focused and accepts a
+    // second Enter while the attachment is still uploading. Two presses sent
+    // the photo twice. A ref settles synchronously, so the second call returns
+    // here.
+    if (inFlight.current) return;
+    inFlight.current = true;
     setSending(true);
     setBody("");
     setUploadError(null);
@@ -138,6 +147,7 @@ export function Thread({
         if ("error" in up) throw new Error(up.error);
         attachment = { url: up.ref, type: file.type || "file", name: file.name };
       } catch (err) {
+        inFlight.current = false;
         setSending(false);
         setBody(text);
         const msg = err instanceof Error ? err.message : "Upload failed";
@@ -163,6 +173,7 @@ export function Thread({
       })
       .select("*")
       .single();
+    inFlight.current = false;
     setSending(false);
     if (error) {
       setBody(text); // restore on failure

@@ -53,12 +53,34 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
       });
     }
 
+    // Poll handle, so a pending wait is torn down with the component.
+    let poll: ReturnType<typeof setInterval> | undefined;
+
     if (window.turnstile) {
       render();
     } else {
       const existing = document.querySelector(`script[src="${SCRIPT}"]`);
-      if (existing) existing.addEventListener("load", render);
-      else {
+      if (existing) {
+        // A previously-appended tag may already have fired `load`, and `load`
+        // does not replay for a listener attached afterwards — so this branch
+        // could wait forever and the widget would simply never appear. It
+        // happens on any page that mounts a second form, or on a remount.
+        // Watch for the global instead, which is the thing we actually need.
+        existing.addEventListener("load", render);
+        poll = setInterval(() => {
+          if (window.turnstile) {
+            clearInterval(poll);
+            render();
+          }
+        }, 100);
+        // Don't wait indefinitely on a script that failed for someone else.
+        setTimeout(() => {
+          if (!window.turnstile) {
+            clearInterval(poll);
+            if (!cancelled) setFailed(true);
+          }
+        }, 8000);
+      } else {
         const s = document.createElement("script");
         s.src = SCRIPT;
         s.async = true;
@@ -71,6 +93,7 @@ export function Turnstile({ onToken }: { onToken: (token: string | null) => void
 
     return () => {
       cancelled = true;
+      clearInterval(poll);
       if (widgetId && window.turnstile) {
         try {
           window.turnstile.remove(widgetId);
