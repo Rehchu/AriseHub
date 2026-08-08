@@ -25,3 +25,6 @@ tsconfig.tsbuildinfo
 __tmp_*
 __probe.*
 public/__probe.*
+
+# Subagent scratch directories.
+.scratch*/
