@@ -677,3 +677,114 @@ describe("room staffing", () => {
   }
 });
 
+describe("IT support threads", () => {
+  // Opening the IT chat gives you YOUR thread with IT, not a shared room —
+  // nobody should see that someone else forgot their password. The requester is
+  // covered by ordinary channel membership; IT sees every thread for its own
+  // department even if they joined after one was opened.
+  async function openThread(userId) {
+    const res = await asUser(db, userId, `select public.get_or_create_support_thread('it') as id`);
+    assert.ok(res.ok, `could not open a support thread: ${res.error}`);
+    return res.rows[0].id;
+  }
+
+  test("anyone can open a thread with IT without being in IT", async (t) => {
+    if (!requireDb(t)) return;
+    const id = await openThread(fx.ids.Member);
+    assert.ok(id, "no channel came back");
+  });
+
+  test("reopening returns the same thread rather than a second one", async (t) => {
+    if (!requireDb(t)) return;
+    const a = await openThread(fx.ids.Member);
+    const b = await openThread(fx.ids.Member);
+    assert.equal(a, b, "a second thread was created for the same person");
+  });
+
+  test("the requester can post in their own thread", async (t) => {
+    if (!requireDb(t)) return;
+    const id = await openThread(fx.ids.Member);
+    const res = await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.messages (channel_id, sender_profile_id, body)
+       values ($1, public.current_profile_id(), 'zz my password is broken')`,
+      [id],
+    );
+    assert.ok(res.ok, `requester could not post in their own thread: ${res.error}`);
+  });
+
+  test("ANOTHER member cannot read someone else's support thread", async (t) => {
+    if (!requireDb(t)) return;
+    // The entire reason this is a per-person thread and not one shared room.
+    const id = await openThread(fx.ids.Member);
+    await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.messages (channel_id, sender_profile_id, body)
+       values ($1, public.current_profile_id(), 'zz private problem')`,
+      [id],
+    );
+    const res = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `select count(*)::int n from public.messages where channel_id = $1`,
+      [id],
+    );
+    assert.equal(res.ok ? res.rows[0].n : -1, 0, "another member read someone else's support thread");
+  });
+
+  test("a Super_Admin cannot read someone else's support thread either", async (t) => {
+    if (!requireDb(t)) return;
+    const id = await openThread(fx.ids.Member);
+    await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.messages (channel_id, sender_profile_id, body)
+       values ($1, public.current_profile_id(), 'zz private problem')`,
+      [id],
+    );
+    const res = await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `select count(*)::int n from public.messages where channel_id = $1`,
+      [id],
+    );
+    assert.equal(res.ok ? res.rows[0].n : -1, 0, "Super_Admin read a support thread they are not part of");
+  });
+
+  test("IT can read and reply to a thread they were never added to", async (t) => {
+    if (!requireDb(t)) return;
+    const id = await openThread(fx.ids.Member);
+    await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.messages (channel_id, sender_profile_id, body)
+       values ($1, public.current_profile_id(), 'zz help me')`,
+      [id],
+    );
+    // Join IT AFTER the thread exists — the case a membership snapshot misses.
+    await db.query(
+      `insert into public.department_members (department_id, profile_id, role)
+       select d.id, p.id, 'member' from public.departments d, public.profiles p
+        where d.slug = 'it' and p.user_id = $1
+       on conflict (department_id, profile_id) do nothing`,
+      [fx.ids.IT_Admin],
+    );
+    const read = await asUser(
+      db,
+      fx.ids.IT_Admin,
+      `select count(*)::int n from public.messages where channel_id = $1`,
+      [id],
+    );
+    assert.ok(read.ok && read.rows[0].n > 0, "IT could not read a thread opened before they joined");
+    const reply = await asUser(
+      db,
+      fx.ids.IT_Admin,
+      `insert into public.messages (channel_id, sender_profile_id, body)
+       values ($1, public.current_profile_id(), 'zz have you tried turning it off')`,
+      [id],
+    );
+    assert.ok(reply.ok, `IT could not reply: ${reply.error}`);
+  });
+});

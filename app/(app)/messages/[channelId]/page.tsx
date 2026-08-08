@@ -16,7 +16,7 @@ export default async function ChannelPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, full_name, email")
     .eq("user_id", user!.id)
     .single();
 
@@ -48,6 +48,8 @@ export default async function ChannelPage({
       currentProfileId={profile?.id ?? ""}
       title={title}
       kind={channel.type}
+      requesterName={(profile as { full_name?: string } | null)?.full_name ?? ""}
+      requesterEmail={(profile as { email?: string } | null)?.email ?? user!.email ?? ""}
     />
   );
 }

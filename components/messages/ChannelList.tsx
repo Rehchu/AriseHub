@@ -10,7 +10,7 @@ import { NewDialog } from "./NewDialog";
 
 interface ChannelRow {
   id: string;
-  type: "department" | "direct";
+  type: "department" | "direct" | "support";
   label: string;
   unread: number;
 }
@@ -22,6 +22,7 @@ export function ChannelList({
 }) {
   const supabase = createClient();
   const pathname = usePathname();
+  const router = useRouter();
   const [channels, setChannels] = useState<ChannelRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -90,7 +91,7 @@ export function ChannelList({
         id: c.id,
         type: c.type,
         label:
-          c.type === "department"
+          c.type === "department" || c.type === "support"
             ? (c.title ?? "Department")
             : (otherName[c.id] ?? "Direct message"),
         unread: unreadBy[c.id] ?? 0,
@@ -137,6 +138,33 @@ export function ChannelList({
 
   const departments = channels.filter((c) => c.type === "department");
   const directs = channels.filter((c) => c.type === "direct");
+  // Your own thread with a department, and — if you are in that department —
+  // everyone else's. Kept apart from the department room so a support request
+  // never lands in the room the whole team reads.
+  const support = channels.filter((c) => c.type === "support");
+
+  const [openingIt, setOpeningIt] = useState(false);
+  const [itError, setItError] = useState<string | null>(null);
+
+  /**
+   * Open my thread with IT. The RPC returns the existing one if there is one,
+   * so this is safe to press twice, and it adds IT's current members so a
+   * technician who joined last week can still see it.
+   */
+  async function openItThread() {
+    setOpeningIt(true);
+    setItError(null);
+    const { data, error } = await supabase.rpc("get_or_create_support_thread", {
+      dept_slug: "it",
+    });
+    setOpeningIt(false);
+    if (error || !data) {
+      setItError(error?.message ?? "Couldn't open a conversation with IT.");
+      return;
+    }
+    await load();
+    router.push(`/messages/${data as string}`);
+  }
 
   return (
     <>
@@ -157,7 +185,27 @@ export function ChannelList({
             <p className="px-3 text-sm text-ink-400">Loading…</p>
           ) : (
             <>
+              <button
+                onClick={openItThread}
+                disabled={openingIt}
+                className="mb-3 flex w-full items-center gap-2.5 rounded-lg bg-ink-50 px-3 py-2.5 text-left text-sm font-medium text-ink-800 transition hover:bg-ink-100 disabled:opacity-60"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-onaccent">
+                  <Icon name="help" size={16} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  {openingIt ? "Opening…" : "Message IT"}
+                  <span className="block text-xs font-normal text-ink-400">
+                    Private — only you and IT can see it
+                  </span>
+                </span>
+              </button>
+              {itError && (
+                <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">{itError}</p>
+              )}
+
               <Section title="Department chats" rows={departments} pathname={pathname} icon="group" />
+              <Section title="Support" rows={support} pathname={pathname} icon="help" empty="No support conversations." />
               <Section title="Direct messages" rows={directs} pathname={pathname} icon="chat" empty="No direct messages yet." />
             </>
           )}

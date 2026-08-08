@@ -56,7 +56,8 @@ export interface Department {
 
 export interface Channel {
   id: string;
-  type: "department" | "direct";
+  /** `support` is a private thread between one person and a department (0061). */
+  type: "department" | "direct" | "support";
   department_id: string | null;
   title: string | null;
   created_at: string;

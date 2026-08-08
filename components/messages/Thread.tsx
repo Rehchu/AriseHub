@@ -8,6 +8,7 @@ import { notifyMany, preview } from "@/lib/notify";
 import { SignedAttachment } from "./SignedAttachment";
 import { uploadToR2 } from "@/lib/upload";
 import { compressImage } from "@/lib/photos";
+import { MakeTicket } from "./MakeTicket";
 
 interface Row extends Message {
   senderName: string;
@@ -18,11 +19,15 @@ export function Thread({
   currentProfileId,
   title,
   kind,
+  requesterName = "",
+  requesterEmail = "",
 }: {
   channelId: string;
   currentProfileId: string;
   title: string;
-  kind: "department" | "direct";
+  kind: "department" | "direct" | "support";
+  requesterName?: string;
+  requesterEmail?: string;
 }) {
   const supabase = createClient();
   const [rows, setRows] = useState<Row[]>([]);
@@ -35,6 +40,7 @@ export function Thread({
   const bottomRef = useRef<HTMLDivElement>(null);
   /** Guards against a second Enter landing while the first send is in flight. */
   const inFlight = useRef(false);
+  const [ticketOpen, setTicketOpen] = useState(false);
 
   const nameFor = useCallback(
     async (profileId: string): Promise<string> => {
@@ -244,9 +250,37 @@ export function Thread({
         >
           ←
         </a>
-        <Icon name={kind === "department" ? "group" : "chat"} className="hidden shrink-0 text-ink-400 sm:block" />
+        <Icon
+          name={kind === "department" ? "group" : kind === "support" ? "help" : "chat"}
+          className="hidden shrink-0 text-ink-400 sm:block"
+        />
         <h2 className="truncate font-display font-bold text-ink-900">{title}</h2>
+        {kind === "support" && (
+          <>
+            <span className="flex-1" />
+            <span className="hidden text-xs text-ink-400 sm:inline">Private</span>
+            <button
+              onClick={() => setTicketOpen(true)}
+              className="shrink-0 rounded-lg bg-ink-100 px-2.5 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-200"
+            >
+              Make a ticket
+            </button>
+          </>
+        )}
       </header>
+
+      {ticketOpen && (
+        <MakeTicket
+          messages={rows.map((r) => ({
+            senderName: r.senderName,
+            body: r.body,
+            created_at: r.created_at,
+          }))}
+          requesterName={requesterName}
+          requesterEmail={requesterEmail}
+          onClose={() => setTicketOpen(false)}
+        />
+      )}
 
       <div className="flex-1 space-y-1 overflow-y-auto bg-ink-50 px-4 py-4">
         {rows.length === 0 && (
