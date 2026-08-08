@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
@@ -111,7 +111,11 @@ export function ScheduleCalendar({
       ? `Week of ${startOfWeek(cursor).toLocaleDateString(undefined, { month: "long", day: "numeric" })}`
       : cursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
-  const todayStr = ymd(new Date());
+  // Resolved after mount. `new Date()` during render runs on the server too,
+  // and the server is UTC — so a Sunday evening in Central time renders as
+  // Monday there, and "today" highlights the wrong cell until React patches it.
+  const [todayStr, setTodayStr] = useState("");
+  useEffect(() => setTodayStr(ymd(new Date())), []);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -235,161 +239,171 @@ export function ScheduleCalendar({
     </div>
   );
 
-  function DayPanel({
-    date,
-    plans: dayPlans,
-    people,
-    blockouts,
-    patterns,
-    canManage,
-    currentProfileId,
-    onClose,
-    onAssigned,
-  }: {
-    date: string;
-    plans: SchedulePlan[];
-    people: { id: string; full_name: string }[];
-    blockouts: Blockout[];
-    patterns: ServingPattern[];
-    canManage: boolean;
-    currentProfileId: string;
-    onClose: () => void;
-    onAssigned: (planId: string, row: SchedulePlan["assignments"][number]) => void;
-  }) {
-    const [planId, setPlanId] = useState(dayPlans[0]?.id ?? "");
-    const [position, setPosition] = useState("");
-    const [person, setPerson] = useState("");
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const dateObj = new Date(date + "T00:00:00");
+}
 
-    // Availability warning shown next to each name.
-    function label(id: string) {
-      const a = availabilityFor(id, dateObj, blockouts, patterns);
-      if (a.state === "blocked") return ` — away (${a.reason})`;
-      if (a.state === "off-pattern") return ` — ${a.reason}`;
-      return "";
+/**
+ * The day drawer.
+ *
+ * Declared at module scope, NOT inside ScheduleCalendar. Nested, it was a new
+ * function identity on every parent render, so React unmounted and remounted
+ * it — wiping the plan, position and person a volunteer had already chosen
+ * partway through assigning someone.
+ */
+function DayPanel({
+  date,
+  plans: dayPlans,
+  people,
+  blockouts,
+  patterns,
+  canManage,
+  currentProfileId,
+  onClose,
+  onAssigned,
+}: {
+  date: string;
+  plans: SchedulePlan[];
+  people: { id: string; full_name: string }[];
+  blockouts: Blockout[];
+  patterns: ServingPattern[];
+  canManage: boolean;
+  currentProfileId: string;
+  onClose: () => void;
+  onAssigned: (planId: string, row: SchedulePlan["assignments"][number]) => void;
+}) {
+  const supabase = createClient();
+  const [planId, setPlanId] = useState(dayPlans[0]?.id ?? "");
+  const [position, setPosition] = useState("");
+  const [person, setPerson] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dateObj = new Date(date + "T00:00:00");
+
+  // Availability warning shown next to each name.
+  function label(id: string) {
+    const a = availabilityFor(id, dateObj, blockouts, patterns);
+    if (a.state === "blocked") return ` — away (${a.reason})`;
+    if (a.state === "off-pattern") return ` — ${a.reason}`;
+    return "";
+  }
+
+  async function assign(e: React.FormEvent) {
+    e.preventDefault();
+    if (!planId || !position.trim()) return;
+    setBusy(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("plan_assignments")
+      .insert({
+        plan_id: planId,
+        position: position.trim(),
+        profile_id: person || null,
+        status: "invited",
+      })
+      .select("id, position, profile_id, status")
+      .single();
+    setBusy(false);
+    if (error) return setError(error.message);
+
+    const name = people.find((p) => p.id === person)?.full_name ?? null;
+    onAssigned(planId, { ...(data as { id: string; position: string; profile_id: string | null; status: "invited" }), name });
+
+    if (person && person !== currentProfileId) {
+      const plan = dayPlans.find((p) => p.id === planId);
+      notify(
+        person,
+        "You've been scheduled",
+        `${plan?.title ?? "Service"} — ${position.trim()} on ${dateObj.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`,
+        `/services/${planId}`,
+      );
     }
+    setPosition("");
+    setPerson("");
+  }
 
-    async function assign(e: React.FormEvent) {
-      e.preventDefault();
-      if (!planId || !position.trim()) return;
-      setBusy(true);
-      setError(null);
-      const { data, error } = await supabase
-        .from("plan_assignments")
-        .insert({
-          plan_id: planId,
-          position: position.trim(),
-          profile_id: person || null,
-          status: "invited",
-        })
-        .select("id, position, profile_id, status")
-        .single();
-      setBusy(false);
-      if (error) return setError(error.message);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
+      <div
+        className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
+          <h2 className="font-display text-lg font-bold">
+            {dateObj.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          </h2>
+          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
+            <Icon name="x" />
+          </button>
+        </div>
 
-      const name = people.find((p) => p.id === person)?.full_name ?? null;
-      onAssigned(planId, { ...(data as { id: string; position: string; profile_id: string | null; status: "invited" }), name });
-
-      if (person && person !== currentProfileId) {
-        const plan = dayPlans.find((p) => p.id === planId);
-        notify(
-          person,
-          "You've been scheduled",
-          `${plan?.title ?? "Service"} — ${position.trim()} on ${dateObj.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`,
-          `/services/${planId}`,
-        );
-      }
-      setPosition("");
-      setPerson("");
-    }
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4" onClick={onClose}>
-        <div
-          className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white sm:rounded-2xl"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
-            <h2 className="font-display text-lg font-bold">
-              {dateObj.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-            </h2>
-            <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
-              <Icon name="x" />
-            </button>
-          </div>
-
-          <div className="space-y-4 p-5">
-            {dayPlans.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-ink-200 px-4 py-8 text-center text-sm text-ink-400">
-                Nothing scheduled this day.
-              </p>
-            ) : (
-              dayPlans.map((p) => (
-                <div key={p.id} className="rounded-xl border border-ink-100 p-3">
-                  <Link href={`/services/${p.id}`} className="font-display font-semibold text-ink-900 hover:text-brand-600">
-                    {p.title}
-                  </Link>
-                  <div className="mt-2 space-y-1">
-                    {p.assignments.map((a) => (
-                      <div key={a.id} className="flex items-center gap-2 text-sm">
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.status]}`} />
-                        <span className="font-medium text-ink-700">{a.position}</span>
-                        <span className="text-ink-500">{a.name ?? "unassigned"}</span>
-                        <span className="ml-auto text-xs capitalize text-ink-400">{a.status}</span>
-                      </div>
-                    ))}
-                    {p.assignments.length === 0 && (
-                      <p className="text-sm text-ink-400">Nobody scheduled yet.</p>
-                    )}
-                  </div>
+        <div className="space-y-4 p-5">
+          {dayPlans.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-ink-200 px-4 py-8 text-center text-sm text-ink-400">
+              Nothing scheduled this day.
+            </p>
+          ) : (
+            dayPlans.map((p) => (
+              <div key={p.id} className="rounded-xl border border-ink-100 p-3">
+                <Link href={`/services/${p.id}`} className="font-display font-semibold text-ink-900 hover:text-brand-600">
+                  {p.title}
+                </Link>
+                <div className="mt-2 space-y-1">
+                  {p.assignments.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2 text-sm">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.status]}`} />
+                      <span className="font-medium text-ink-700">{a.position}</span>
+                      <span className="text-ink-500">{a.name ?? "unassigned"}</span>
+                      <span className="ml-auto text-xs capitalize text-ink-400">{a.status}</span>
+                    </div>
+                  ))}
+                  {p.assignments.length === 0 && (
+                    <p className="text-sm text-ink-400">Nobody scheduled yet.</p>
+                  )}
                 </div>
-              ))
-            )}
+              </div>
+            ))
+          )}
 
-            {canManage && dayPlans.length > 0 && (
-              <form onSubmit={assign} className="space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-                  Schedule someone
-                </p>
-                {dayPlans.length > 1 && (
-                  <select className="ah-input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
-                    {dayPlans.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <input
-                  className="ah-input"
-                  placeholder="Position (e.g. Sound, Acoustic Guitar)"
-                  value={position}
-                  onChange={(e) => setPosition(e.target.value)}
-                />
-                <select className="ah-input" value={person} onChange={(e) => setPerson(e.target.value)}>
-                  <option value="">Assign later</option>
-                  {people.map((p) => (
+          {canManage && dayPlans.length > 0 && (
+            <form onSubmit={assign} className="space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+                Schedule someone
+              </p>
+              {dayPlans.length > 1 && (
+                <select className="ah-input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+                  {dayPlans.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.full_name}
-                      {label(p.id)}
+                      {p.title}
                     </option>
                   ))}
                 </select>
-                {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
-                <button
-                  type="submit"
-                  disabled={busy || !position.trim()}
-                  className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
-                >
-                  {busy ? "Adding…" : "Add to schedule"}
-                </button>
-              </form>
-            )}
-          </div>
+              )}
+              <input
+                className="ah-input"
+                placeholder="Position (e.g. Sound, Acoustic Guitar)"
+                value={position}
+                onChange={(e) => setPosition(e.target.value)}
+              />
+              <select className="ah-input" value={person} onChange={(e) => setPerson(e.target.value)}>
+                <option value="">Assign later</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.full_name}
+                    {label(p.id)}
+                  </option>
+                ))}
+              </select>
+              {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
+              <button
+                type="submit"
+                disabled={busy || !position.trim()}
+                className="w-full rounded-lg bg-brand-500 py-2 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+              >
+                {busy ? "Adding…" : "Add to schedule"}
+              </button>
+            </form>
+          )}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 }

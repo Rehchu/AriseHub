@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export interface Present {
@@ -19,7 +19,16 @@ export interface Present {
  */
 export function usePresence(channelId: string, me: { id: string; name: string } | null) {
   const [present, setPresent] = useState<Present[]>([]);
-  const [setTypingFn, setSetTypingFn] = useState<((t: boolean) => void) | null>(null);
+  // A ref, not state.
+  //
+  // This kept the typing callback in useState and set it from inside the
+  // effect, while the effect's dependency array included `me` — the object.
+  // A caller passing an inline `{ id, name }` (the obvious way to call this)
+  // hands over a new reference every render, so: effect runs -> setState ->
+  // render -> new `me` -> effect runs. An infinite loop, which is why nothing
+  // has imported this hook yet. Deps are now the primitive fields, and the
+  // callback lives in a ref so publishing it never causes a render.
+  const typingRef = useRef<((t: boolean) => void) | null>(null);
 
   useEffect(() => {
     if (!channelId || !me) return;
@@ -51,20 +60,27 @@ export function usePresence(channelId: string, me: { id: string; name: string } 
       });
 
     let idle: ReturnType<typeof setTimeout> | null = null;
-    setSetTypingFn(() => (typing: boolean) => {
+    typingRef.current = (typing: boolean) => {
       void room.track({ profileId: me.id, name: me.name, typing });
       if (idle) clearTimeout(idle);
       // Stop advertising if they walk away mid-sentence.
       if (typing) idle = setTimeout(() => void room.track({ profileId: me.id, name: me.name, typing: false }), 6000);
-    });
+    };
 
     return () => {
       if (idle) clearTimeout(idle);
+      typingRef.current = null;
       void supabase.removeChannel(room);
     };
-  }, [channelId, me?.id, me?.name, me]);
+    // Primitives only — see the note above. `me` itself must not be in here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId, me?.id, me?.name]);
 
-  return { present, setTyping: setTypingFn };
+  // Stable identity, so callers can put it in their own dependency arrays
+  // without reintroducing the loop this hook just escaped.
+  const setTyping = useCallback((typing: boolean) => typingRef.current?.(typing), []);
+
+  return { present, setTyping };
 }
 
 /** "Kristina is typing…" / "Kristina and 2 others are here" */

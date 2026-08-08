@@ -51,8 +51,15 @@ export function GlobalSearch() {
     }
   }, [open]);
 
+  // Monotonic id per search. Clearing the debounce timer stops a query that
+  // hasn't STARTED, but does nothing about six that are already in flight — so
+  // a slow early result could land after a fast later one and overwrite it,
+  // leaving the list showing matches for a prefix of what's in the box.
+  const searchSeq = useRef(0);
+
   const search = useCallback(
     async (term: string) => {
+      const seq = ++searchSeq.current;
       const like = `%${term}%`;
       setBusy(true);
       const [people, tasks, events, groupsRes, plans, forms] = await Promise.all([
@@ -63,6 +70,8 @@ export function GlobalSearch() {
         supabase.from("service_plans").select("id, title, service_date").ilike("title", like).limit(5),
         supabase.from("forms").select("id, title, slug").ilike("title", like).limit(4),
       ]);
+      // A newer search started while these were running — discard.
+      if (seq !== searchSeq.current) return;
 
       const out: Hit[] = [];
       for (const p of (people.data ?? []) as { id: string; full_name: string; email: string | null; role: string }[]) {

@@ -59,16 +59,20 @@ export async function POST(req: NextRequest) {
     // Existing records, indexed for matching.
     const { data: existing } = await admin
       .from("profiles")
-      .select("id, elvanto_id, email");
+      .select("id, elvanto_id, email, archived_at");
     const byElvanto = new Map<string, string>();
     const byEmail = new Map<string, string>();
+    // Whether we already consider them archived, so a sync can't undo it.
+    const archivedAlready = new Map<string, string | null>();
     for (const p of (existing ?? []) as {
       id: string;
       elvanto_id: string | null;
       email: string | null;
+      archived_at: string | null;
     }[]) {
       if (p.elvanto_id) byElvanto.set(p.elvanto_id, p.id);
       if (p.email) byEmail.set(p.email.toLowerCase(), p.id);
+      archivedAlready.set(p.id, p.archived_at);
     }
 
     for (const person of people) {
@@ -79,14 +83,28 @@ export async function POST(req: NextRequest) {
         byElvanto.get(person.id) ?? (email ? byEmail.get(email) : undefined);
 
       // Contact details only — never role or campus, which AriseHub owns.
-      const fields = {
+      const fields: Record<string, unknown> = {
         full_name: displayName(person),
         email,
         phone: bestPhone(person),
         date_of_birth: person.date_of_birth || null,
         elvanto_id: person.id,
-        archived_at: archived ? new Date().toISOString() : null,
       };
+
+      // Archival is one-directional, and archived_at is written once.
+      //
+      // This was `archived_at: archived ? now : null` on every row, every sync,
+      // which did two wrong things: it CLEARED the archive date for anyone
+      // archived here but still active in Elvanto — quietly resurrecting people
+      // somebody had deliberately removed — and it re-stamped the date each run
+      // for those who were archived, so "archived since" was always today.
+      //
+      // Archiving is an AriseHub decision, the same as role and campus. Elvanto
+      // may set it; only AriseHub clears it.
+      const previouslyArchived = existingId ? archivedAlready.get(existingId) : null;
+      if (archived && !previouslyArchived) {
+        fields.archived_at = new Date().toISOString();
+      }
 
       if (dryRun) {
         if (existingId) peopleUpdated++;

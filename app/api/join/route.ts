@@ -67,6 +67,21 @@ export async function POST(req: NextRequest) {
   if (l.expires_at && new Date(l.expires_at) < new Date()) return invalid;
   if (l.max_uses != null && l.uses >= l.max_uses) return invalid;
 
+  // Is this person already in the church's records without a login?
+  //
+  // Elvanto sync and family registration both create profiles with user_id
+  // null. When such a person later signs up, the auth trigger makes a SECOND
+  // profile — so their check-ins, family links, group memberships and serving
+  // history stay on the old row while their login points at an empty new one.
+  // Look them up first, then merge below.
+  const { data: preexisting } = await admin
+    .from("profiles")
+    .select("id, full_name")
+    .ilike("email", cleanEmail)
+    .is("user_id", null)
+    .maybeSingle();
+  const orphan = preexisting as { id: string; full_name: string } | null;
+
   // Create the account, already confirmed — the link was the invitation.
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email: cleanEmail,
@@ -98,6 +113,34 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     profileId = (p as { id: string } | null)?.id ?? null;
     if (!profileId) await new Promise((r) => setTimeout(r, 200));
+  }
+
+  // Merge onto the record they already had, rather than stranding it.
+  //
+  // Order matters: profiles.user_id is UNIQUE, so the trigger-created row has
+  // to release the id before the existing row can take it. The new row is
+  // seconds old and has nothing referencing it; the old one carries their
+  // check-ins, family, groups and serving history.
+  if (orphan && profileId && orphan.id !== profileId) {
+    const { error: delErr } = await admin.from("profiles").delete().eq("id", profileId);
+    if (!delErr) {
+      const { error: linkErr } = await admin
+        .from("profiles")
+        .update({ user_id: authUserId })
+        .eq("id", orphan.id);
+      // If claiming the old row fails, the account exists with no profile at
+      // all, which is worse than a duplicate — so put one back.
+      if (linkErr) {
+        const { data: recreated } = await admin
+          .from("profiles")
+          .insert({ user_id: authUserId, full_name: cleanName || orphan.full_name, email: cleanEmail })
+          .select("id")
+          .single();
+        profileId = (recreated as { id: string } | null)?.id ?? null;
+      } else {
+        profileId = orphan.id;
+      }
+    }
   }
 
   if (profileId) {

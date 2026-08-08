@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 
@@ -71,8 +71,11 @@ export function FormBuilder({
     window.location.href = "/forms";
   }
 
-  const publicUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/f/${form.slug}` : `/f/${form.slug}`;
+  // After mount, not during render — see the note in InvitePanel. Branching on
+  // `typeof window` mid-render is a hydration mismatch.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const publicUrl = `${origin}/f/${form.slug}`;
 
   async function toggleActive() {
     const next = !active;

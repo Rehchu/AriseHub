@@ -46,9 +46,17 @@ export function InstallPrompt() {
       e.preventDefault();
       setDeferred(e as BIPEvent);
     };
+    // Named, so it can actually be removed. This was an inline arrow with no
+    // matching removeEventListener, so every mount left another `appinstalled`
+    // handler attached to window holding a reference to a dead component's
+    // setState.
+    const onInstalled = () => setInstalled(true);
     window.addEventListener("beforeinstallprompt", onBIP);
-    window.addEventListener("appinstalled", () => setInstalled(true));
-    return () => window.removeEventListener("beforeinstallprompt", onBIP);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBIP);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
   }, []);
 
   if (installed) return null;

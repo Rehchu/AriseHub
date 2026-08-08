@@ -90,8 +90,13 @@ export function InvitePanel({
     });
   }
 
-  const urlFor = (code: string) =>
-    typeof window !== "undefined" ? `${window.location.origin}/join/${code}` : `/join/${code}`;
+  // Origin is resolved after mount, not during render. Branching on
+  // `typeof window` inside render makes the server emit one string and the
+  // client another, which is a hydration mismatch — React discards the server
+  // markup for that subtree and warns in the console.
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const urlFor = (code: string) => `${origin}/join/${code}`;
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
