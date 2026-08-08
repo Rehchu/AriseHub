@@ -13,6 +13,8 @@ export interface RoomRow {
   min_age: number | null;
   max_age: number | null;
   active: boolean;
+  /** Safeguarding ratio — children per adult. Null = no ratio warning. */
+  max_children_per_adult: number | null;
 }
 
 /**
@@ -59,7 +61,7 @@ export function RoomsAdmin({
         capacity: capacity === "" ? null : Number(capacity),
         active: true,
       })
-      .select("id, name, campus_id, capacity, min_age, max_age, active")
+      .select("id, name, campus_id, capacity, min_age, max_age, active, max_children_per_adult")
       .single();
     setBusy(false);
     if (error) return setError(error.message);
@@ -197,7 +199,7 @@ export function RoomsAdmin({
               </button>
             </div>
 
-            <div className="mt-2 grid grid-cols-3 gap-2 border-t border-ink-100 pt-2">
+            <div className="mt-2 grid grid-cols-2 gap-2 border-t border-ink-100 pt-2 sm:grid-cols-4">
               <label className="block">
                 <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-400">Min age</span>
                 <input
@@ -226,6 +228,23 @@ export function RoomsAdmin({
                   className="ah-input py-1 text-sm"
                   value={r.capacity ?? ""}
                   onChange={(e) => patch(r.id, { capacity: e.target.value === "" ? null : Number(e.target.value) })}
+                />
+              </label>
+              <label className="block">
+                <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-400">
+                  Children per adult
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  className="ah-input py-1 text-sm"
+                  placeholder="—"
+                  value={r.max_children_per_adult ?? ""}
+                  onChange={(e) =>
+                    patch(r.id, {
+                      max_children_per_adult: e.target.value === "" ? null : Number(e.target.value),
+                    })
+                  }
                 />
               </label>
             </div>

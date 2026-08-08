@@ -603,6 +603,48 @@ describe("calendar", () => {
   });
 });
 
+describe("room staffing", () => {
+  test("check-in staff can record how many adults are in a room", async (t) => {
+    if (!requireDb(t)) return;
+    const room = await db.query(`select id from public.rooms limit 1`);
+    if (room.rowCount === 0) return t.skip("no rooms configured");
+    const res = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `insert into public.room_staffing (room_id, on_date, adults) values ($1, current_date, 3)
+       on conflict (room_id, on_date) do update set adults = 3`,
+      [room.rows[0].id],
+    );
+    assert.ok(res.ok, `the station cannot record staffing: ${res.error}`);
+  });
+
+  test("a plain member cannot", async (t) => {
+    if (!requireDb(t)) return;
+    const room = await db.query(`select id from public.rooms limit 1`);
+    if (room.rowCount === 0) return t.skip("no rooms configured");
+    const res = await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.room_staffing (room_id, on_date, adults) values ($1, current_date, 99)
+       on conflict (room_id, on_date) do update set adults = 99`,
+      [room.rows[0].id],
+    );
+    assert.ok(deniedByPolicy(res), `expected denial, got: ${res.ok ? "ALLOWED" : res.error}`);
+  });
+
+  test("every children's room has a ratio", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await db.query(
+      `select name from public.rooms where active and max_children_per_adult is null`,
+    );
+    assert.equal(
+      res.rowCount,
+      0,
+      `no ratio set for: ${res.rows.map((r) => r.name).join(", ")} — those rooms warn about nothing`,
+    );
+  });
+});
+
 describe("storage", () => {
   test("a member cannot list arbitrary stored objects", async (t) => {
     if (!requireDb(t)) return;

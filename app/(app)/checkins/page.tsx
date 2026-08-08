@@ -25,7 +25,7 @@ export default async function CheckinsPage() {
   todayStart.setHours(0, 0, 0, 0);
 
   const [{ data: rooms }, { data: checkins }, { data: people }] = await Promise.all([
-    supabase.from("rooms").select("id, name, capacity, min_age, max_age, active").order("name"),
+    supabase.from("rooms").select("id, name, capacity, min_age, max_age, active, max_children_per_adult").order("name"),
     supabase
       .from("checkins")
       .select(
