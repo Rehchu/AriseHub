@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Campus, Department, UserRole } from "@/lib/database.types";
 import { Icon } from "@/components/shell/Icon";
 
-const ROLES: UserRole[] = ["Member", "Volunteer", "Staff", "IT_Admin", "Super_Admin"];
+const ROLES: UserRole[] = ["Member", "Volunteer", "Staff", "IT_Admin", "Admin", "Super_Admin"];
 
 interface InviteLink {
   id: string;

@@ -20,7 +20,7 @@ const TITLES = [
   "Administrator",
 ];
 
-const ROLES: UserRole[] = ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"];
+const ROLES: UserRole[] = ["Super_Admin", "Admin", "IT_Admin", "Staff", "Volunteer", "Member"];
 
 export interface PersonFieldDef {
   id: string;

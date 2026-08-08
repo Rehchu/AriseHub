@@ -1,0 +1,23 @@
+-- The Admin rung: Apostle and Pastor.
+--
+-- Agreed hierarchy (docs/access-model.md):
+--   Super Admin > Admin > Department Head > Staff > Volunteer / Praise Team Member > Member
+--
+-- Only ONE new enum value, deliberately. The other two rungs already exist in
+-- the data model and did not need inventing:
+--   * Department Head is department_members.role = 'lead', which
+--     is_any_department_lead() already reads and /invite already honours.
+--   * Praise Team Member is not a permission level at all — it is what the
+--     Praise Team calls a Volunteer. Same rung, different name, so it is a
+--     display label derived from department membership rather than a role.
+--     Making it a role would mean auditing all 19 role-keyed tables to keep
+--     those people from silently losing access.
+--
+-- Apostle vs Pastor is recorded in profiles.title, which stays display-only.
+-- The ACCESS comes from this role; the word beside the name is cosmetic. A
+-- permission you can grant by typing into a free-text box is not a permission.
+--
+-- Separate migration because Postgres will not let a new enum value be USED in
+-- the same transaction that adds it. 0060 does the using.
+
+alter type public.user_role add value if not exists 'Admin' after 'Super_Admin';

@@ -4,6 +4,10 @@
 
 export type UserRole =
   | "Super_Admin"
+  /** Apostle and Pastor (0059). Same reach as Super_Admin across the app, and
+   *  the only rung that sees every department chat. Which of the two someone is
+   *  lives in profiles.title, which stays cosmetic. */
+  | "Admin"
   | "IT_Admin"
   | "Staff"
   | "Volunteer"

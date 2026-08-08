@@ -232,23 +232,28 @@ export function RoomsAdmin({
                   onChange={(e) => patch(r.id, { capacity: e.target.value === "" ? null : Number(e.target.value) })}
                 />
               </label>
-              <label className="block">
-                <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-400">
-                  Children per adult
-                </span>
-                <input
-                  type="number"
-                  min={1}
-                  className="ah-input py-1 text-sm"
-                  placeholder="—"
-                  value={r.max_children_per_adult ?? ""}
-                  onChange={(e) =>
-                    patch(r.id, {
-                      max_children_per_adult: e.target.value === "" ? null : Number(e.target.value),
-                    })
-                  }
-                />
-              </label>
+              {/* Only for classrooms. Give a room an age range and it becomes
+                  one; without that it's a meeting space, and a safeguarding
+                  ratio on Fellowship Hall is noise. */}
+              {(r.min_age != null || r.max_age != null) && (
+                <label className="block">
+                  <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-ink-400">
+                    Children per adult
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    className="ah-input py-1 text-sm"
+                    placeholder="—"
+                    value={r.max_children_per_adult ?? ""}
+                    onChange={(e) =>
+                      patch(r.id, {
+                        max_children_per_adult: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </label>
+              )}
             </div>
           </div>
         ))}

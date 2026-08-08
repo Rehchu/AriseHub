@@ -350,6 +350,16 @@ export function CheckinStation({
   }
 
   const activeRooms = rooms.filter((r) => r.active);
+  /**
+   * Rooms children actually go into.
+   *
+   * A room is not a classroom. Fellowship Hall and the Dream Team Room get
+   * booked for adult meetings and events, and they were appearing in the
+   * staffing strip asking someone to count adults into them — a safeguarding
+   * ratio is meaningless there. The age range is what makes a room a classroom,
+   * and it is the same thing check-in uses to auto-assign a child.
+   */
+  const classrooms = activeRooms.filter((r) => r.min_age != null || r.max_age != null);
   const present = useMemo(() => checkins.filter((c) => c.status === "checked_in"), [checkins]);
 
   const occupancy = useMemo(() => {
@@ -872,13 +882,13 @@ export function CheckinStation({
           {/* Ratios. Capacity says whether the room is full; this says whether
               it is safely staffed, which is the number policy is written
               against and the one nobody was tracking. */}
-          {activeRooms.length > 0 && (
+          {classrooms.length > 0 && (
             <section className="mb-5">
               <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
-                Rooms — tap ± as adults arrive or leave
+                Classrooms — tap ± as adults arrive or leave
               </h2>
               <div className="space-y-1.5">
-                {activeRooms.map((r) => {
+                {classrooms.map((r) => {
                   const kids = occupancy[r.id] ?? 0;
                   const staff = adults[r.id] ?? 0;
                   const ratio = r.max_children_per_adult ?? null;

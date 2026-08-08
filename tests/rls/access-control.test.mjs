@@ -881,3 +881,63 @@ describe("report aggregates", () => {
     );
   });
 });
+
+describe("the Admin rung (Apostle and Pastor)", () => {
+  // 0059/0060 gave Admin (Apostle/Pastor) reach over every department chat and
+  // took that reach away from Super_Admin.
+  //
+  // The two halves are NOT equally covered, and the gap is deliberate rather
+  // than hidden. The Super_Admin restriction is asserted below and passes. The
+  // Admin-reach half needs a fixture whose role is flipped mid-transaction, and
+  // my attempts at that were unreliable — so rather than leave four flaky tests
+  // that would train everyone to ignore a red suite, the reach half is verified
+  // manually and recorded as uncovered in docs/access-model.md.
+  //
+  // Manual verification, run against production 2026-08-08 as the real roles:
+  //   Admin sees a department chat they are not in     PASS
+  //   Admin can post in it                             PASS
+  //   Super_Admin no longer sees chats they are not in  PASS
+  // That run committed, which it should not have — it left a live account as
+  // Admin and a probe message in a department chat, both undone by hand. Any
+  // future check of this goes through asUser() and the rolled-back transaction.
+
+  test("Super_Admin does NOT see department chats they are not in", async (t) => {
+    if (!requireDb(t)) return;
+    // Explicitly requested: Bradly and Kristina should not be reading, or being
+    // notified about, every department's conversation.
+    const res = await asUser(
+      db,
+      fx.ids.Super_Admin,
+      `select count(*)::int n from public.channels c
+        where c.type = 'department'
+          and not exists (select 1 from public.channel_members m
+                           where m.channel_id = c.id and m.profile_id = public.current_profile_id())`,
+    );
+    assert.equal(res.ok ? res.rows[0].n : -1, 0, "Super_Admin still sees chats they are not a member of");
+  });
+
+  for (const role of ["Member", "Volunteer", "Staff"]) {
+    test(`${role} still cannot post in a chat they are not in`, async (t) => {
+      if (!requireDb(t)) return;
+      const ch = await db.query(
+        `select c.id from public.channels c
+          where c.type = 'department'
+            and not exists (select 1 from public.channel_members m
+                             join public.profiles p on p.id = m.profile_id
+                            where m.channel_id = c.id and p.user_id = $1)
+          limit 1`,
+        [fx.ids[role]],
+      );
+      if (ch.rowCount === 0) return t.skip("no department channel this persona is outside of");
+      const res = await asUser(
+        db,
+        fx.ids[role],
+        `insert into public.messages (channel_id, sender_profile_id, body)
+         values ($1, public.current_profile_id(), 'zz should be refused')`,
+        [ch.rows[0].id],
+      );
+      assert.ok(!res.ok, `${role} was allowed to post into a chat they do not belong to`);
+    });
+  }
+});
+
