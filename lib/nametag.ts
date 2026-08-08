@@ -33,6 +33,15 @@ export interface NameTagData {
   room: string;
   code: string;
   hasAllergy: boolean;
+  /**
+   * When the check-in actually happened. Reprinting a badge on Monday must not
+   * stamp it with Monday's date — the date on a child's tag is evidence.
+   */
+  checkedInAt?: string;
+  campus?: string;
+  guardian?: string;
+  service?: string;
+  age?: number;
 }
 
 const esc = (s: string) =>

@@ -197,7 +197,10 @@ export function CheckinStation({
     const child = forKind("child");
     if (child) toPrint.push(child);
     if (tagOpts.showGuardianTag) {
-      const g = forKind("guardian");
+      // No guardian template? Print the child design again marked as a guardian
+      // tag rather than silently skipping it. A child checked in without a
+      // matching claim tag is the failure this whole code system exists to stop.
+      const g = forKind("guardian") ?? (child ? { ...child, kind: "guardian" as const } : undefined);
       if (g) toPrint.push(g);
     }
 
@@ -209,6 +212,11 @@ export function CheckinStation({
           code: d.code,
           church: tagOpts.churchName,
           hasAllergy: d.hasAllergy,
+          campus: d.campus,
+          guardian: d.guardian,
+          service: d.service,
+          age: d.age,
+          checkedInAt: d.checkedInAt,
         });
         // DYMO Connect here → shared print agent (iPads) → browser dialog.
         if (await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined)) continue;
@@ -302,6 +310,7 @@ export function CheckinStation({
         code,
         room: roomName,
         hasAllergy: person.has_allergy,
+        checkedInAt: nowIso,
       });
       setBusy(false);
       setQ("");
@@ -729,6 +738,8 @@ export function CheckinStation({
                     room: rooms.find((r) => r.id === c.room_id)?.name ?? "",
                     code: c.security_code ?? "",
                     hasAllergy: !!c.child?.has_allergy,
+                    // Reprint carries the ORIGINAL check-in time, not now.
+                    checkedInAt: c.checked_in_at,
                   })
                 }
                 className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-ink-500 hover:bg-ink-100"

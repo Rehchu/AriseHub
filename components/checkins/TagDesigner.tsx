@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import {
   blankDesign,
+  elementVisible,
   FONTS,
   LABEL_PRESETS,
+  MERGE_FIELDS,
+  newElementId,
+  PRINT_DPI,
   renderTagToPng,
   type TagDesign,
   type TagElement,
@@ -24,15 +28,35 @@ const SAMPLE = {
   room: "Arise Kids",
   code: "AB34",
   church: "Arise Church",
+  campus: "Main Campus",
+  guardian: "Dana R.",
+  service: "10:30 Service",
+  age: 6,
   hasAllergy: true,
 };
 
-let uid = 0;
-const newId = () => `e${Date.now().toString(36)}${uid++}`;
+const BASE_PX_PER_IN = 200; // on-screen scale at 100% zoom
+const MAX_HISTORY = 60;
+
+function emptyTemplate(): TagTemplate {
+  return {
+    id: "",
+    name: "New tag",
+    width_in: 3.5,
+    height_in: 1.125,
+    design: blankDesign(),
+    is_default: false,
+    kind: "child",
+  };
+}
 
 /**
  * Drag-and-drop name tag designer. The canvas is the label at screen scale;
  * elements are positioned as fractions so a design works on any label size.
+ *
+ * Screen scaling mirrors the renderer exactly: fontSize is pt scaled by label
+ * height, and every other length is px-at-96dpi scaled by the stage's px/in.
+ * Get that wrong and the stage stops being a preview.
  */
 export function TagDesigner({
   initial,
@@ -43,43 +67,91 @@ export function TagDesigner({
 }) {
   const supabase = createClient();
   const [templates, setTemplates] = useState<TagTemplate[]>(initial);
-  const [current, setCurrent] = useState<TagTemplate>(
-    initial[0] ?? {
-      id: "",
-      name: "Child name tag",
-      width_in: 3.5,
-      height_in: 1.125,
-      design: blankDesign(),
-      is_default: true,
-      kind: "child",
-    },
-  );
+  const [current, setCurrent] = useState<TagTemplate>(initial[0] ?? emptyTemplate());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const [artCat, setArtCat] = useState<ClipArt["category"]>("faith");
   const [artColor, setArtColor] = useState("#d2303b");
   const [preview, setPreview] = useState<string>("");
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [showGrid, setShowGrid] = useState(false);
+
+  const [past, setPast] = useState<TagTemplate[]>([]);
+  const [future, setFuture] = useState<TagTemplate[]>([]);
+  const savedSnapshot = useRef<string>(JSON.stringify(initial[0] ?? emptyTemplate()));
+  const clipboard = useRef<TagElement | null>(null);
+
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: string; mode: "move" | "resize"; dx: number; dy: number } | null>(null);
 
-  const PX_PER_IN = 200; // on-screen scale
+  const PX_PER_IN = BASE_PX_PER_IN * zoom;
   const stageW = current.width_in * PX_PER_IN;
   const stageH = current.height_in * PX_PER_IN;
+  // The renderer scales px-at-96dpi lengths by dpi/96; on screen the stage's
+  // px-per-inch plays the part of dpi.
+  const pxScale = PX_PER_IN / 96;
+  const ptScale = (PX_PER_IN / 72) * (current.height_in / 1.125);
 
   const selected = current.design.elements.find((e) => e.id === selectedId) ?? null;
+  const dirty = useMemo(() => JSON.stringify(current) !== savedSnapshot.current, [current]);
 
-  // Live preview (what actually prints).
+  // ---- history -------------------------------------------------------------
+  // Snapshots are taken when an interaction STARTS, not on every value change,
+  // so dragging a slider is one undo step rather than forty.
+  const pushHistory = useCallback(() => {
+    setPast((p) => [...p.slice(-(MAX_HISTORY - 1)), current]);
+    setFuture([]);
+  }, [current]);
+
+  const undo = useCallback(() => {
+    setPast((p) => {
+      if (p.length === 0) return p;
+      const prev = p[p.length - 1];
+      setFuture((f) => [current, ...f].slice(0, MAX_HISTORY));
+      setCurrent(prev);
+      setSelectedId(null);
+      return p.slice(0, -1);
+    });
+  }, [current]);
+
+  const redo = useCallback(() => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      setPast((p) => [...p, current]);
+      setCurrent(f[0]);
+      setSelectedId(null);
+      return f.slice(1);
+    });
+  }, [current]);
+
+  // ---- live preview --------------------------------------------------------
+  // Debounced: this rasterises the whole label at print DPI, and it used to run
+  // on every single pointermove during a drag.
   useEffect(() => {
     let cancelled = false;
-    renderTagToPng(current, SAMPLE, 200).then((png) => {
-      if (!cancelled) setPreview(png);
-    });
+    const t = setTimeout(() => {
+      renderTagToPng(current, SAMPLE, PRINT_DPI).then((png) => {
+        if (!cancelled) setPreview(png);
+      });
+    }, 220);
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
   }, [current]);
+
+  // Losing a design to a stray tab close is not recoverable — there is no draft.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   function update(patch: Partial<TagTemplate>) {
     setCurrent((c) => ({ ...c, ...patch }));
@@ -96,52 +168,131 @@ export function TagDesigner({
       },
     }));
   }
+  function setElements(fn: (els: TagElement[]) => TagElement[]) {
+    setCurrent((c) => ({ ...c, design: { ...c.design, elements: fn(c.design.elements) } }));
+  }
+
   function addEl(kind: TagElement["kind"]) {
+    pushHistory();
     const base: TagElement = {
-      id: newId(),
+      id: newElementId(),
       kind,
       x: 0.1,
       y: 0.35,
-      w: kind === "line" ? 0.5 : 0.35,
-      h: kind === "line" ? 0.02 : 0.2,
+      w: kind === "line" ? 0.5 : kind === "qr" ? 0.22 : 0.35,
+      h: kind === "line" ? 0.02 : kind === "qr" ? 0.62 : 0.2,
       ...(kind === "text"
-        ? { text: "New text", fontFamily: "Poppins", fontSize: 12, color: "#0b0b0c", align: "left" as const }
+        ? {
+            text: "New text",
+            fontFamily: "Poppins",
+            fontSize: 12,
+            color: "#0b0b0c",
+            align: "left" as const,
+          }
         : {}),
       ...(kind === "rect" || kind === "line" ? { fill: "#d2303b", radius: 2 } : {}),
+      ...(kind === "qr" || kind === "barcode"
+        ? { codeValue: "{code}", color: "#0b0b0c", ...(kind === "barcode" ? { showCodeText: true } : {}) }
+        : {}),
     };
-    setCurrent((c) => ({ ...c, design: { ...c.design, elements: [...c.design.elements, base] } }));
+    setElements((els) => [...els, base]);
     setSelectedId(base.id);
   }
+
   // Clip art is added as an image element backed by an inline SVG data URL,
   // so it scales and prints cleanly and can be recoloured on insert.
   function addArt(art: ClipArt) {
+    pushHistory();
     const el: TagElement = {
-      id: newId(),
+      id: newElementId(),
       kind: "image",
+      name: art.label,
       x: 0.06,
       y: 0.25,
       w: 0.2,
       h: 0.45,
       src: clipArtDataUrl(art, artColor),
     };
-    setCurrent((c) => ({ ...c, design: { ...c.design, elements: [...c.design.elements, el] } }));
+    setElements((els) => [...els, el]);
     setSelectedId(el.id);
     setArtOpen(false);
   }
 
   function removeEl(id: string) {
-    setCurrent((c) => ({
-      ...c,
-      design: { ...c.design, elements: c.design.elements.filter((e) => e.id !== id) },
-    }));
+    const el = current.design.elements.find((e) => e.id === id);
+    if (el?.locked) return;
+    pushHistory();
+    setElements((els) => els.filter((e) => e.id !== id));
     setSelectedId(null);
   }
 
-  // ---- drag / resize on the stage ----
+  function duplicateEl(id: string) {
+    const el = current.design.elements.find((e) => e.id === id);
+    if (!el) return;
+    pushHistory();
+    const copy: TagElement = {
+      ...el,
+      id: newElementId(),
+      x: Math.min(0.95, el.x + 0.03),
+      y: Math.min(0.95, el.y + 0.03),
+    };
+    setElements((els) => [...els, copy]);
+    setSelectedId(copy.id);
+  }
+
+  /** Move an element in the draw order. Later in the array = drawn on top. */
+  function reorder(id: string, to: "front" | "back" | "up" | "down") {
+    pushHistory();
+    setElements((els) => {
+      const i = els.findIndex((e) => e.id === id);
+      if (i === -1) return els;
+      const next = [...els];
+      const [el] = next.splice(i, 1);
+      if (to === "front") next.push(el);
+      else if (to === "back") next.unshift(el);
+      else if (to === "up") next.splice(Math.min(next.length, i + 1), 0, el);
+      else next.splice(Math.max(0, i - 1), 0, el);
+      return next;
+    });
+  }
+
+  function alignEl(id: string, how: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") {
+    const el = current.design.elements.find((e) => e.id === id);
+    if (!el) return;
+    pushHistory();
+    const patch: Partial<TagElement> =
+      how === "left" ? { x: 0.02 }
+      : how === "right" ? { x: 1 - el.w - 0.02 }
+      : how === "hcenter" ? { x: (1 - el.w) / 2 }
+      : how === "top" ? { y: 0.02 }
+      : how === "bottom" ? { y: 1 - el.h - 0.02 }
+      : { y: (1 - el.h) / 2 };
+    updateEl(id, patch);
+  }
+
+  function insertMergeField(token: string) {
+    if (!selected || selected.kind !== "text") return;
+    pushHistory();
+    updateEl(selected.id, { text: `${selected.text ?? ""}${token}` });
+  }
+
+  // ---- drag / resize on the stage ------------------------------------------
+  const snap = useCallback(
+    (v: number) => {
+      const g = current.design.gridSize ?? 0.05;
+      return current.design.snapToGrid ? Math.round(v / g) * g : v;
+    },
+    [current.design.gridSize, current.design.snapToGrid],
+  );
+
   function onPointerDown(e: React.PointerEvent, el: TagElement, mode: "move" | "resize") {
+    if (el.locked) return;
     e.stopPropagation();
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    // Capture on the STAGE, not the element: capturing on the element meant a
+    // fast drag that outran the pointer dropped the gesture entirely.
+    stageRef.current?.setPointerCapture(e.pointerId);
     const rect = stageRef.current!.getBoundingClientRect();
+    pushHistory();
     drag.current = {
       id: el.id,
       mode,
@@ -150,6 +301,7 @@ export function TagDesigner({
     };
     setSelectedId(el.id);
   }
+
   function onPointerMove(e: React.PointerEvent) {
     const d = drag.current;
     if (!d) return;
@@ -160,18 +312,99 @@ export function TagDesigner({
     if (!el) return;
     if (d.mode === "move") {
       updateEl(d.id, {
-        x: clamp(fx - d.dx, -0.1, 1),
-        y: clamp(fy - d.dy, -0.1, 1),
+        x: snap(clamp(fx - d.dx, -0.1, 1)),
+        y: snap(clamp(fy - d.dy, -0.1, 1)),
       });
     } else {
       updateEl(d.id, {
-        w: clamp(fx - el.x, 0.03, 1.2),
-        h: clamp(fy - el.y, 0.03, 1.2),
+        w: snap(clamp(fx - el.x, 0.03, 1.2)),
+        h: snap(clamp(fy - el.y, 0.03, 1.2)),
       });
     }
   }
-  function onPointerUp() {
+
+  function endDrag() {
     drag.current = null;
+  }
+
+  // ---- keyboard ------------------------------------------------------------
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      const typing =
+        t &&
+        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+      const mod = e.metaKey || e.ctrlKey;
+
+      if (mod && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redo();
+        return;
+      }
+      if (typing) return;
+
+      if (e.key === "Escape") {
+        setSelectedId(null);
+        return;
+      }
+      if (!selected) return;
+
+      if (mod && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        duplicateEl(selected.id);
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "c") {
+        clipboard.current = selected;
+        return;
+      }
+      if (mod && e.key.toLowerCase() === "v") {
+        if (!clipboard.current) return;
+        e.preventDefault();
+        pushHistory();
+        const copy: TagElement = {
+          ...clipboard.current,
+          id: newElementId(),
+          x: Math.min(0.95, clipboard.current.x + 0.03),
+          y: Math.min(0.95, clipboard.current.y + 0.03),
+        };
+        setElements((els) => [...els, copy]);
+        setSelectedId(copy.id);
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        removeEl(selected.id);
+        return;
+      }
+      const step = e.shiftKey ? 0.05 : 0.005;
+      const nudge: Record<string, Partial<TagElement>> = {
+        ArrowLeft: { x: clamp(selected.x - step, -0.1, 1) },
+        ArrowRight: { x: clamp(selected.x + step, -0.1, 1) },
+        ArrowUp: { y: clamp(selected.y - step, -0.1, 1) },
+        ArrowDown: { y: clamp(selected.y + step, -0.1, 1) },
+      };
+      if (nudge[e.key]) {
+        e.preventDefault();
+        if (selected.locked) return;
+        updateEl(selected.id, nudge[e.key]);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, undo, redo, pushHistory]);
+
+  // ---- persistence ---------------------------------------------------------
+  function confirmDiscard(): boolean {
+    if (!dirty) return true;
+    return window.confirm("This template has unsaved changes. Discard them?");
   }
 
   async function save() {
@@ -190,45 +423,105 @@ export function TagDesigner({
       : await supabase.from("nametag_templates").insert(row).select("*").single();
     setSaving(false);
     if (res.error) {
-      setMsg(res.error.message);
+      // RLS rejections read as gibberish to a volunteer; say what it means.
+      const m = /row-level security|permission denied/i.test(res.error.message)
+        ? "You don't have permission to change name tag templates — ask an admin."
+        : res.error.message;
+      setMsg({ text: m, bad: true });
       return;
     }
     const saved = res.data as TagTemplate;
     setCurrent(saved);
-    setTemplates((ts) => {
-      const rest = ts.filter((t) => t.id !== saved.id);
-      return [...rest, saved];
-    });
-    setMsg("Saved. Check-in will use this design.");
+    savedSnapshot.current = JSON.stringify(saved);
+    // Keep list order stable — replacing in place stops the picker reshuffling
+    // under the user every time they save.
+    setTemplates((ts) =>
+      ts.some((t) => t.id === saved.id) ? ts.map((t) => (t.id === saved.id ? saved : t)) : [...ts, saved],
+    );
+    setMsg({ text: "Saved. Check-in will use this design." });
+  }
+
+  useEffect(() => {
+    if (!msg || msg.bad) return;
+    const t = setTimeout(() => setMsg(null), 4000);
+    return () => clearTimeout(t);
+  }, [msg]);
+
+  async function deleteTemplate() {
+    if (!current.id) return;
+    if (!window.confirm(`Delete "${current.name}"? This can't be undone.`)) return;
+    const { error } = await supabase.from("nametag_templates").delete().eq("id", current.id);
+    if (error) {
+      setMsg({ text: error.message, bad: true });
+      return;
+    }
+    const rest = templates.filter((t) => t.id !== current.id);
+    setTemplates(rest);
+    const next = rest[0] ?? emptyTemplate();
+    setCurrent(next);
+    savedSnapshot.current = JSON.stringify(next);
+    setSelectedId(null);
+  }
+
+  function duplicateTemplate() {
+    const copy: TagTemplate = {
+      ...current,
+      id: "",
+      name: `${current.name} copy`,
+      is_default: false,
+      // Fresh ids, or edits to the copy would land on the original's elements.
+      design: {
+        ...current.design,
+        elements: current.design.elements.map((e) => ({ ...e, id: newElementId() })),
+      },
+    };
+    setCurrent(copy);
+    savedSnapshot.current = "";
+    setSelectedId(null);
   }
 
   async function uploadImage(file: File, target: "background" | "element") {
+    // Designs live in a jsonb column and images are inlined as data URLs, so an
+    // unbounded upload becomes an unbounded row that every check-in station then
+    // downloads on every print.
+    if (file.size > 400_000) {
+      setMsg({
+        text: `That image is ${(file.size / 1024).toFixed(0)}KB. Please use one under 400KB — labels print at 300dpi, so small images are plenty.`,
+        bad: true,
+      });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       const src = String(reader.result);
+      pushHistory();
       if (target === "background") updateDesign({ backgroundImage: src });
       else {
         const el: TagElement = {
-          id: newId(),
+          id: newElementId(),
           kind: "image",
+          name: file.name,
           x: 0.05,
           y: 0.3,
           w: 0.25,
           h: 0.4,
           src,
         };
-        setCurrent((c) => ({ ...c, design: { ...c.design, elements: [...c.design.elements, el] } }));
+        setElements((els) => [...els, el]);
         setSelectedId(el.id);
       }
     };
     reader.readAsDataURL(file);
   }
 
+  const gridSize = current.design.gridSize ?? 0.05;
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-ink-50">
       <div className="mx-auto max-w-5xl px-4 py-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <h1 className="font-display text-xl font-bold text-ink-900">Name tag designer</h1>
+          {dirty && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Unsaved</span>}
           <div className="flex-1" />
           {templates.length > 0 && (
             <select
@@ -236,10 +529,12 @@ export function TagDesigner({
               value={current.id}
               onChange={(e) => {
                 const t = templates.find((x) => x.id === e.target.value);
-                if (t) {
-                  setCurrent(t);
-                  setSelectedId(null);
-                }
+                if (!t || !confirmDiscard()) return;
+                setCurrent(t);
+                savedSnapshot.current = JSON.stringify(t);
+                setPast([]);
+                setFuture([]);
+                setSelectedId(null);
               }}
             >
               {!current.id && <option value="">Untitled (unsaved)</option>}
@@ -252,15 +547,12 @@ export function TagDesigner({
           )}
           <button
             onClick={() => {
-              setCurrent({
-                id: "",
-                name: "New tag",
-                width_in: 3.5,
-                height_in: 1.125,
-                design: blankDesign(),
-                is_default: false,
-                kind: "child",
-              });
+              if (!confirmDiscard()) return;
+              const t = emptyTemplate();
+              setCurrent(t);
+              savedSnapshot.current = "";
+              setPast([]);
+              setFuture([]);
               setSelectedId(null);
             }}
             className="rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700"
@@ -274,12 +566,26 @@ export function TagDesigner({
           >
             {saving ? "Saving…" : "Save"}
           </button>
-          <button onClick={onClose} className="rounded-lg px-2 py-1.5 text-ink-500 hover:bg-ink-100">
+          <button
+            onClick={() => {
+              if (confirmDiscard()) onClose();
+            }}
+            className="rounded-lg px-2 py-1.5 text-ink-500 hover:bg-ink-100"
+          >
             <Icon name="x" />
           </button>
         </div>
 
-        {msg && <p className="mb-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</p>}
+        {msg && (
+          <p
+            className={
+              "mb-3 rounded-lg px-3 py-2 text-sm " +
+              (msg.bad ? "bg-brand-50 text-brand-700" : "bg-emerald-50 text-emerald-800")
+            }
+          >
+            {msg.text}
+          </p>
+        )}
 
         <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
           {/* ---- Stage ---- */}
@@ -288,13 +594,17 @@ export function TagDesigner({
               <input
                 className="ah-input w-auto flex-1 py-1.5 text-sm"
                 value={current.name}
+                onFocus={pushHistory}
                 onChange={(e) => update({ name: e.target.value })}
                 placeholder="Template name"
               />
               <select
                 className="ah-input w-auto py-1.5 text-sm"
                 value={current.kind}
-                onChange={(e) => update({ kind: e.target.value as "child" | "guardian" })}
+                onChange={(e) => {
+                  pushHistory();
+                  update({ kind: e.target.value as "child" | "guardian" });
+                }}
               >
                 <option value="child">Child tag</option>
                 <option value="guardian">Guardian pickup tag</option>
@@ -303,117 +613,206 @@ export function TagDesigner({
                 <input
                   type="checkbox"
                   checked={current.is_default}
-                  onChange={(e) => update({ is_default: e.target.checked })}
+                  onChange={(e) => {
+                    pushHistory();
+                    update({ is_default: e.target.checked });
+                  }}
                 />
                 Default
               </label>
             </div>
 
-            <div
-              ref={stageRef}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onClick={() => setSelectedId(null)}
-              className="relative mx-auto overflow-hidden rounded-lg border-2 border-dashed border-ink-300 bg-white shadow-sm"
-              style={{
-                width: stageW,
-                height: stageH,
-                maxWidth: "100%",
-                background: current.design.background,
-                backgroundImage: current.design.backgroundImage
-                  ? `url(${current.design.backgroundImage})`
-                  : undefined,
-                backgroundSize: "cover",
-                border: current.design.borderWidth
-                  ? current.design.borderWidth + "px solid " + (current.design.borderColor ?? "#0b0b0c")
-                  : undefined,
-                borderRadius: current.design.borderRadius ?? undefined,
-                filter: current.design.monochrome ? "grayscale(1) contrast(3)" : undefined,
-              }}
-            >
-              {current.design.elements.map((el) => {
-                const sel = el.id === selectedId;
-                const common: React.CSSProperties = {
-                  position: "absolute",
-                  left: `${el.x * 100}%`,
-                  top: `${el.y * 100}%`,
-                  width: `${el.w * 100}%`,
-                  height: `${el.h * 100}%`,
-                  opacity: el.opacity ?? 1,
-                  transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
-                  outline: sel ? "2px solid #d2303b" : "1px dashed rgba(0,0,0,.15)",
-                  cursor: "move",
-                  touchAction: "none",
-                };
-                return (
+            {/* Toolbar */}
+            <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-ink-100 bg-white px-2 py-1.5">
+              <ToolBtn onClick={undo} disabled={past.length === 0} title="Undo (Ctrl+Z)">↶</ToolBtn>
+              <ToolBtn onClick={redo} disabled={future.length === 0} title="Redo (Ctrl+Shift+Z)">↷</ToolBtn>
+              <Sep />
+              <ToolBtn onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))} title="Zoom out">−</ToolBtn>
+              <span className="w-11 text-center text-xs tabular-nums text-ink-500">{Math.round(zoom * 100)}%</span>
+              <ToolBtn onClick={() => setZoom((z) => Math.min(3, +(z + 0.25).toFixed(2)))} title="Zoom in">+</ToolBtn>
+              <Sep />
+              <ToolBtn onClick={() => setShowGrid((g) => !g)} active={showGrid} title="Show grid">#</ToolBtn>
+              <ToolBtn
+                onClick={() => updateDesign({ snapToGrid: !current.design.snapToGrid })}
+                active={!!current.design.snapToGrid}
+                title="Snap to grid"
+              >
+                ⇥
+              </ToolBtn>
+              <div className="flex-1" />
+              <span className="hidden text-xs text-ink-400 sm:inline">
+                Arrows nudge · Del removes · Ctrl+D duplicates
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <div
+                ref={stageRef}
+                onPointerMove={onPointerMove}
+                onPointerUp={endDrag}
+                onPointerCancel={endDrag}
+                onLostPointerCapture={endDrag}
+                onClick={() => setSelectedId(null)}
+                className="relative mx-auto overflow-hidden rounded-lg border-2 border-dashed border-ink-300 bg-white shadow-sm"
+                style={{
+                  width: stageW,
+                  height: stageH,
+                  flex: "0 0 auto",
+                  background: current.design.background,
+                  backgroundImage: current.design.backgroundImage
+                    ? `url(${current.design.backgroundImage})`
+                    : undefined,
+                  // Matches the renderer, which letterboxes by default. The stage
+                  // used to force `cover` and quietly disagree with the print.
+                  backgroundSize: current.design.backgroundFit === "cover"
+                    ? "cover"
+                    : current.design.backgroundFit === "stretch"
+                      ? "100% 100%"
+                      : "contain",
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "center",
+                  border: current.design.borderWidth
+                    ? current.design.borderWidth * pxScale + "px solid " + (current.design.borderColor ?? "#0b0b0c")
+                    : undefined,
+                  borderRadius: (current.design.borderRadius ?? 0) * pxScale || undefined,
+                  filter: current.design.monochrome ? "grayscale(1) contrast(3)" : undefined,
+                }}
+              >
+                {showGrid && (
                   <div
-                    key={el.id}
-                    style={common}
-                    onPointerDown={(e) => onPointerDown(e, el, "move")}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {el.kind === "text" && (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent:
-                            el.align === "center" ? "center" : el.align === "right" ? "flex-end" : "flex-start",
-                          color: el.color,
-                          fontFamily: `"${el.fontFamily}", system-ui, sans-serif`,
-                          fontWeight: el.bold ? 700 : 400,
-                          fontStyle: el.italic ? "italic" : "normal",
-                          fontSize: (el.fontSize ?? 12) * (PX_PER_IN / 72) * (current.height_in / 1.125),
-                          letterSpacing: el.letterSpacing ?? 0,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          pointerEvents: "none",
-                          textTransform: el.uppercase ? "uppercase" : undefined,
-                        }}
-                      >
-                        {el.text}
-                      </div>
-                    )}
-                    {(el.kind === "rect" || el.kind === "line") && (
-                      <div
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          background: el.fill,
-                          borderRadius: el.shape === "ellipse" ? "50%" : (el.radius ?? 0),
-                          border: el.borderWidth
-                            ? el.borderWidth + "px solid " + (el.borderColor ?? "#0b0b0c")
-                            : undefined,
-                          pointerEvents: "none",
-                        }}
-                      />
-                    )}
-                    {el.kind === "image" && el.src && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={el.src}
-                        alt=""
-                        style={{ width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none" }}
-                      />
-                    )}
-                    {sel && (
-                      <span
-                        onPointerDown={(e) => onPointerDown(e, el, "resize")}
-                        className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-se-resize rounded-full bg-brand-500"
-                        style={{ touchAction: "none" }}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      backgroundImage:
+                        "linear-gradient(to right, rgba(0,0,0,.10) 1px, transparent 1px)," +
+                        "linear-gradient(to bottom, rgba(0,0,0,.10) 1px, transparent 1px)",
+                      backgroundSize: `${gridSize * 100}% ${gridSize * 100}%`,
+                    }}
+                  />
+                )}
+                {!!current.design.safeMarginIn && (
+                  <div
+                    className="pointer-events-none absolute border border-dashed border-brand-300"
+                    style={{
+                      left: current.design.safeMarginIn * PX_PER_IN,
+                      top: current.design.safeMarginIn * PX_PER_IN,
+                      right: current.design.safeMarginIn * PX_PER_IN,
+                      bottom: current.design.safeMarginIn * PX_PER_IN,
+                    }}
+                  />
+                )}
+
+                {current.design.elements.map((el) => {
+                  const sel = el.id === selectedId;
+                  if (el.hidden) return null;
+                  const dimmed = !elementVisible(el, SAMPLE, current.kind);
+                  const common: React.CSSProperties = {
+                    position: "absolute",
+                    left: `${el.x * 100}%`,
+                    top: `${el.y * 100}%`,
+                    width: `${el.w * 100}%`,
+                    height: `${el.h * 100}%`,
+                    opacity: (el.opacity ?? 1) * (dimmed ? 0.25 : 1),
+                    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+                    outline: sel
+                      ? "2px solid #d2303b"
+                      : el.locked
+                        ? "1px dashed rgba(0,0,0,.35)"
+                        : "1px dashed rgba(0,0,0,.15)",
+                    cursor: el.locked ? "not-allowed" : "move",
+                    touchAction: "none",
+                  };
+                  return (
+                    <div
+                      key={el.id}
+                      style={common}
+                      onPointerDown={(e) => onPointerDown(e, el, "move")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedId(el.id);
+                      }}
+                    >
+                      {el.kind === "text" && (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            display: "flex",
+                            alignItems:
+                              el.valign === "top" ? "flex-start" : el.valign === "bottom" ? "flex-end" : "center",
+                            justifyContent:
+                              el.align === "center" ? "center" : el.align === "right" ? "flex-end" : "flex-start",
+                            textAlign: el.align ?? "left",
+                            color: el.color,
+                            fontFamily: `"${el.fontFamily}", system-ui, sans-serif`,
+                            fontWeight: el.bold ? 700 : 400,
+                            fontStyle: el.italic ? "italic" : "normal",
+                            fontSize: (el.fontSize ?? 12) * ptScale,
+                            lineHeight: el.lineHeight ?? 1.2,
+                            letterSpacing: (el.letterSpacing ?? 0) * pxScale,
+                            whiteSpace: el.wrap ? "normal" : "nowrap",
+                            overflow: "hidden",
+                            pointerEvents: "none",
+                            textTransform: el.uppercase ? "uppercase" : undefined,
+                          }}
+                        >
+                          {el.text}
+                        </div>
+                      )}
+                      {(el.kind === "rect" || el.kind === "line") && (
+                        <div
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            background: el.fill === "transparent" ? "transparent" : el.fill,
+                            borderRadius: el.shape === "ellipse" ? "50%" : (el.radius ?? 0) * pxScale,
+                            border: el.borderWidth
+                              ? `${el.borderWidth * pxScale}px ${el.borderStyle ?? "solid"} ${el.borderColor ?? "#0b0b0c"}`
+                              : undefined,
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
+                      {el.kind === "image" && el.src && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={el.src}
+                          alt=""
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: el.fit === "cover" ? "cover" : el.fit === "stretch" ? "fill" : "contain",
+                            pointerEvents: "none",
+                          }}
+                        />
+                      )}
+                      {(el.kind === "qr" || el.kind === "barcode") && (
+                        <div
+                          className="flex h-full w-full items-center justify-center border border-dashed border-ink-300 bg-white/70 text-center text-[10px] font-medium text-ink-500"
+                          style={{ pointerEvents: "none" }}
+                        >
+                          {el.kind === "qr" ? "QR" : "▌▌▍▌"}
+                          <span className="ml-1 font-mono">{el.codeValue ?? "{code}"}</span>
+                        </div>
+                      )}
+                      {sel && !el.locked && (
+                        <span
+                          onPointerDown={(e) => onPointerDown(e, el, "resize")}
+                          className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 cursor-se-resize rounded-full border border-white bg-brand-500"
+                          style={{ touchAction: "none" }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
               <AddBtn onClick={() => addEl("text")}>+ Text</AddBtn>
               <AddBtn onClick={() => addEl("rect")}>+ Box</AddBtn>
               <AddBtn onClick={() => addEl("line")}>+ Line</AddBtn>
+              <AddBtn onClick={() => addEl("qr")}>+ QR code</AddBtn>
+              <AddBtn onClick={() => addEl("barcode")}>+ Barcode</AddBtn>
               <AddBtn onClick={() => setArtOpen((o) => !o)}>+ Clip art</AddBtn>
               <label className="cursor-pointer rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-200">
                 + Image
@@ -473,59 +872,129 @@ export function TagDesigner({
               </div>
             )}
 
-            <p className="mt-3 text-xs text-ink-500">
-              Placeholders: <code>{"{name}"}</code> <code>{"{room}"}</code>{" "}
-              <code>{"{code}"}</code> <code>{"{date}"}</code> <code>{"{church}"}</code>{" "}
-              <code>{"{allergy}"}</code> — they fill in per child at check-in.
-            </p>
+            <div className="mt-3">
+              <p className="mb-1 text-xs text-ink-500">
+                Merge fields — click to add to the selected text box:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {MERGE_FIELDS.map((f) => (
+                  <button
+                    key={f.token}
+                    title={f.label}
+                    disabled={!selected || selected.kind !== "text"}
+                    onClick={() => insertMergeField(f.token)}
+                    className="rounded-md bg-ink-100 px-2 py-1 font-mono text-xs text-ink-600 transition hover:bg-ink-200 disabled:opacity-40"
+                  >
+                    {f.token}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {preview && (
               <div className="mt-4">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
-                  Print preview (actual output)
+                  Print preview (actual output at {PRINT_DPI}dpi)
                 </p>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={preview} alt="Label preview" className="rounded border border-ink-200" style={{ width: stageW, maxWidth: "100%" }} />
+                <img
+                  src={preview}
+                  alt="Label preview"
+                  className="rounded border border-ink-200"
+                  style={{ width: stageW, maxWidth: "100%" }}
+                />
               </div>
             )}
           </div>
 
           {/* ---- Inspector ---- */}
           <aside className="space-y-4">
+            <Panel title="Layers">
+              {current.design.elements.length === 0 && (
+                <p className="text-sm text-ink-400">Nothing on the label yet.</p>
+              )}
+              {/* Topmost first — that's the order people expect to read a stack in. */}
+              <ul className="space-y-1">
+                {[...current.design.elements].reverse().map((el) => (
+                  <li
+                    key={el.id}
+                    className={
+                      "flex items-center gap-1 rounded-md px-1.5 py-1 text-sm " +
+                      (el.id === selectedId ? "bg-brand-50 text-brand-800" : "text-ink-600 hover:bg-ink-50")
+                    }
+                  >
+                    <button className="min-w-0 flex-1 truncate text-left" onClick={() => setSelectedId(el.id)}>
+                      {el.name || defaultLayerName(el)}
+                    </button>
+                    <IconBtn
+                      title={el.hidden ? "Show" : "Hide"}
+                      onClick={() => {
+                        pushHistory();
+                        updateEl(el.id, { hidden: !el.hidden });
+                      }}
+                    >
+                      {el.hidden ? "◌" : "◉"}
+                    </IconBtn>
+                    <IconBtn
+                      title={el.locked ? "Unlock" : "Lock"}
+                      onClick={() => {
+                        pushHistory();
+                        updateEl(el.id, { locked: !el.locked });
+                      }}
+                    >
+                      {el.locked ? "🔒" : "🔓"}
+                    </IconBtn>
+                    <IconBtn title="Bring forward" onClick={() => reorder(el.id, "up")}>▲</IconBtn>
+                    <IconBtn title="Send backward" onClick={() => reorder(el.id, "down")}>▼</IconBtn>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+
             <Panel title="Label">
               <Row label="Label size (DYMO stock)">
                 <select
                   className="ah-input py-1 text-sm"
-                  value={current.width_in + "x" + current.height_in}
+                  // Keyed by preset id: several rolls share dimensions, so a
+                  // width×height value could never round-trip to the right one.
+                  value={
+                    LABEL_PRESETS.find((l) => l.w === current.width_in && l.h === current.height_in)?.id ?? ""
+                  }
                   onChange={(e) => {
-                    const preset = LABEL_PRESETS.find(
-                      (l) => l.w + "x" + l.h === e.target.value,
-                    );
-                    if (preset) update({ width_in: preset.w, height_in: preset.h });
+                    const preset = LABEL_PRESETS.find((l) => l.id === e.target.value);
+                    if (preset) {
+                      pushHistory();
+                      update({ width_in: preset.w, height_in: preset.h });
+                    }
                   }}
                 >
                   <option value="">Custom…</option>
                   {LABEL_PRESETS.map((l) => (
-                    <option key={l.name} value={l.w + "x" + l.h}>
+                    <option key={l.id} value={l.id}>
                       {l.name} — {l.w}in × {l.h}in{l.note ? " (" + l.note + ")" : ""}
                     </option>
                   ))}
                 </select>
               </Row>
-              <Row label="Width (in)">
-                <input type="number" step="0.125" className="ah-input py-1 text-sm" value={current.width_in}
-                  onChange={(e) => update({ width_in: Number(e.target.value) || 3.5 })} />
-              </Row>
-              <Row label="Height (in)">
-                <input type="number" step="0.125" className="ah-input py-1 text-sm" value={current.height_in}
-                  onChange={(e) => update({ height_in: Number(e.target.value) || 1.125 })} />
-              </Row>
+              <div className="grid grid-cols-2 gap-2">
+                <Row label="Width (in)">
+                  <input type="number" step="0.125" className="ah-input py-1 text-sm" value={current.width_in}
+                    onFocus={pushHistory}
+                    onChange={(e) => update({ width_in: Number(e.target.value) || 3.5 })} />
+                </Row>
+                <Row label="Height (in)">
+                  <input type="number" step="0.125" className="ah-input py-1 text-sm" value={current.height_in}
+                    onFocus={pushHistory}
+                    onChange={(e) => update({ height_in: Number(e.target.value) || 1.125 })} />
+                </Row>
+              </div>
               <Row label="Background">
                 <input type="color" className="h-8 w-full rounded border border-ink-200" value={current.design.background}
                   onChange={(e) => updateDesign({ background: e.target.value })} />
               </Row>
               <Row label={"Label border (" + (current.design.borderWidth ?? 0) + "px)"}>
                 <input type="range" min={0} max={12} value={current.design.borderWidth ?? 0} className="w-full"
+                  onPointerDown={pushHistory}
                   onChange={(e) => updateDesign({ borderWidth: Number(e.target.value) })} />
               </Row>
               {(current.design.borderWidth ?? 0) > 0 && (
@@ -537,80 +1006,190 @@ export function TagDesigner({
                   </Row>
                   <Row label={"Border radius (" + (current.design.borderRadius ?? 0) + ")"}>
                     <input type="range" min={0} max={40} value={current.design.borderRadius ?? 0} className="w-full"
+                      onPointerDown={pushHistory}
                       onChange={(e) => updateDesign({ borderRadius: Number(e.target.value) })} />
                   </Row>
                 </>
               )}
               <label className="flex items-center gap-2 text-sm text-ink-700">
                 <input type="checkbox" checked={!!current.design.monochrome}
-                  onChange={(e) => updateDesign({ monochrome: e.target.checked })} />
+                  onChange={(e) => {
+                    pushHistory();
+                    updateDesign({ monochrome: e.target.checked });
+                  }} />
                 Black &amp; white (matches thermal printing)
               </label>
+              {current.design.monochrome && (
+                <Row label={`Threshold (${current.design.monochromeThreshold ?? 160})`}>
+                  <input type="range" min={60} max={240} value={current.design.monochromeThreshold ?? 160} className="w-full"
+                    onPointerDown={pushHistory}
+                    onChange={(e) => updateDesign({ monochromeThreshold: Number(e.target.value) })} />
+                </Row>
+              )}
+              <Row label={`Safe margin (${(current.design.safeMarginIn ?? 0).toFixed(3)}in)`}>
+                <input type="range" min={0} max={0.25} step={0.015625} value={current.design.safeMarginIn ?? 0} className="w-full"
+                  onPointerDown={pushHistory}
+                  onChange={(e) => updateDesign({ safeMarginIn: Number(e.target.value) })} />
+              </Row>
               <label className="mt-1 block cursor-pointer rounded-lg bg-ink-100 px-3 py-1.5 text-center text-sm font-medium text-ink-700">
                 Background image
                 <input type="file" accept="image/*" className="hidden"
                   onChange={(e) => e.target.files?.[0] && uploadImage(e.target.files[0], "background")} />
               </label>
               {current.design.backgroundImage && (
-                <button onClick={() => updateDesign({ backgroundImage: undefined })}
-                  className="mt-1 w-full text-xs text-brand-600 underline">
-                  Remove background image
-                </button>
+                <>
+                  <Row label="Background fit">
+                    <select className="ah-input py-1 text-sm" value={current.design.backgroundFit ?? "contain"}
+                      onChange={(e) => {
+                        pushHistory();
+                        updateDesign({ backgroundFit: e.target.value as TagDesign["backgroundFit"] });
+                      }}>
+                      <option value="contain">Fit inside</option>
+                      <option value="cover">Fill and crop</option>
+                      <option value="stretch">Stretch</option>
+                    </select>
+                  </Row>
+                  <button onClick={() => { pushHistory(); updateDesign({ backgroundImage: undefined }); }}
+                    className="mt-1 w-full text-xs text-brand-600 underline">
+                    Remove background image
+                  </button>
+                </>
               )}
             </Panel>
 
             {selected ? (
               <Panel title={`Selected: ${selected.kind}`}>
+                <Row label="Layer name">
+                  <input className="ah-input py-1 text-sm" value={selected.name ?? ""}
+                    placeholder={defaultLayerName(selected)}
+                    onFocus={pushHistory}
+                    onChange={(e) => updateEl(selected.id, { name: e.target.value })} />
+                </Row>
+
                 {selected.kind === "text" && (
                   <>
                     <Row label="Text">
-                      <input className="ah-input py-1 text-sm" value={selected.text ?? ""}
+                      <textarea className="ah-input py-1 text-sm" rows={2} value={selected.text ?? ""}
+                        onFocus={pushHistory}
                         onChange={(e) => updateEl(selected.id, { text: e.target.value })} />
                     </Row>
                     <Row label="Font">
                       <select className="ah-input py-1 text-sm" value={selected.fontFamily}
-                        onChange={(e) => updateEl(selected.id, { fontFamily: e.target.value })}>
+                        onChange={(e) => { pushHistory(); updateEl(selected.id, { fontFamily: e.target.value }); }}>
                         {FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
                       </select>
                     </Row>
                     <Row label={`Size (${selected.fontSize}pt)`}>
-                      <input type="range" min={5} max={40} value={selected.fontSize ?? 12} className="w-full"
+                      <input type="range" min={5} max={60} value={selected.fontSize ?? 12} className="w-full"
+                        onPointerDown={pushHistory}
                         onChange={(e) => updateEl(selected.id, { fontSize: Number(e.target.value) })} />
                     </Row>
                     <Row label="Colour">
                       <input type="color" className="h-8 w-full rounded border border-ink-200" value={selected.color ?? "#000000"}
                         onChange={(e) => updateEl(selected.id, { color: e.target.value })} />
                     </Row>
-                    <Row label="Align">
-                      <select className="ah-input py-1 text-sm" value={selected.align ?? "left"}
-                        onChange={(e) => updateEl(selected.id, { align: e.target.value as "left" | "center" | "right" })}>
-                        <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
-                      </select>
-                    </Row>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Row label="Align">
+                        <select className="ah-input py-1 text-sm" value={selected.align ?? "left"}
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { align: e.target.value as TagElement["align"] }); }}>
+                          <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+                        </select>
+                      </Row>
+                      <Row label="Vertical">
+                        <select className="ah-input py-1 text-sm" value={selected.valign ?? "middle"}
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { valign: e.target.value as TagElement["valign"] }); }}>
+                          <option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option>
+                        </select>
+                      </Row>
+                    </div>
                     <div className="flex flex-wrap gap-3 text-sm text-ink-700">
                       <label className="flex items-center gap-1.5">
                         <input type="checkbox" checked={!!selected.bold}
-                          onChange={(e) => updateEl(selected.id, { bold: e.target.checked })} /> Bold
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { bold: e.target.checked }); }} /> Bold
                       </label>
                       <label className="flex items-center gap-1.5">
                         <input type="checkbox" checked={!!selected.italic}
-                          onChange={(e) => updateEl(selected.id, { italic: e.target.checked })} /> Italic
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { italic: e.target.checked }); }} /> Italic
                       </label>
                       <label className="flex items-center gap-1.5">
                         <input type="checkbox" checked={!!selected.uppercase}
-                          onChange={(e) => updateEl(selected.id, { uppercase: e.target.checked })} /> UPPERCASE
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { uppercase: e.target.checked }); }} /> UPPERCASE
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        <input type="checkbox" checked={!!selected.wrap}
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { wrap: e.target.checked }); }} /> Wrap lines
                       </label>
                     </div>
+                    {selected.wrap && (
+                      <Row label={`Line height (${(selected.lineHeight ?? 1.2).toFixed(2)})`}>
+                        <input type="range" min={0.8} max={2} step={0.05} value={selected.lineHeight ?? 1.2} className="w-full"
+                          onPointerDown={pushHistory}
+                          onChange={(e) => updateEl(selected.id, { lineHeight: Number(e.target.value) })} />
+                      </Row>
+                    )}
                     <Row label={`Letter spacing (${selected.letterSpacing ?? 0})`}>
                       <input type="range" min={0} max={12} value={selected.letterSpacing ?? 0} className="w-full"
+                        onPointerDown={pushHistory}
                         onChange={(e) => updateEl(selected.id, { letterSpacing: Number(e.target.value) })} />
+                    </Row>
+                    <Row label={`Never shrink below (${selected.minFontSize ?? 6}pt)`}>
+                      <input type="range" min={4} max={20} value={selected.minFontSize ?? 6} className="w-full"
+                        onPointerDown={pushHistory}
+                        onChange={(e) => updateEl(selected.id, { minFontSize: Number(e.target.value) })} />
                     </Row>
                   </>
                 )}
+
+                {(selected.kind === "qr" || selected.kind === "barcode") && (
+                  <>
+                    <Row label="Encodes">
+                      <input className="ah-input py-1 font-mono text-sm" value={selected.codeValue ?? "{code}"}
+                        onFocus={pushHistory}
+                        onChange={(e) => updateEl(selected.id, { codeValue: e.target.value })} />
+                    </Row>
+                    <p className="text-xs text-ink-400">
+                      Merge fields work here too — <code>{"{code}"}</code> is the pickup code a
+                      volunteer scans to find the right child.
+                    </p>
+                    <Row label="Colour">
+                      <input type="color" className="h-8 w-full rounded border border-ink-200" value={selected.color ?? "#0b0b0c"}
+                        onChange={(e) => updateEl(selected.id, { color: e.target.value })} />
+                    </Row>
+                    {selected.kind === "qr" ? (
+                      <Row label="Error correction">
+                        <select className="ah-input py-1 text-sm" value={selected.qrEcc ?? "M"}
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { qrEcc: e.target.value as TagElement["qrEcc"] }); }}>
+                          <option value="L">L — smallest</option>
+                          <option value="M">M — recommended</option>
+                          <option value="Q">Q — tolerant</option>
+                          <option value="H">H — most tolerant</option>
+                        </select>
+                      </Row>
+                    ) : (
+                      <label className="flex items-center gap-2 text-sm text-ink-700">
+                        <input type="checkbox" checked={!!selected.showCodeText}
+                          onChange={(e) => { pushHistory(); updateEl(selected.id, { showCodeText: e.target.checked }); }} />
+                        Print the code as text underneath
+                      </label>
+                    )}
+                  </>
+                )}
+
+                {selected.kind === "image" && (
+                  <Row label="Image fit">
+                    <select className="ah-input py-1 text-sm" value={selected.fit ?? "contain"}
+                      onChange={(e) => { pushHistory(); updateEl(selected.id, { fit: e.target.value as TagElement["fit"] }); }}>
+                      <option value="contain">Fit inside</option>
+                      <option value="cover">Fill and crop</option>
+                      <option value="stretch">Stretch</option>
+                    </select>
+                  </Row>
+                )}
+
                 {selected.kind === "rect" && (
                   <Row label="Shape">
                     <select className="ah-input py-1 text-sm" value={selected.shape ?? "rect"}
-                      onChange={(e) => updateEl(selected.id, { shape: e.target.value as "rect" | "ellipse" })}>
+                      onChange={(e) => { pushHistory(); updateEl(selected.id, { shape: e.target.value as "rect" | "ellipse" }); }}>
                       <option value="rect">Rectangle</option>
                       <option value="ellipse">Ellipse / circle</option>
                     </select>
@@ -619,11 +1198,23 @@ export function TagDesigner({
                 {(selected.kind === "rect" || selected.kind === "line") && (
                   <>
                     <Row label="Fill">
-                      <input type="color" className="h-8 w-full rounded border border-ink-200" value={selected.fill ?? "#d2303b"}
-                        onChange={(e) => updateEl(selected.id, { fill: e.target.value })} />
+                      <div className="flex items-center gap-2">
+                        <input type="color" className="h-8 flex-1 rounded border border-ink-200"
+                          value={selected.fill && selected.fill !== "transparent" ? selected.fill : "#d2303b"}
+                          onChange={(e) => updateEl(selected.id, { fill: e.target.value })} />
+                        <label className="flex items-center gap-1 text-xs text-ink-600">
+                          <input type="checkbox" checked={selected.fill === "transparent"}
+                            onChange={(e) => {
+                              pushHistory();
+                              updateEl(selected.id, { fill: e.target.checked ? "transparent" : "#d2303b" });
+                            }} />
+                          None
+                        </label>
+                      </div>
                     </Row>
                     <Row label={`Corner radius (${selected.radius ?? 0})`}>
                       <input type="range" min={0} max={24} value={selected.radius ?? 0} className="w-full"
+                        onPointerDown={pushHistory}
                         onChange={(e) => updateEl(selected.id, { radius: Number(e.target.value) })} />
                     </Row>
                   </>
@@ -632,40 +1223,121 @@ export function TagDesigner({
                   <>
                     <Row label={"Border (" + (selected.borderWidth ?? 0) + "px)"}>
                       <input type="range" min={0} max={12} value={selected.borderWidth ?? 0} className="w-full"
+                        onPointerDown={pushHistory}
                         onChange={(e) => updateEl(selected.id, { borderWidth: Number(e.target.value) })} />
                     </Row>
                     {(selected.borderWidth ?? 0) > 0 && (
-                      <Row label="Border colour">
-                        <input type="color" className="h-8 w-full rounded border border-ink-200"
-                          value={selected.borderColor ?? "#0b0b0c"}
-                          onChange={(e) => updateEl(selected.id, { borderColor: e.target.value })} />
-                      </Row>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Row label="Border colour">
+                          <input type="color" className="h-8 w-full rounded border border-ink-200"
+                            value={selected.borderColor ?? "#0b0b0c"}
+                            onChange={(e) => updateEl(selected.id, { borderColor: e.target.value })} />
+                        </Row>
+                        <Row label="Style">
+                          <select className="ah-input py-1 text-sm" value={selected.borderStyle ?? "solid"}
+                            onChange={(e) => { pushHistory(); updateEl(selected.id, { borderStyle: e.target.value as TagElement["borderStyle"] }); }}>
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dotted">Dotted</option>
+                          </select>
+                        </Row>
+                      </div>
                     )}
                   </>
                 )}
+
+                <div className="grid grid-cols-4 gap-1.5">
+                  <NumBox label="X %" value={selected.x} onFocus={pushHistory}
+                    onChange={(v) => updateEl(selected.id, { x: v })} />
+                  <NumBox label="Y %" value={selected.y} onFocus={pushHistory}
+                    onChange={(v) => updateEl(selected.id, { y: v })} />
+                  <NumBox label="W %" value={selected.w} onFocus={pushHistory}
+                    onChange={(v) => updateEl(selected.id, { w: v })} />
+                  <NumBox label="H %" value={selected.h} onFocus={pushHistory}
+                    onChange={(v) => updateEl(selected.id, { h: v })} />
+                </div>
+
+                <Row label="Align on label">
+                  <div className="flex flex-wrap gap-1">
+                    <IconBtn title="Align left" onClick={() => alignEl(selected.id, "left")}>⇤</IconBtn>
+                    <IconBtn title="Centre horizontally" onClick={() => alignEl(selected.id, "hcenter")}>↔</IconBtn>
+                    <IconBtn title="Align right" onClick={() => alignEl(selected.id, "right")}>⇥</IconBtn>
+                    <IconBtn title="Align top" onClick={() => alignEl(selected.id, "top")}>⤒</IconBtn>
+                    <IconBtn title="Centre vertically" onClick={() => alignEl(selected.id, "vcenter")}>↕</IconBtn>
+                    <IconBtn title="Align bottom" onClick={() => alignEl(selected.id, "bottom")}>⤓</IconBtn>
+                  </div>
+                </Row>
+
                 <Row label={`Rotation (${selected.rotation ?? 0}°)`}>
                   <input type="range" min={-180} max={180} value={selected.rotation ?? 0} className="w-full"
+                    onPointerDown={pushHistory}
                     onChange={(e) => updateEl(selected.id, { rotation: Number(e.target.value) })} />
                 </Row>
                 <Row label={`Opacity (${((selected.opacity ?? 1) * 100).toFixed(0)}%)`}>
                   <input type="range" min={0.1} max={1} step={0.05} value={selected.opacity ?? 1} className="w-full"
+                    onPointerDown={pushHistory}
                     onChange={(e) => updateEl(selected.id, { opacity: Number(e.target.value) })} />
                 </Row>
-                <label className="flex items-center gap-2 text-sm text-ink-700">
-                  <input type="checkbox" checked={!!selected.onlyIfAllergy}
-                    onChange={(e) => updateEl(selected.id, { onlyIfAllergy: e.target.checked })} />
-                  Only show if child has an allergy
-                </label>
-                <button onClick={() => removeEl(selected.id)}
-                  className="mt-2 w-full rounded-lg bg-brand-50 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100">
-                  Delete element
-                </button>
+                <Row label="Show this element">
+                  <select className="ah-input py-1 text-sm"
+                    value={selected.showIf ?? (selected.onlyIfAllergy ? "allergy" : "always")}
+                    onChange={(e) => {
+                      pushHistory();
+                      // Writing showIf retires the legacy flag so the two can't disagree.
+                      updateEl(selected.id, {
+                        showIf: e.target.value as TagElement["showIf"],
+                        onlyIfAllergy: undefined,
+                      });
+                    }}>
+                    <option value="always">Always</option>
+                    <option value="allergy">Only if child has an allergy</option>
+                    <option value="noAllergy">Only if NO allergy</option>
+                    <option value="hasRoom">Only if a room is assigned</option>
+                    <option value="hasCode">Only if there is a code</option>
+                    <option value="childOnly">Child tags only</option>
+                    <option value="guardianOnly">Guardian tags only</option>
+                  </select>
+                </Row>
+
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => duplicateEl(selected.id)}
+                    className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-200">
+                    Duplicate
+                  </button>
+                  <button onClick={() => removeEl(selected.id)} disabled={selected.locked}
+                    className="flex-1 rounded-lg bg-brand-50 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100 disabled:opacity-40">
+                    Delete
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => reorder(selected.id, "front")}
+                    className="flex-1 rounded-lg bg-ink-100 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-200">
+                    Bring to front
+                  </button>
+                  <button onClick={() => reorder(selected.id, "back")}
+                    className="flex-1 rounded-lg bg-ink-100 py-1.5 text-xs font-medium text-ink-700 hover:bg-ink-200">
+                    Send to back
+                  </button>
+                </div>
               </Panel>
             ) : (
               <Panel title="Selected">
                 <p className="text-sm text-ink-400">Click an element on the label to edit it.</p>
               </Panel>
             )}
+
+            <Panel title="Template">
+              <button onClick={duplicateTemplate}
+                className="w-full rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-200">
+                Duplicate this template
+              </button>
+              {current.id && (
+                <button onClick={deleteTemplate}
+                  className="w-full rounded-lg bg-brand-50 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100">
+                  Delete this template
+                </button>
+              )}
+            </Panel>
           </aside>
         </div>
       </div>
@@ -676,11 +1348,70 @@ export function TagDesigner({
 function clamp(n: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, n));
 }
+function defaultLayerName(el: TagElement) {
+  if (el.kind === "text") return (el.text ?? "Text").slice(0, 24) || "Text";
+  if (el.kind === "qr") return "QR code";
+  if (el.kind === "barcode") return "Barcode";
+  if (el.kind === "image") return "Image";
+  if (el.kind === "line") return "Line";
+  return "Box";
+}
 function AddBtn({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} className="rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-200">
       {children}
     </button>
+  );
+}
+function ToolBtn({
+  onClick, children, title, disabled, active,
+}: {
+  onClick: () => void; children: React.ReactNode; title: string; disabled?: boolean; active?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      className={
+        "h-8 w-8 rounded-md text-sm transition disabled:opacity-30 " +
+        (active ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-700 hover:bg-ink-200")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+function IconBtn({ onClick, children, title }: { onClick: () => void; children: React.ReactNode; title: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="h-7 w-7 shrink-0 rounded-md bg-ink-100 text-xs text-ink-600 transition hover:bg-ink-200"
+    >
+      {children}
+    </button>
+  );
+}
+function NumBox({
+  label, value, onChange, onFocus,
+}: {
+  label: string; value: number; onChange: (v: number) => void; onFocus: () => void;
+}) {
+  return (
+    <label className="block text-xs">
+      <span className="mb-0.5 block font-medium text-ink-500">{label}</span>
+      <input
+        type="number"
+        step={0.5}
+        className="ah-input py-1 text-xs"
+        value={Number((value * 100).toFixed(1))}
+        onFocus={onFocus}
+        onChange={(e) => onChange(clamp(Number(e.target.value) / 100, -0.1, 1.2))}
+      />
+    </label>
   );
 }
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
@@ -698,4 +1429,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       {children}
     </label>
   );
+}
+function Sep() {
+  return <span className="mx-0.5 h-5 w-px bg-ink-200" />;
 }
