@@ -17,7 +17,9 @@ import {
   printImageViaDymo,
   printImageViaServer,
   printImageViaBrowser,
+  agentUrlProblem,
   type DymoStatus,
+  type PrintResult,
 } from "@/lib/dymo";
 import { renderTagToPng, type TagTemplate } from "@/lib/tag-design";
 import { TagDesigner } from "./TagDesigner";
@@ -152,6 +154,15 @@ export function CheckinStation({
   // DYMO Connect detection. Runs on this device only — the service is local.
   const [dymo, setDymo] = useState<DymoStatus | null>(null);
   const [printer, setPrinter] = useState<string>("");
+  // What the last print actually did. Every path used to fail silently, which
+  // is the worst possible behaviour when you are standing at the desk on a
+  // Sunday morning wondering why nothing came out.
+  const [printLog, setPrintLog] = useState<PrintResult[]>([]);
+  const [agentUrl, setAgentUrl] = useState("");
+  useEffect(() => {
+    setAgentUrl(localStorage.getItem("ah-print-server") ?? "");
+  }, []);
+  const agentProblem = agentUrlProblem(agentUrl);
   useEffect(() => {
     getDymoStatus().then((s) => {
       setDymo(s);
@@ -286,20 +297,43 @@ export function CheckinStation({
           checkedInAt: d.checkedInAt,
         });
         // DYMO Connect here → shared print agent (iPads) → browser dialog.
-        if (await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined)) continue;
-        const agent = localStorage.getItem("ah-print-server");
-        if (agent && (await printImageViaServer(png, tpl.width_in, tpl.height_in, agent, printer || undefined)))
+        const attempts: PrintResult[] = [];
+        const direct = await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined);
+        attempts.push(direct);
+        if (direct.ok) {
+          setPrintLog(attempts);
           continue;
+        }
+        const agent = localStorage.getItem("ah-print-server");
+        if (agent) {
+          const viaAgent = await printImageViaServer(png, tpl.width_in, tpl.height_in, agent, printer || undefined);
+          attempts.push(viaAgent);
+          if (viaAgent.ok) {
+            setPrintLog(attempts);
+            continue;
+          }
+        }
         printImageViaBrowser(png, tpl.width_in, tpl.height_in);
+        attempts.push({ ok: true, via: "browser" });
+        setPrintLog(attempts);
       }
       return;
     }
 
     // No designed template yet — fall back to the built-in layout.
-    if (await printViaDymo(d, tagOpts, printer || undefined)) return;
+    const attempts: PrintResult[] = [];
+    const direct = await printViaDymo(d, tagOpts, printer || undefined);
+    attempts.push(direct);
+    if (direct.ok) return setPrintLog(attempts);
     const server = localStorage.getItem("ah-print-server");
-    if (server && (await printViaServer(d, tagOpts, server))) return;
+    if (server) {
+      const viaAgent = await printViaServer(d, tagOpts, server);
+      attempts.push(viaAgent);
+      if (viaAgent.ok) return setPrintLog(attempts);
+    }
     printNameTag(d, tagOpts);
+    attempts.push({ ok: true, via: "browser" });
+    setPrintLog(attempts);
   }
 
   const activeRooms = rooms.filter((r) => r.active);
@@ -637,19 +671,45 @@ export function CheckinStation({
             </span>
             <input
               className="ah-input"
-              placeholder="http://192.168.1.50:41952"
-              defaultValue={
-                typeof window !== "undefined"
-                  ? (localStorage.getItem("ah-print-server") ?? "")
-                  : ""
-              }
+              placeholder="https://192.168.1.50:41952"
+              defaultValue={agentUrl}
+              onChange={(e) => setAgentUrl(e.target.value)}
               onBlur={(e) => localStorage.setItem("ah-print-server", e.target.value.trim())}
             />
             <span className="mt-1 block text-xs text-ink-400">
               Address of the desktop running the print agent with the DYMO on USB.
               Leave blank if this device prints directly.
             </span>
+            {/* Says it up front rather than after an hour of debugging a
+                "network error" that is actually a browser policy. */}
+            {agentProblem && (
+              <span className="mt-1 block rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
+                {agentProblem}
+              </span>
+            )}
           </label>
+
+          {/* What the last print attempt actually did. */}
+          {printLog.length > 0 && (
+            <div className="mb-3 rounded-lg border border-ink-100 bg-ink-50 px-3 py-2">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                Last print
+              </p>
+              <ul className="space-y-0.5 text-xs">
+                {printLog.map((a, i) => (
+                  <li key={i} className={a.ok ? "text-emerald-700" : "text-brand-700"}>
+                    {a.ok ? "✓" : "✕"}{" "}
+                    {a.via === "dymo"
+                      ? "DYMO Connect on this device"
+                      : a.via === "agent"
+                        ? "Print agent"
+                        : "Browser print dialog"}
+                    {a.error ? ` — ${a.error}` : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm sm:col-span-2">
               <span className="mb-1 block font-medium text-ink-600">Church name on tag</span>

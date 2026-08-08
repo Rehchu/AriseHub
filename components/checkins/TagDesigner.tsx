@@ -261,12 +261,12 @@ export function TagDesigner({
     if (!el) return;
     pushHistory();
     const patch: Partial<TagElement> =
-      how === "left" ? { x: 0.02 }
-      : how === "right" ? { x: 1 - el.w - 0.02 }
-      : how === "hcenter" ? { x: (1 - el.w) / 2 }
-      : how === "top" ? { y: 0.02 }
-      : how === "bottom" ? { y: 1 - el.h - 0.02 }
-      : { y: (1 - el.h) / 2 };
+      how === "left" ? { x: 0 }
+      : how === "right" ? { x: Math.max(0, 1 - el.w) }
+      : how === "hcenter" ? { x: Math.max(0, (1 - el.w) / 2) }
+      : how === "top" ? { y: 0 }
+      : how === "bottom" ? { y: Math.max(0, 1 - el.h) }
+      : { y: Math.max(0, (1 - el.h) / 2) };
     updateEl(id, patch);
   }
 
@@ -310,15 +310,18 @@ export function TagDesigner({
     const fy = (e.clientY - rect.top) / rect.height;
     const el = current.design.elements.find((x) => x.id === d.id);
     if (!el) return;
+    // Everything stays inside the label. Dragging something half off the edge
+    // just prints it cropped, and you cannot see that on screen — the stage
+    // clips it exactly like the printer does.
     if (d.mode === "move") {
       updateEl(d.id, {
-        x: snap(clamp(fx - d.dx, -0.1, 1)),
-        y: snap(clamp(fy - d.dy, -0.1, 1)),
+        x: snap(clamp(fx - d.dx, 0, Math.max(0, 1 - el.w))),
+        y: snap(clamp(fy - d.dy, 0, Math.max(0, 1 - el.h))),
       });
     } else {
       updateEl(d.id, {
-        w: snap(clamp(fx - el.x, 0.03, 1.2)),
-        h: snap(clamp(fy - el.y, 0.03, 1.2)),
+        w: snap(clamp(fx - el.x, 0.03, 1 - el.x)),
+        h: snap(clamp(fy - el.y, 0.03, 1 - el.y)),
       });
     }
   }
@@ -384,11 +387,13 @@ export function TagDesigner({
         return;
       }
       const step = e.shiftKey ? 0.05 : 0.005;
+      const maxX = Math.max(0, 1 - selected.w);
+      const maxY = Math.max(0, 1 - selected.h);
       const nudge: Record<string, Partial<TagElement>> = {
-        ArrowLeft: { x: clamp(selected.x - step, -0.1, 1) },
-        ArrowRight: { x: clamp(selected.x + step, -0.1, 1) },
-        ArrowUp: { y: clamp(selected.y - step, -0.1, 1) },
-        ArrowDown: { y: clamp(selected.y + step, -0.1, 1) },
+        ArrowLeft: { x: clamp(selected.x - step, 0, maxX) },
+        ArrowRight: { x: clamp(selected.x + step, 0, maxX) },
+        ArrowUp: { y: clamp(selected.y - step, 0, maxY) },
+        ArrowDown: { y: clamp(selected.y + step, 0, maxY) },
       };
       if (nudge[e.key]) {
         e.preventDefault();
@@ -589,7 +594,13 @@ export function TagDesigner({
 
         <div className="grid gap-5 lg:grid-cols-[1fr_18rem]">
           {/* ---- Stage ---- */}
-          <div>
+          {/* min-w-0 is load-bearing. A grid item defaults to min-width:auto, so
+              this column refused to shrink below the stage's width — an 800px
+              4 × 2.31 badge made the column 800px wide on a 375px phone, the
+              overflow-x-auto inside it never had anything to scroll, and the
+              page itself went sideways with the label's left edge off screen
+              and unreachable. That was the "cut off on the left" report. */}
+          <div className="min-w-0">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <input
                 className="ah-input w-auto flex-1 py-1.5 text-sm"
@@ -645,7 +656,13 @@ export function TagDesigner({
               </span>
             </div>
 
+            {/* `min-w-max justify-center` rather than `mx-auto` on the stage.
+                With auto margins, a stage wider than the viewport has its LEFT
+                overflow made unreachable — you cannot scroll to it — which is
+                what cut off the left edge of the 4 × 2.31 badge. This centres
+                only while it fits, and scrolls to both edges when it doesn't. */}
             <div className="overflow-x-auto">
+              <div className="flex min-w-max justify-center">
               <div
                 ref={stageRef}
                 onPointerMove={onPointerMove}
@@ -653,7 +670,7 @@ export function TagDesigner({
                 onPointerCancel={endDrag}
                 onLostPointerCapture={endDrag}
                 onClick={() => setSelectedId(null)}
-                className="relative mx-auto overflow-hidden rounded-lg border-2 border-dashed border-ink-300 bg-white shadow-sm"
+                className="relative overflow-hidden rounded-lg bg-white shadow-sm ring-2 ring-ink-300"
                 style={{
                   width: stageW,
                   height: stageH,
@@ -805,7 +822,12 @@ export function TagDesigner({
                   );
                 })}
               </div>
+              </div>
             </div>
+            <p className="mt-1 text-center text-xs text-ink-400">
+              {current.width_in}in × {current.height_in}in — the outlined area is
+              the label. Elements can&apos;t be moved outside it.
+            </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
               <AddBtn onClick={() => addEl("text")}>+ Text</AddBtn>
@@ -1246,15 +1268,17 @@ export function TagDesigner({
                   </>
                 )}
 
+                {/* Same containment as dragging — typing 120% would otherwise
+                    push an element off the label where the stage clips it. */}
                 <div className="grid grid-cols-4 gap-1.5">
                   <NumBox label="X %" value={selected.x} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { x: v })} />
+                    onChange={(v) => updateEl(selected.id, { x: clamp(v, 0, Math.max(0, 1 - selected.w)) })} />
                   <NumBox label="Y %" value={selected.y} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { y: v })} />
+                    onChange={(v) => updateEl(selected.id, { y: clamp(v, 0, Math.max(0, 1 - selected.h)) })} />
                   <NumBox label="W %" value={selected.w} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { w: v })} />
+                    onChange={(v) => updateEl(selected.id, { w: clamp(v, 0.03, 1 - selected.x) })} />
                   <NumBox label="H %" value={selected.h} onFocus={pushHistory}
-                    onChange={(v) => updateEl(selected.id, { h: v })} />
+                    onChange={(v) => updateEl(selected.id, { h: clamp(v, 0.03, 1 - selected.y) })} />
                 </div>
 
                 <Row label="Align on label">

@@ -93,19 +93,70 @@ export interface DymoStatus {
   available: boolean;
   printers: string[];
   reason?: string;
+  /** Did /dymo/dymo.connect.framework.js load at all? */
+  sdkLoaded?: boolean;
+  /** Raw environment details, for the diagnostics panel. */
+  environment?: string;
+}
+
+/**
+ * Outcome of one print attempt.
+ *
+ * These used to return a bare boolean with the error swallowed in a catch, so a
+ * label that never appeared gave you nothing to go on — which is exactly the
+ * situation you are in when you are standing at the church on a Sunday morning
+ * and it is not printing.
+ */
+export interface PrintResult {
+  ok: boolean;
+  /** Which path was tried: DYMO Connect here, the LAN agent, or the browser. */
+  via: "dymo" | "agent" | "browser";
+  error?: string;
+}
+
+/**
+ * A LAN print agent on plain http cannot be reached from the https app —
+ * browsers block it as mixed content, and the failure looks like a network
+ * error rather than a policy one. Worth saying out loud before someone spends
+ * an hour on it.
+ */
+export function agentUrlProblem(url: string): string | null {
+  const u = url.trim();
+  if (!u) return null;
+  if (!/^https?:\/\//i.test(u)) return "Needs to start with http:// or https://";
+  if (
+    u.toLowerCase().startsWith("http://") &&
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    !/^https?:\/\/(localhost|127\.0\.0\.1)/i.test(u)
+  ) {
+    return "This page is https, so the browser will block a plain http agent (mixed content). Run the agent with TLS, or use the browser-print fallback.";
+  }
+  return null;
 }
 
 /** Is DYMO Connect running here, and which printers does it see? */
 export async function getDymoStatus(): Promise<DymoStatus> {
   const fw = await loadDymo();
-  if (!fw) return { available: false, printers: [], reason: "DYMO SDK could not load." };
+  if (!fw) {
+    return {
+      available: false,
+      printers: [],
+      sdkLoaded: false,
+      reason:
+        "The DYMO SDK didn't load. Check /dymo/dymo.connect.framework.js is being served, and that no extension is blocking it.",
+    };
+  }
   try {
     const env = fw.checkEnvironment();
     if (!env.isFrameworkInstalled) {
       return {
         available: false,
         printers: [],
-        reason: "DYMO Connect isn't running on this computer.",
+        sdkLoaded: true,
+        environment: env.errorDetails,
+        reason:
+          "DYMO Connect isn't answering on this computer. Start DYMO Connect, then open https://localhost:41951 once and accept its certificate — the page talks to the service over https and a browser that hasn't trusted it fails silently.",
       };
     }
     const printers = fw
@@ -115,12 +166,15 @@ export async function getDymoStatus(): Promise<DymoStatus> {
     return {
       available: printers.length > 0,
       printers,
+      sdkLoaded: true,
+      environment: env.errorDetails,
       reason: printers.length ? undefined : "DYMO Connect is running but no printer is connected.",
     };
   } catch (e) {
     return {
       available: false,
       printers: [],
+      sdkLoaded: true,
       reason: e instanceof Error ? e.message : "DYMO check failed.",
     };
   }
@@ -141,16 +195,27 @@ export async function printViaServer(
   d: NameTagData,
   o: NameTagOptions,
   serverUrl: string,
-): Promise<boolean> {
+): Promise<PrintResult> {
+  const blocked = agentUrlProblem(serverUrl);
+  if (blocked) return { ok: false, via: "agent", error: blocked };
   try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
     const res = await fetch(`${serverUrl.replace(/\/$/, "")}/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ labelXml: buildTextLabelXml(d, o) }),
-    });
-    return res.ok;
-  } catch {
-    return false;
+      signal: ctl.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) return { ok: false, via: "agent", error: `Agent replied ${res.status}` };
+    return { ok: true, via: "agent" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      via: "agent",
+      error: /abort/i.test(msg) ? "Agent didn't respond within 8s" : msg,
+    };
   }
 }
 
@@ -166,20 +231,24 @@ export async function printImageViaDymo(
   widthIn: number,
   heightIn: number,
   printerName?: string,
-): Promise<boolean> {
+): Promise<PrintResult> {
   const fw = await loadDymo();
-  if (!fw) return false;
+  if (!fw) return { ok: false, via: "dymo", error: "SDK not loaded" };
   try {
-    if (!fw.checkEnvironment().isFrameworkInstalled) return false;
+    if (!fw.checkEnvironment().isFrameworkInstalled) {
+      return { ok: false, via: "dymo", error: "DYMO Connect not running on this computer" };
+    }
     const printer = printerName || fw.getPrinters()[0]?.name;
-    if (!printer) return false;
+    if (!printer) return { ok: false, via: "dymo", error: "No printer connected" };
 
     const xml = buildImageLabelXml(pngDataUrl, widthIn, heightIn);
     const label = fw.openLabelXml(xml);
     fw.printLabel(printer, "", label.getLabelXml(), "");
-    return true;
-  } catch {
-    return false;
+    return { ok: true, via: "dymo" };
+  } catch (e) {
+    // The real reason matters: "printer is offline" and "the label XML is
+    // malformed" both used to surface as a silent false.
+    return { ok: false, via: "dymo", error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -265,8 +334,14 @@ export async function printImageViaServer(
   heightIn: number,
   serverUrl: string,
   printerName?: string,
-): Promise<boolean> {
+): Promise<PrintResult> {
+  const blocked = agentUrlProblem(serverUrl);
+  if (blocked) return { ok: false, via: "agent", error: blocked };
   try {
+    // Without a timeout an unreachable agent hangs the check-in desk until the
+    // browser gives up, which can be a minute or more with a queue waiting.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
     const res = await fetch(`${serverUrl.replace(/\/$/, "")}/print`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -274,10 +349,19 @@ export async function printImageViaServer(
         labelXml: buildImageLabelXml(pngDataUrl, widthIn, heightIn),
         printerName,
       }),
-    });
-    return res.ok;
-  } catch {
-    return false;
+      signal: ctl.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!res.ok) {
+      return { ok: false, via: "agent", error: `Agent replied ${res.status}` };
+    }
+    return { ok: true, via: "agent" };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return {
+      ok: false,
+      via: "agent",
+      error: /abort/i.test(msg) ? "Agent didn't respond within 8s" : msg,
+    };
   }
 }
 
@@ -358,15 +442,17 @@ export async function printViaDymo(
   d: NameTagData,
   o: NameTagOptions,
   printerName?: string,
-): Promise<boolean> {
+): Promise<PrintResult> {
   const fw = await loadDymo();
-  if (!fw) return false;
+  if (!fw) return { ok: false, via: "dymo", error: "SDK not loaded" };
   try {
     const env = fw.checkEnvironment();
-    if (!env.isFrameworkInstalled) return false;
+    if (!env.isFrameworkInstalled) {
+      return { ok: false, via: "dymo", error: "DYMO Connect not running on this computer" };
+    }
     const printers = fw.getPrinters();
     const printer = printerName || printers[0]?.name;
-    if (!printer) return false;
+    if (!printer) return { ok: false, via: "dymo", error: "No printer connected" };
 
     const today = new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" });
     const variants: Array<"child" | "guardian"> = o.showGuardianTag
@@ -396,8 +482,8 @@ export async function printViaDymo(
 
       fw.printLabel(printer, "", label.getLabelXml(), "");
     }
-    return true;
-  } catch {
-    return false;
+    return { ok: true, via: "dymo" };
+  } catch (e) {
+    return { ok: false, via: "dymo", error: e instanceof Error ? e.message : String(e) };
   }
 }
