@@ -31,6 +31,8 @@
   --color-chrome-50: #f6f6f7;
   --color-chrome-200: #c5c6ca;
   --color-chrome-300: #9a9ba1;
+  /* Not for text. Everything in this scale sits on chrome-800/900, and 400
+     measures 3.88:1 against 900 — under AA. Use 300 (7.1:1) for muted labels. */
   --color-chrome-400: #6d6e76;
   --color-chrome-600: #34353b;
   --color-chrome-700: #26272c;

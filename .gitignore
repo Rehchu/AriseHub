@@ -16,3 +16,6 @@ supabase/.temp/
 *.log
 .DS_Store
 .open-next/
+
+# tsc incremental cache — machine-local, not a build output worth tracking
+tsconfig.tsbuildinfo

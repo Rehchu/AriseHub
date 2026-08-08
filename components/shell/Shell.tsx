@@ -216,7 +216,10 @@ function SidebarFooter({
         <Avatar name={name} photo={photo} size={34} />
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-chrome-50">{name}</p>
-          <p className="text-xs text-chrome-400">{role?.replace("_", " ") ?? "Member"}</p>
+          {/* chrome-300, not 400: the chrome scale sits on a near-black sidebar
+            that never inverts, and 400 measured 3.88:1 there — under AA for
+            what is already 12px text. */}
+        <p className="text-xs text-chrome-300">{role?.replace("_", " ") ?? "Member"}</p>
         </div>
       </div>
       {canInvite && (

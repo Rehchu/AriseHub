@@ -134,7 +134,9 @@ export function RoomsAdmin({
             </select>
           </label>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        {/* Three number fields side by side leaves ~95px each on a phone, and
+            iOS pins form controls to 16px. Two up, three from sm. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-xs font-medium text-ink-500">Min age</span>
             <input type="number" min={0} className="ah-input" placeholder="—" value={minAge} onChange={(e) => setMinAge(e.target.value)} />
