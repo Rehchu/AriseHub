@@ -19,6 +19,24 @@ export const SENDERS = {
   it: process.env.IT_FROM_EMAIL || "AriseIT <ariseit@myfaithtech.com>",
 } as const;
 
+/**
+ * Which Resend key signs which sender.
+ *
+ * Two keys on purpose, not one shared: either can be rotated or revoked without
+ * silencing the other, and the Resend dashboard then shows AriseHub's account
+ * mail separately from AriseIT's ticket traffic.
+ *
+ * ARISE_HUB_RESEND_API_KEY is AriseHub's own. It falls back to RESEND_API_KEY so
+ * that nothing stops working in the window between deploying this and setting
+ * the new secret — and so a single-key setup keeps working as it always did.
+ */
+function keyFor(from: string): string | undefined {
+  if (from === SENDERS.it) {
+    return process.env.IT_RESEND_API_KEY || process.env.RESEND_API_KEY;
+  }
+  return process.env.ARISE_HUB_RESEND_API_KEY || process.env.RESEND_API_KEY;
+}
+
 export async function sendEmail(opts: {
   to: string;
   subject: string;
@@ -26,7 +44,8 @@ export async function sendEmail(opts: {
   /** Defaults to AriseHub. Pass SENDERS.it for anything ticket-related. */
   from?: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const key = process.env.RESEND_API_KEY;
+  const from = opts.from || SENDERS.hub;
+  const key = keyFor(from);
   if (!key) return { ok: false, error: "email not configured" };
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -36,7 +55,7 @@ export async function sendEmail(opts: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: opts.from || SENDERS.hub,
+        from,
         to: [opts.to],
         subject: opts.subject,
         html: opts.html,
