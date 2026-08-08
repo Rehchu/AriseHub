@@ -26,6 +26,12 @@ export interface Profile {
   emergency_phone: string | null;
   campus_id: string | null;
   is_checkin_lead: boolean;
+  /**
+   * Keeps service/QA accounts out of the member-facing directory. Grants and
+   * restricts nothing — visibility only. Super_Admin is the only role that can
+   * set it (enforced by the privileged-field trigger, migration 0036).
+   */
+  hidden_from_directory: boolean;
   archived_at: string | null;
   created_at: string;
   updated_at: string;

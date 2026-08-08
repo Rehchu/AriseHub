@@ -30,7 +30,7 @@ export default async function PeopleAdminPage() {
     supabase
       .from("people_directory")
       .select(
-        "id, user_id, full_name, email, phone, photo_url, role, title, campus_id, is_checkin_lead, archived_at, created_at, updated_at",
+        "id, user_id, full_name, email, phone, photo_url, role, title, campus_id, is_checkin_lead, hidden_from_directory, archived_at, created_at, updated_at",
       )
       .order("full_name"),
     supabase.from("departments").select("id, name, slug").order("name"),

@@ -203,6 +203,11 @@ export function PeopleAdmin({
                           archived
                         </span>
                       )}
+                      {p.hidden_from_directory && (
+                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase text-amber-800">
+                          hidden
+                        </span>
+                      )}
                     </p>
                     <p className="truncate text-xs text-ink-400">
                       {p.title && (
@@ -346,6 +351,27 @@ export function PeopleAdmin({
                         }
                       />
                       Check-in lead (can view children&apos;s medical info)
+                    </label>
+                    {/* Migration 0036 added this column; nothing wrote to it
+                        until now, so hidden accounts were not actually
+                        reachable from the app. */}
+                    <label className="mt-2 flex items-start gap-2 text-sm text-ink-700">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={p.hidden_from_directory}
+                        onChange={(e) =>
+                          patch(p.id, { hidden_from_directory: e.target.checked })
+                        }
+                      />
+                      <span>
+                        Hide from the People directory
+                        <span className="block text-xs text-ink-400">
+                          For service and QA accounts. They sign in and are governed by
+                          exactly the same permissions as anyone else — they just don&apos;t
+                          appear next to real members. Leadership still sees them here.
+                        </span>
+                      </span>
                     </label>
 
                     {fields.length > 0 && (
