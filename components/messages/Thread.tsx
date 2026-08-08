@@ -53,14 +53,20 @@ export function Thread({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Newest 200, then reversed for display.
+      //
+      // This ordered ASCENDING with limit(200), and Postgres applies LIMIT
+      // after ORDER BY — so it fetched the 200 OLDEST messages in the channel.
+      // Once a department chat passed 200 messages the thread would show its
+      // first ever conversation and nothing since, with no indication why.
       const { data } = await supabase
         .from("messages")
         .select("*, profiles!messages_sender_profile_id_fkey(full_name)")
         .eq("channel_id", channelId)
-        .order("created_at", { ascending: true })
+        .order("created_at", { ascending: false })
         .limit(200);
       if (cancelled) return;
-      const mapped = (data ?? []).map((m: Record<string, unknown>) => {
+      const mapped = (data ?? []).reverse().map((m: Record<string, unknown>) => {
         const sender = (m.profiles as { full_name: string } | null)?.full_name ?? "Someone";
         nameCache.current[m.sender_profile_id as string] = sender;
         return { ...(m as unknown as Message), senderName: sender };

@@ -44,14 +44,29 @@ export function PublicForm({
     const nameKey = fields.find((f) => /name/i.test(f.label))?.label;
     const submitter_name = nameKey ? String(values[nameKey] ?? "") : null;
 
-    const { error } = await supabase.from("form_submissions").insert({
-      form_id: formId,
-      submitter_name,
-      data: values,
-    });
-    setBusy(false);
-    if (error) {
-      setError("Sorry — something went wrong. Please try again.");
+    // Through the API rather than straight to PostgREST, so the Turnstile
+    // token is actually verified. It used to be collected into state and never
+    // sent, which made the bot protection decorative.
+    try {
+      const res = await fetch("/api/forms/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formId,
+          submitterName: submitter_name,
+          data: values,
+          turnstileToken,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setBusy(false);
+      if (!res.ok) {
+        setError(json.error ?? "Sorry — something went wrong. Please try again.");
+        return;
+      }
+    } catch {
+      setBusy(false);
+      setError("Couldn't reach the server. Check your connection and try again.");
       return;
     }
     setDone(true);

@@ -38,6 +38,7 @@ export async function updateSession(request: NextRequest) {
     pathname.startsWith("/f/") || // public Connect Card submission pages
     pathname.startsWith("/join/") || // invite-link self-registration
     pathname.startsWith("/api/join") ||
+    pathname.startsWith("/api/forms/submit") || // public Connect Card, Turnstile-gated
     pathname.startsWith("/api/calendar/feed") || // public iCal subscription
     pathname.startsWith("/api/cron/") || // scheduled jobs (secret-gated)
     pathname === "/sw.js" ||

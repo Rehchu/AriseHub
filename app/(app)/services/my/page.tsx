@@ -31,11 +31,36 @@ export default async function MySchedulePage() {
       .in("id", planIds)
       .order("service_date"),
     // 0024 lets anyone on a plan see the whole team for it.
+    //
+    // Names only. This embedded `phone`, which 0030 revoked from the
+    // `authenticated` role — so PostgREST refused the WHOLE query, the error
+    // was discarded into `const { data: assignments }`, and every plan rendered
+    // with an empty team and no clue why. Phone numbers come from
+    // people_directory below, which gates them properly.
     supabase
       .from("plan_assignments")
-      .select("id, plan_id, position, profile_id, status, assignee:profiles!plan_assignments_profile_id_fkey(full_name, phone)")
+      .select("id, plan_id, position, profile_id, status, assignee:profiles!plan_assignments_profile_id_fkey(full_name)")
       .in("plan_id", planIds),
   ]);
+
+  // Contact numbers for the team, for whoever is allowed to see them.
+  // people_directory returns phone as NULL rather than erroring when the caller
+  // isn't leadership, so the roster renders either way.
+  const teamIds = [
+    ...new Set(((assignments ?? []) as { profile_id: string | null }[])
+      .map((a) => a.profile_id)
+      .filter((id): id is string => !!id)),
+  ];
+  const phoneById: Record<string, string | null> = {};
+  if (teamIds.length) {
+    const { data: contacts } = await supabase
+      .from("people_directory")
+      .select("id, phone")
+      .in("id", teamIds);
+    for (const c of (contacts ?? []) as { id: string; phone: string | null }[]) {
+      phoneById[c.id] = c.phone;
+    }
+  }
 
   const byPlan: Record<string, MyPlan["team"]> = {};
   for (const a of (assignments ?? []) as unknown as Array<{
@@ -44,7 +69,7 @@ export default async function MySchedulePage() {
     position: string;
     profile_id: string | null;
     status: string;
-    assignee: { full_name: string; phone: string | null } | { full_name: string; phone: string | null }[] | null;
+    assignee: { full_name: string } | { full_name: string }[] | null;
   }>) {
     const who = Array.isArray(a.assignee) ? a.assignee[0] : a.assignee;
     (byPlan[a.plan_id] ??= []).push({
@@ -53,7 +78,7 @@ export default async function MySchedulePage() {
       profile_id: a.profile_id,
       status: a.status as "invited" | "accepted" | "declined",
       name: who?.full_name ?? null,
-      phone: who?.phone ?? null,
+      phone: a.profile_id ? (phoneById[a.profile_id] ?? null) : null,
     });
   }
 
