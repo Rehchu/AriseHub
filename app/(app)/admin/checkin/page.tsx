@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import {
   CheckinSettingsAdmin,
   type AutoCheckoutRule,
-  type RoomRatio,
 } from "@/components/admin/CheckinSettingsAdmin";
 
 export default async function CheckinSettingsPage() {
@@ -22,8 +21,7 @@ export default async function CheckinSettingsPage() {
     redirect("/dashboard");
   }
 
-  const [{ data: settings }, { data: rules }, { data: campuses }, { data: rooms }] =
-    await Promise.all([
+  const [{ data: settings }, { data: rules }, { data: campuses }] = await Promise.all([
     supabase
       .from("checkin_settings")
       .select("require_pickup_verification, auto_checkout_enabled")
@@ -34,11 +32,7 @@ export default async function CheckinSettingsPage() {
       .order("day_of_week")
       .order("at_time"),
     supabase.from("campuses").select("name, timezone").order("name"),
-    supabase
-      .from("rooms")
-      .select("id, name, min_age, max_age, capacity, max_children_per_adult, active")
-      .order("name"),
-    ]);
+  ]);
 
   return (
     <CheckinSettingsAdmin
@@ -50,7 +44,6 @@ export default async function CheckinSettingsPage() {
         (settings as { auto_checkout_enabled?: boolean } | null)?.auto_checkout_enabled ?? true
       }
       rules={(rules ?? []) as AutoCheckoutRule[]}
-      rooms={(rooms ?? []) as RoomRatio[]}
       campuses={(campuses ?? []) as { name: string; timezone: string | null }[]}
     />
   );

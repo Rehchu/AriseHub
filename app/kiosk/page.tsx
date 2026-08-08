@@ -36,7 +36,7 @@ export default async function KioskPage() {
   // Via checkin_people — date_of_birth and has_allergy are no longer granted
   // on profiles church-wide (0049).
   const [{ data: rooms }, { data: checkins }, { data: people }] = await Promise.all([
-    supabase.from("rooms").select("id, name, capacity, min_age, max_age, active, max_children_per_adult").order("name"),
+    supabase.from("rooms").select("id, name, capacity, min_age, max_age, active").order("name"),
     supabase
       .from("checkins")
       .select("id, profile_id, room_id, status, security_code, checked_in_at, checked_out_at, notes")

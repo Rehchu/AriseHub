@@ -175,8 +175,8 @@ export interface TagValues {
  */
 export const PRINT_DPI = 300;
 
-export const FONTS = [
-  "Poppins",
+/** Always available, no network needed. */
+export const SYSTEM_FONTS = [
   "system-ui",
   "Georgia",
   "Times New Roman",
@@ -186,6 +186,102 @@ export const FONTS = [
   "Trebuchet MS",
   "Verdana",
 ];
+
+/**
+ * Fifty Google families, fetched only when one is actually used.
+ *
+ * Loading all fifty up front would pull megabytes of webfont onto a check-in
+ * tablet before anyone has designed anything, so `loadFont` injects a stylesheet
+ * per family on demand and `ensureFonts` waits for it before rasterising —
+ * otherwise the canvas silently falls back and the printed label disagrees with
+ * the screen, which is the one thing the preview exists to prevent.
+ *
+ * Chosen for a NAME BADGE read at arm's length across a room: heavy weights
+ * available, wide apertures, unambiguous digits for the pickup code. Grouped so
+ * the picker can label them.
+ */
+export const GOOGLE_FONTS: { name: string; group: "Sans" | "Serif" | "Display" | "Handwriting" | "Mono" }[] = [
+  { name: "Poppins", group: "Sans" },
+  { name: "Inter", group: "Sans" },
+  { name: "Roboto", group: "Sans" },
+  { name: "Open Sans", group: "Sans" },
+  { name: "Lato", group: "Sans" },
+  { name: "Montserrat", group: "Sans" },
+  { name: "Nunito", group: "Sans" },
+  { name: "Nunito Sans", group: "Sans" },
+  { name: "Raleway", group: "Sans" },
+  { name: "Work Sans", group: "Sans" },
+  { name: "Rubik", group: "Sans" },
+  { name: "Manrope", group: "Sans" },
+  { name: "DM Sans", group: "Sans" },
+  { name: "Outfit", group: "Sans" },
+  { name: "Plus Jakarta Sans", group: "Sans" },
+  { name: "Figtree", group: "Sans" },
+  { name: "Quicksand", group: "Sans" },
+  { name: "Barlow", group: "Sans" },
+  { name: "Source Sans 3", group: "Sans" },
+  { name: "Oswald", group: "Sans" },
+  { name: "Fira Sans", group: "Sans" },
+  { name: "Karla", group: "Sans" },
+  { name: "Mulish", group: "Sans" },
+  { name: "Cabin", group: "Sans" },
+  { name: "Titillium Web", group: "Sans" },
+  { name: "Playfair Display", group: "Serif" },
+  { name: "Merriweather", group: "Serif" },
+  { name: "Lora", group: "Serif" },
+  { name: "PT Serif", group: "Serif" },
+  { name: "Source Serif 4", group: "Serif" },
+  { name: "Libre Baskerville", group: "Serif" },
+  { name: "Crimson Text", group: "Serif" },
+  { name: "Cormorant Garamond", group: "Serif" },
+  { name: "EB Garamond", group: "Serif" },
+  { name: "Bitter", group: "Serif" },
+  { name: "Bebas Neue", group: "Display" },
+  { name: "Anton", group: "Display" },
+  { name: "Archivo Black", group: "Display" },
+  { name: "Alfa Slab One", group: "Display" },
+  { name: "Righteous", group: "Display" },
+  { name: "Fredoka", group: "Display" },
+  { name: "Baloo 2", group: "Display" },
+  { name: "Luckiest Guy", group: "Display" },
+  { name: "Bungee", group: "Display" },
+  { name: "Pacifico", group: "Handwriting" },
+  { name: "Caveat", group: "Handwriting" },
+  { name: "Dancing Script", group: "Handwriting" },
+  { name: "Satisfy", group: "Handwriting" },
+  { name: "Permanent Marker", group: "Handwriting" },
+  { name: "JetBrains Mono", group: "Mono" },
+];
+
+export const FONTS = [...GOOGLE_FONTS.map((f) => f.name), ...SYSTEM_FONTS];
+
+const loaded = new Set<string>();
+
+/**
+ * Pull one Google family in, once. Resolves when the browser has it, so a
+ * caller can rasterise straight afterwards.
+ */
+export function loadFont(family: string): Promise<void> {
+  if (typeof document === "undefined") return Promise.resolve();
+  if (!GOOGLE_FONTS.some((f) => f.name === family)) return Promise.resolve();
+  if (loaded.has(family)) return Promise.resolve();
+  loaded.add(family);
+  return new Promise((resolve) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    // 400 and 700 only — the designer offers regular and bold, nothing between,
+    // and every extra weight is another file over a church's wifi.
+    link.href =
+      "https://fonts.googleapis.com/css2?family=" +
+      encodeURIComponent(family).replace(/%20/g, "+") +
+      ":ital,wght@0,400;0,700;1,400;1,700&display=swap";
+    link.onload = () => resolve();
+    // A font that will not load must not hang the print. The canvas falls back
+    // to system-ui, which is visibly wrong rather than silently missing.
+    link.onerror = () => resolve();
+    document.head.appendChild(link);
+  });
+}
 
 /** Every merge field, with a description — the editor renders this list. */
 export const MERGE_FIELDS: { token: string; label: string }[] = [
@@ -364,13 +460,20 @@ async function ensureFonts(design: TagDesign, dpi: number, heightIn: number): Pr
   if (typeof document === "undefined" || !document.fonts) return;
   const ptScale = (dpi / 72) * (heightIn / 1.125);
   const wanted = new Set<string>();
+  const families = new Set<string>();
   for (const el of design.elements) {
     if (el.kind !== "text") continue;
     const size = Math.max(1, Math.round((el.fontSize ?? 12) * ptScale));
     const weight = el.bold ? "700" : "400";
     const style = el.italic ? "italic " : "";
-    wanted.add(`${style}${weight} ${size}px "${el.fontFamily ?? "system-ui"}"`);
+    const family = el.fontFamily ?? "system-ui";
+    families.add(family);
+    wanted.add(`${style}${weight} ${size}px "${family}"`);
   }
+  // Fetch any Google family this design uses before asking the browser to load
+  // the face. Without this the canvas rasterises in the fallback and the print
+  // quietly disagrees with the preview.
+  await Promise.all([...families].map((f) => loadFont(f)));
   await Promise.all(
     [...wanted].map((f) => document.fonts.load(f).catch(() => undefined)),
   );

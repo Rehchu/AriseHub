@@ -41,8 +41,6 @@ export interface RoomRow {
   min_age: number | null;
   max_age: number | null;
   active: boolean;
-  /** Safeguarding ratio. Null = no ratio warning for this room. */
-  max_children_per_adult?: number | null;
 }
 export interface PersonRow {
   id: string;
@@ -125,9 +123,6 @@ export function CheckinStation({
   const [requirePickup, setRequirePickup] = useState(true);
   // Siblings ticked for the family currently being checked in.
   const [alsoSelected, setAlsoSelected] = useState<Record<string, boolean>>({});
-  // Adults present per room today. Capacity is a fire-code number; this is the
-  // safeguarding one, and it is the one nobody was tracking.
-  const [adults, setAdults] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastBadge, setLastBadge] = useState<
@@ -238,30 +233,6 @@ export function CheckinStation({
 
   const today = new Date().toISOString().slice(0, 10);
 
-  useEffect(() => {
-    supabase
-      .from("room_staffing")
-      .select("room_id, adults")
-      .eq("on_date", today)
-      .then(({ data }) => {
-        const next: Record<string, number> = {};
-        for (const r of (data ?? []) as { room_id: string; adults: number }[]) next[r.room_id] = r.adults;
-        setAdults(next);
-      });
-  }, [supabase, today]);
-
-  async function setRoomAdults(roomId: string, n: number) {
-    const value = Math.max(0, n);
-    setAdults((a) => ({ ...a, [roomId]: value }));
-    const { error } = await supabase
-      .from("room_staffing")
-      .upsert(
-        { room_id: roomId, on_date: today, adults: value, updated_by: currentProfileId },
-        { onConflict: "room_id,on_date" },
-      );
-    if (error) setError(error.message);
-  }
-
   // Kids' ministry on a Sunday wants pickup verified. A midweek service where
   // the child just leaves with their parents does not. Super_Admin decides in
   // Admin -> Check-in rather than it being a code change.
@@ -350,16 +321,6 @@ export function CheckinStation({
   }
 
   const activeRooms = rooms.filter((r) => r.active);
-  /**
-   * Rooms children actually go into.
-   *
-   * A room is not a classroom. Fellowship Hall and the Dream Team Room get
-   * booked for adult meetings and events, and they were appearing in the
-   * staffing strip asking someone to count adults into them — a safeguarding
-   * ratio is meaningless there. The age range is what makes a room a classroom,
-   * and it is the same thing check-in uses to auto-assign a child.
-   */
-  const classrooms = activeRooms.filter((r) => r.min_age != null || r.max_age != null);
   const present = useMemo(() => checkins.filter((c) => c.status === "checked_in"), [checkins]);
 
   const occupancy = useMemo(() => {
@@ -878,67 +839,6 @@ export function CheckinStation({
                 <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold">{queued}</span>
               )}
             </div>
-          )}
-          {/* Ratios. Capacity says whether the room is full; this says whether
-              it is safely staffed, which is the number policy is written
-              against and the one nobody was tracking. */}
-          {classrooms.length > 0 && (
-            <section className="mb-5">
-              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
-                Classrooms — tap ± as adults arrive or leave
-              </h2>
-              <div className="space-y-1.5">
-                {classrooms.map((r) => {
-                  const kids = occupancy[r.id] ?? 0;
-                  const staff = adults[r.id] ?? 0;
-                  const ratio = r.max_children_per_adult ?? null;
-                  const needed = ratio ? Math.ceil(kids / ratio) : 0;
-                  const short = ratio != null && kids > 0 && staff < needed;
-                  return (
-                    <div
-                      key={r.id}
-                      className={
-                        "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-sm " +
-                        (short ? "border-brand-300 bg-brand-50" : "border-ink-100 bg-white")
-                      }
-                    >
-                      <span className="font-medium text-ink-900">{r.name}</span>
-                      <span className="text-ink-500">
-                        {kids} {kids === 1 ? "child" : "children"}
-                        {r.capacity != null && ` / ${r.capacity}`}
-                      </span>
-                      {ratio != null && (
-                        <span className={short ? "font-medium text-brand-700" : "text-ink-400"}>
-                          {short
-                            ? `needs ${needed} adult${needed === 1 ? "" : "s"} (1:${ratio})`
-                            : `1:${ratio}`}
-                        </span>
-                      )}
-                      <span className="flex-1" />
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setRoomAdults(r.id, staff - 1)}
-                          aria-label={`One fewer adult in ${r.name}`}
-                          className="h-8 w-8 rounded-md bg-ink-100 text-ink-700 hover:bg-ink-200"
-                        >
-                          −
-                        </button>
-                        <span className="w-16 text-center text-sm tabular-nums text-ink-700">
-                          {staff} adult{staff === 1 ? "" : "s"}
-                        </span>
-                        <button
-                          onClick={() => setRoomAdults(r.id, staff + 1)}
-                          aria-label={`One more adult in ${r.name}`}
-                          className="h-8 w-8 rounded-md bg-ink-100 text-ink-700 hover:bg-ink-200"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
           )}
 
           <section>

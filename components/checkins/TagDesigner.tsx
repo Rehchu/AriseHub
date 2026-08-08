@@ -6,7 +6,9 @@ import { Icon } from "@/components/shell/Icon";
 import {
   blankDesign,
   elementVisible,
-  FONTS,
+  GOOGLE_FONTS,
+  SYSTEM_FONTS,
+  loadFont,
   LABEL_PRESETS,
   MERGE_FIELDS,
   newElementId,
@@ -390,11 +392,19 @@ export function TagDesigner({
     }
     const rect = stageRef.current!.getBoundingClientRect();
     pushHistory();
+    // For a move, the offset is pointer-minus-origin. For a resize it is
+    // pointer-minus-CORNER, so the box keeps its size at the moment you grab it
+    // instead of snapping to wherever the pointer happens to be. The handle sits
+    // inside the element, so the old absolute maths shrank the box by the
+    // handle's own width the instant you touched it — and on a small element
+    // that collapsed it to the minimum and looked like it vanished.
     drag.current = {
       id: el.id,
       mode,
-      dx: (e.clientX - rect.left) / rect.width - el.x,
-      dy: (e.clientY - rect.top) / rect.height - el.y,
+      dx:
+        (e.clientX - rect.left) / rect.width - (mode === "resize" ? el.x + el.w : el.x),
+      dy:
+        (e.clientY - rect.top) / rect.height - (mode === "resize" ? el.y + el.h : el.y),
     };
     setSelectedId(el.id);
   }
@@ -415,10 +425,11 @@ export function TagDesigner({
       });
     } else {
       // Resize may run past the edge for the same reason a move may — the
-      // overhang is clipped, not printed.
+      // overhang is clipped, not printed. The grab offset keeps the corner under
+      // the pointer rather than jumping to it.
       updateEl(d.id, {
-        w: snap(Math.max(MIN_SIZE, fx - el.x)),
-        h: snap(Math.max(MIN_SIZE, fy - el.y)),
+        w: snap(Math.max(MIN_SIZE, fx - d.dx - el.x)),
+        h: snap(Math.max(MIN_SIZE, fy - d.dy - el.y)),
       });
     }
   }
@@ -1097,9 +1108,13 @@ export function TagDesigner({
                   <button
                     key={f.token}
                     title={f.label}
-                    disabled={!selected || selected.kind !== "text"}
+                    /* Not disabled. These were greyed out unless a text box was
+                       already selected, which is exactly why they could only
+                       ever merge and never add: insertMergeField creates a box
+                       when there is nothing to append to, and a disabled button
+                       meant that path could never run. */
                     onClick={() => insertMergeField(f.token)}
-                    className="rounded-md bg-ink-100 px-2 py-1 font-mono text-xs text-ink-600 transition hover:bg-ink-200 disabled:opacity-40"
+                    className="rounded-md bg-ink-100 px-2 py-1 font-mono text-xs text-ink-600 transition hover:bg-ink-200"
                   >
                     {f.token}
                   </button>
@@ -1290,9 +1305,29 @@ export function TagDesigner({
                         onChange={(e) => updateEl(selected.id, { text: e.target.value })} />
                     </Row>
                     <Row label="Font">
-                      <select className="ah-input py-1 text-sm" value={selected.fontFamily}
-                        onChange={(e) => { pushHistory(); updateEl(selected.id, { fontFamily: e.target.value }); }}>
-                        {FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+                      <select
+                        className="ah-input py-1 text-sm"
+                        value={selected.fontFamily}
+                        onChange={(e) => {
+                          pushHistory();
+                          const family = e.target.value;
+                          // Fetch it now, so the stage and the 300dpi preview
+                          // both render in the real face instead of falling
+                          // back for the first second.
+                          void loadFont(family);
+                          updateEl(selected.id, { fontFamily: family });
+                        }}
+                      >
+                        {(["Sans", "Serif", "Display", "Handwriting", "Mono"] as const).map((group) => (
+                          <optgroup key={group} label={group}>
+                            {GOOGLE_FONTS.filter((f) => f.group === group).map((f) => (
+                              <option key={f.name} value={f.name}>{f.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                        <optgroup label="On this device">
+                          {SYSTEM_FONTS.map((f) => <option key={f} value={f}>{f}</option>)}
+                        </optgroup>
                       </select>
                     </Row>
                     <Row label={`Size (${selected.fontSize}pt)`}>
@@ -1474,6 +1509,41 @@ export function TagDesigner({
                   <NumBox label="H %" value={selected.h} onFocus={pushHistory}
                     onChange={(v) => updateEl(selected.id, { h: Math.max(MIN_SIZE, v) })} />
                 </div>
+                {/* Rotation. TagElement.rotation and renderTagToPng have
+                    supported this all along — there was simply no way to set
+                    it, which is why the only rotated things on a label were
+                    ones that arrived with a template. */}
+                <label className="block">
+                  <span className="mb-1 flex items-center justify-between text-xs font-medium text-ink-500">
+                    <span>Rotation</span>
+                    <span className="tabular-nums text-ink-400">{selected.rotation ?? 0}°</span>
+                  </span>
+                  <input
+                    type="range"
+                    min={-180}
+                    max={180}
+                    step={1}
+                    value={selected.rotation ?? 0}
+                    onFocus={pushHistory}
+                    onChange={(e) => updateEl(selected.id, { rotation: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                  <span className="mt-1 flex flex-wrap gap-1">
+                    {[0, 90, 180, 270].map((deg) => (
+                      <button
+                        key={deg}
+                        onClick={() => {
+                          pushHistory();
+                          updateEl(selected.id, { rotation: deg === 0 ? 0 : deg > 180 ? deg - 360 : deg });
+                        }}
+                        className="ah-tight rounded-md bg-ink-100 px-2 py-1 text-[11px] font-medium text-ink-600 hover:bg-ink-200"
+                      >
+                        {deg}°
+                      </button>
+                    ))}
+                  </span>
+                </label>
+
                 <button
                   onClick={() => {
                     pushHistory();
