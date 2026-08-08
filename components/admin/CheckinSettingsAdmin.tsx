@@ -187,8 +187,14 @@ export function CheckinSettingsAdmin({
           a room is short. Blank means no warning for that room.
         </p>
 
+        {/* Classrooms only. A room is not automatically a children's room —
+            Fellowship Hall and the Dream Team Room get booked for adult
+            meetings, and asking for a safeguarding ratio on those is noise.
+            The age range is what makes a room a classroom. */}
         <ul className="mt-3 space-y-1.5">
-          {rooms.filter((r) => r.active).map((r) => (
+          {rooms
+            .filter((r) => r.active && (r.min_age != null || r.max_age != null))
+            .map((r) => (
             <li
               key={r.id}
               className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-ink-100 px-3 py-2 text-sm"
@@ -217,9 +223,11 @@ export function CheckinSettingsAdmin({
               </label>
             </li>
           ))}
-          {rooms.filter((r) => r.active).length === 0 && (
+          {rooms.filter((r) => r.active && (r.min_age != null || r.max_age != null)).length === 0 && (
             <li className="rounded-lg border border-dashed border-ink-200 px-3 py-3 text-sm text-ink-400">
-              No active rooms. Add your classrooms in Admin → Rooms.
+              No classrooms yet. A room counts as a classroom once it has an age
+              range — set that in Admin → Rooms. Rooms without one are meeting
+              spaces and don&apos;t need a ratio.
             </li>
           )}
         </ul>

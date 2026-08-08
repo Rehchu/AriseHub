@@ -6,7 +6,6 @@ export type ModuleKey =
   | "people"
   | "checkins"
   | "forms"
-  | "care"
   | "reports"
   | "groups"
   | "calendar"
@@ -38,8 +37,6 @@ export const MODULES: ModuleDef[] = [
   // queries RLS refuses — or hides one somebody is entitled to work on.
   { key: "checkins", label: "Check-Ins", href: "/checkins", icon: "badge", accent: "#0891b2", ready: true, roles: CHECKIN_ROLES },
   { key: "forms", label: "Forms", href: "/forms", icon: "form", accent: "#0d9488", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
-  // Visibility is decided by is_pastoral() in the Shell, not by role.
-  { key: "care", label: "Care", href: "/care", icon: "heart", accent: "#be123c", ready: true },
   { key: "reports", label: "Reports", href: "/reports", icon: "chart", accent: "#0f766e", ready: true, roles: ["Super_Admin", "Staff"] },
   { key: "groups", label: "Groups", href: "/groups", icon: "group", accent: "#059669", ready: true },
   { key: "calendar", label: "Calendar", href: "/calendar", icon: "calendar", accent: "#d97706", ready: true },

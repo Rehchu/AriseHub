@@ -25,14 +25,12 @@ export function Shell({
   profile,
   email,
   isIT = false,
-  canCare = false,
   canInvite = false,
   children,
 }: {
   profile: Profile | null;
   email: string;
   isIT?: boolean;
-  canCare?: boolean;
   canInvite?: boolean;
   children: React.ReactNode;
 }) {
@@ -42,10 +40,7 @@ export function Shell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  // Care is grant-based, not role-based, so filter it separately.
-  const modules = visibleModules(profile?.role).filter(
-    (m) => m.key !== "care" || canCare,
-  );
+  const modules = visibleModules(profile?.role);
   const displayName = profile?.full_name || email;
 
   async function signOut() {

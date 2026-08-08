@@ -48,7 +48,6 @@ export default async function AdminLayout({
             <AdminTab href="/admin/departments" label="Departments" />
             <AdminTab href="/admin/people" label="People" />
             <AdminTab href="/admin/fields" label="Custom Fields" />
-            <AdminTab href="/admin/care-access" label="Care Access" />
           </>
         )}
         {(isSuper || isIT) && <AdminTab href="/admin/elvanto" label="Elvanto" />}

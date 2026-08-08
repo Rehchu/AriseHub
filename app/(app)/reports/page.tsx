@@ -28,7 +28,6 @@ export default async function ReportsPage() {
     departmentsCount,
     tasksOpen,
     tasksDone,
-    careOpen,
     upcomingPlans,
     submissions,
   ] = await Promise.all([
@@ -46,7 +45,6 @@ export default async function ReportsPage() {
     supabase.from("departments").select("*", { count: "exact", head: true }),
     supabase.from("tasks").select("*", { count: "exact", head: true }).neq("status", "done"),
     supabase.from("tasks").select("*", { count: "exact", head: true }).eq("status", "done"),
-    supabase.from("care_items").select("*", { count: "exact", head: true }).neq("stage", "resolved"),
     supabase.from("service_plans").select("*", { count: "exact", head: true }).gte("service_date", today),
     supabase.from("form_submissions").select("*", { count: "exact", head: true }),
   ]);
@@ -105,7 +103,6 @@ export default async function ReportsPage() {
         <Stat icon="users" accent="#7c3aed" label="People" value={peopleTotal} />
         <Stat icon="group" accent="#059669" label="Groups" value={n(groupsCount)} sub={`${n(groupMembers)} memberships`} />
         <Stat icon="task" accent="#0891b2" label="Open tasks" value={n(tasksOpen)} sub={`${n(tasksDone)} done`} />
-        <Stat icon="heart" accent="#be123c" label="Open care items" value={n(careOpen)} />
         <Stat icon="music" accent="#db2777" label="Upcoming plans" value={n(upcomingPlans)} />
         <Stat icon="form" accent="#0d9488" label="Form submissions" value={n(submissions)} />
         <Stat icon="group" accent="#4b5563" label="Departments" value={n(departmentsCount)} />
