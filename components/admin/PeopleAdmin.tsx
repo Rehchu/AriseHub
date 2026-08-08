@@ -7,7 +7,8 @@ import { Icon } from "@/components/shell/Icon";
 import { InvitePanel } from "./InvitePanel";
 import { Avatar } from "@/components/people/Avatar";
 
-// Suggestions only — the field is free text so unusual titles still work.
+// Suggestions only — the field is free text, so a title that isn't here still
+// works; type it and it sticks.
 const TITLES = [
   "Apostle",
   "Pastor",
@@ -15,10 +16,33 @@ const TITLES = [
   "Elder",
   "Minister",
   "Deacon",
+  "Praise Team Leader",
+  "Children's Director",
+  "Youth Director",
   "Department Head",
   "Worship Leader",
+  "Media Director",
   "Administrator",
+  "Armor Bearer",
+  "Usher",
+  "Greeter",
 ];
+
+/**
+ * What to call someone who has no title of their own.
+ *
+ * "{Department} member" — a Praise Team volunteer with no title reads as
+ * "Praise Team member" rather than a blank space. More than one department
+ * falls back to the first, alphabetically, so it is at least stable.
+ */
+function displayTitle(
+  title: string | null | undefined,
+  deptNames: string[],
+): string | null {
+  if (title && title.trim()) return title.trim();
+  if (deptNames.length === 0) return null;
+  return `${[...deptNames].sort()[0]} member`;
+}
 
 const ROLES: UserRole[] = ["Super_Admin", "Admin", "IT_Admin", "Staff", "Volunteer", "Member"];
 
@@ -210,9 +234,26 @@ export function PeopleAdmin({
                       )}
                     </p>
                     <p className="truncate text-xs text-ink-400">
-                      {p.title && (
-                        <span className="mr-1.5 font-medium text-brand-600">{p.title}</span>
-                      )}
+                      {(() => {
+                        const names = departments
+                          .filter((d) => deptIds.has(d.id))
+                          .map((d) => d.name);
+                        const shown = displayTitle(p.title, names);
+                        if (!shown) return null;
+                        return (
+                          <span
+                            // Muted when it's the department fallback rather
+                            // than a title someone actually holds.
+                            className={
+                              p.title?.trim()
+                                ? "mr-1.5 font-medium text-brand-600"
+                                : "mr-1.5 text-ink-400"
+                            }
+                          >
+                            {shown}
+                          </span>
+                        );
+                      })()}
                       {p.email}
                     </p>
                   </div>
@@ -246,11 +287,14 @@ export function PeopleAdmin({
                     ))}
                   </select>
 
+                  {/* Was "Departments (N)", so nobody clicked it looking for a
+                      ministry title — and that panel is the only place a title
+                      can be set. Named for what is actually behind it. */}
                   <button
                     onClick={() => setExpanded(isOpen ? null : p.id)}
-                    className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+                    className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50"
                   >
-                    Departments ({deptIds.size})
+                    {isOpen ? "Hide" : `Title & departments (${deptIds.size})`}
                   </button>
                   <button
                     onClick={() => resetPassword(p)}
