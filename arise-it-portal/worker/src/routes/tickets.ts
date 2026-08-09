@@ -4,7 +4,7 @@ import { and, eq, desc, isNull, like, or, sql } from "drizzle-orm";
 import { tickets, ticketComments, users } from "../db/schema";
 import { requireAuth, requireRole, campusFilter } from "../lib/auth-middleware";
 import { logAudit } from "../lib/audit";
-import { notifyNewTicket } from "../lib/notify";
+import { notifyNewTicket, notifyStatusChange } from "../lib/notify";
 import type { Env, Variables } from "../types";
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -117,13 +117,35 @@ app.put("/:id", requireRole("super_admin", "campus_admin"), async (c) => {
     .where(eq(tickets.id, id))
     .returning();
 
+  const statusChanged = !!body.status && body.status !== existing.status;
+
   await logAudit(c.env, {
     userId: user.id,
-    action: body.status && body.status !== existing.status ? "status_change" : "updated",
+    action: statusChanged ? "status_change" : "updated",
     entityType: "ticket",
     entityId: id,
     details: body,
   });
+
+  // Tell the requester, but only on a genuine transition — not on every edit to
+  // a due date or a description. notifyStatusChange also declines to email
+  // someone about their own click, and never throws, so the update stands
+  // whether or not the mail goes out.
+  if (statusChanged) {
+    await notifyStatusChange(
+      c.env,
+      {
+        id: updated.id,
+        subject: updated.subject,
+        status: updated.status,
+        requesterUserId: updated.requesterUserId,
+        requesterEmail: updated.requesterEmail,
+      },
+      user.id,
+      new URL(c.req.url).origin,
+    );
+  }
+
   return c.json({ ticket: updated });
 });
 
@@ -145,6 +167,25 @@ app.post("/:id/assign", requireRole("super_admin", "campus_admin"), async (c) =>
     .returning();
 
   await logAudit(c.env, { userId: user.id, action: "assigned", entityType: "ticket", entityId: id, details: { assignedToUserId: assigneeId } });
+
+  // Picking a ticket up moves it open -> in_progress, which is exactly the
+  // transition a waiting requester most wants to hear about. It happens here
+  // rather than through PUT /:id, so without this it would go out silently.
+  if (updated.status !== existing.status) {
+    await notifyStatusChange(
+      c.env,
+      {
+        id: updated.id,
+        subject: updated.subject,
+        status: updated.status,
+        requesterUserId: updated.requesterUserId,
+        requesterEmail: updated.requesterEmail,
+      },
+      user.id,
+      new URL(c.req.url).origin,
+    );
+  }
+
   return c.json({ ticket: updated });
 });
 

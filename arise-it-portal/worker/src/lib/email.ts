@@ -6,7 +6,21 @@ import type { Env } from "../types";
 
 const DEFAULT_FROM = "Arise IT Portal <onboarding@resend.dev>";
 
-async function send(env: Env, to: string, subject: string, html: string): Promise<boolean> {
+/**
+ * Who ticket mail comes from.
+ *
+ * myfaithtech.com is verified, and the church wanted ticket traffic to arrive as
+ * AriseIT rather than as the portal's default sender — so a status change lands
+ * in the same conversation as the rest of someone's IT history rather than
+ * looking like a system notice from somewhere unfamiliar.
+ *
+ * AriseHub uses arisehub@ for anything about an ACCOUNT (password resets,
+ * invitations); ariseit@ is for anything about a ticket. Overridable without a
+ * deploy via IT_FROM_EMAIL.
+ */
+const TICKET_FROM = "AriseIT <ariseit@myfaithtech.com>";
+
+async function send(env: Env, to: string, subject: string, html: string, from?: string): Promise<boolean> {
   if (!env.RESEND_API_KEY) return false;
   try {
     const res = await fetch("https://api.resend.com/emails", {
@@ -15,7 +29,7 @@ async function send(env: Env, to: string, subject: string, html: string): Promis
         Authorization: `Bearer ${env.RESEND_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ from: env.FROM_EMAIL || DEFAULT_FROM, to: [to], subject, html }),
+      body: JSON.stringify({ from: from || env.FROM_EMAIL || DEFAULT_FROM, to: [to], subject, html }),
     });
     if (!res.ok) {
       console.error("Resend send failed", res.status, await res.text().catch(() => ""));
@@ -108,4 +122,35 @@ export function sendPasswordResetEmail(
      <p style="font-size:13px;color:#777;margin-top:16px">If you didn't request this, contact your IT admin.</p>`
   );
   return send(env, opts.to, "Your Arise IT Portal password was reset", html);
+}
+
+/**
+ * Tell a requester their ticket moved. Sent as AriseIT, not as the portal's
+ * default sender — see TICKET_FROM.
+ */
+export async function sendStatusChange(
+  env: Env,
+  opts: {
+    to: string;
+    heading: string;
+    line: string;
+    subject: string;
+    status: string;
+    ticketUrl: string;
+  }
+): Promise<boolean> {
+  const html = shell(
+    `<p style="font-size:16px;margin:0 0 8px;font-weight:600">${opts.heading}</p>
+     <p style="margin:0 0 12px">${opts.line}</p>
+     <p style="margin:0 0 4px;color:#555"><strong>${opts.subject}</strong></p>
+     <p style="margin:0 0 16px;color:#777;font-size:13px">Status: ${opts.status}</p>
+     ${button(opts.ticketUrl, "View your request")}`
+  );
+  return send(
+    env,
+    opts.to,
+    `Your IT request: ${opts.status}`,
+    html,
+    env.IT_FROM_EMAIL || TICKET_FROM
+  );
 }

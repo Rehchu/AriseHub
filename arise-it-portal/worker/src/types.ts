@@ -10,6 +10,10 @@ export interface Env {
   // gracefully and the admin shares the temp password manually as before.
   RESEND_API_KEY?: string;
   FROM_EMAIL?: string;
+  // Ticket mail goes out as AriseIT rather than the portal's default sender, so
+  // a status change lands in the same conversation as the rest of someone's IT
+  // history. Unset falls back to "AriseIT <ariseit@myfaithtech.com>".
+  IT_FROM_EMAIL?: string;
   // AriseHub single sign-in: the Supabase project URL whose JWTs this API will
   // accept (mapped to local users by email). Unset = bridge disabled, the
   // portal's own cookie login is the only path.
