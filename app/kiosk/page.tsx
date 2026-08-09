@@ -104,6 +104,7 @@ export default async function KioskPage() {
           currentProfileId={p.id}
           campusId={p.campus_id}
           isCheckinLead={p.is_checkin_lead || p.role === "Super_Admin"}
+          kiosk
         />
       </main>
       <footer className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 text-center text-xs text-ink-400">

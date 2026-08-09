@@ -94,6 +94,7 @@ export function CheckinStation({
   currentProfileId,
   campusId,
   isCheckinLead,
+  kiosk = false,
 }: {
   initial: CheckinRow[];
   rooms: RoomRow[];
@@ -103,6 +104,8 @@ export function CheckinStation({
   currentProfileId: string;
   campusId: string | null;
   isCheckinLead: boolean;
+  /** Already the locked-down station: don't offer a way back into it. */
+  kiosk?: boolean;
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -600,6 +603,17 @@ export function CheckinStation({
         <TabBtn active={tab === "checkin"} onClick={() => setTab("checkin")}>Check in / out</TabBtn>
         <TabBtn active={tab === "roster"} onClick={() => setTab("roster")}>Roster ({present.length})</TabBtn>
         <div className="flex-1" />
+        {/* A plain anchor, not a router push: /kiosk lives outside the app shell,
+            and a hard navigation is what makes "Add to Home Screen" from there
+            launch straight into the station with no address bar. */}
+        {!kiosk && (
+          <a
+            href="/kiosk"
+            className="mb-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+          >
+            <Icon name="badge" size={16} /> Kiosk mode
+          </a>
+        )}
         <button
           onClick={() => setShowTagSettings((s) => !s)}
           className="mb-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
