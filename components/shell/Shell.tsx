@@ -14,6 +14,7 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { GlobalSearch } from "./GlobalSearch";
 import { ITPortalLink } from "./ITPortalLink";
 import { ThemeToggle } from "./ThemeToggle";
+import { ThisSunday } from "./ThisSunday";
 import { Avatar } from "@/components/people/Avatar";
 import { BottomNav, bottomNavItems } from "./BottomNav";
 
@@ -51,43 +52,72 @@ export function Shell({
   const bottomItems = bottomNavItems(modules);
   const bottomKeys = new Set(bottomItems.map((m) => m.key));
 
+  // Nocturne shell: core areas stay top-level; everything else collapses into
+  // "More". Auto-open when the CURRENT page lives inside it, or finding
+  // yourself becomes a puzzle.
+  const secondary = modules.filter((m) => !m.core);
+  const onSecondary = secondary.some(
+    (m) => pathname === m.href || pathname.startsWith(m.href + "/"),
+  );
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  const renderItem = (m: (typeof modules)[number]) => {
+    const active = pathname === m.href || pathname.startsWith(m.href + "/");
+    // IT staff jump straight into the portal instead of the self-help page.
+    if (m.key === "it" && isIT) {
+      return <ITPortalLink key={m.key} onNavigate={() => setDrawerOpen(false)} />;
+    }
+    return (
+      <Link
+        key={m.key}
+        href={m.ready ? m.href : "#"}
+        onClick={() => setDrawerOpen(false)}
+        aria-disabled={!m.ready}
+        className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
+          active
+            ? "bg-accent text-onaccent"
+            : "text-chrome-200 hover:bg-chrome-700 hover:text-chrome-50"
+        } ${m.ready ? "" : "cursor-default opacity-50"}`}
+      >
+        <Icon name={m.icon} />
+        <span className="flex-1">{m.label}</span>
+        {!m.ready && (
+          <span className="rounded bg-chrome-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-chrome-300">
+            Soon
+          </span>
+        )}
+      </Link>
+    );
+  };
+
   // `hideBottomNavItems` is for the phone drawer: no point listing Messages
   // twice when it is already a thumb-tap away at the bottom of the screen.
-  const navList = (hideBottomNavItems = false) => (
-    <nav className="flex-1 space-y-1 px-3">
-      {modules
-        .filter((m) => !(hideBottomNavItems && bottomKeys.has(m.key)))
-        .map((m) => {
-        const active =
-          pathname === m.href || pathname.startsWith(m.href + "/");
-        // IT staff jump straight into the portal instead of the self-help page.
-        if (m.key === "it" && isIT) {
-          return <ITPortalLink key={m.key} onNavigate={() => setDrawerOpen(false)} />;
-        }
-        return (
-          <Link
-            key={m.key}
-            href={m.ready ? m.href : "#"}
-            onClick={() => setDrawerOpen(false)}
-            aria-disabled={!m.ready}
-            className={`group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${
-              active
-                ? "bg-accent text-chrome-50"
-                : "text-chrome-200 hover:bg-chrome-700 hover:text-chrome-50"
-            } ${m.ready ? "" : "cursor-default opacity-50"}`}
-          >
-            <Icon name={m.icon} />
-            <span className="flex-1">{m.label}</span>
-            {!m.ready && (
-              <span className="rounded bg-chrome-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-chrome-300">
-                Soon
+  const navList = (hideBottomNavItems = false) => {
+    const show = (list: typeof modules) =>
+      list.filter((m) => !(hideBottomNavItems && bottomKeys.has(m.key)));
+    const more = show(secondary);
+    return (
+      <nav className="flex-1 px-3">
+        <div className="space-y-1">{show(modules.filter((m) => m.core)).map(renderItem)}</div>
+        <ThisSunday />
+        {more.length > 0 && (
+          <>
+            <button
+              onClick={() => setMoreOpen((o) => !o)}
+              className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-300 transition hover:bg-chrome-700 hover:text-chrome-50"
+            >
+              <Icon name="menu" size={18} />
+              <span className="flex-1 text-left">More</span>
+              <span aria-hidden className="text-xs">
+                {moreOpen || onSecondary ? "−" : "+"}
               </span>
-            )}
-          </Link>
-        );
-        })}
-    </nav>
-  );
+            </button>
+            {(moreOpen || onSecondary) && <div className="mt-1 space-y-1">{more.map(renderItem)}</div>}
+          </>
+        )}
+      </nav>
+    );
+  };
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-ink-50">
@@ -153,7 +183,7 @@ export function Shell({
           {!isIT && (
           <button
             onClick={() => setHelpOpen(true)}
-            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-semibold text-chrome-50 transition hover:bg-accent-strong lg:h-9"
+            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-accent px-3 text-sm font-semibold text-onaccent transition hover:bg-accent-strong lg:h-9"
           >
             <Icon name="help" size={18} />
             <span className="hidden sm:inline">Get IT Help</span>

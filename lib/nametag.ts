@@ -35,6 +35,8 @@ export interface NameTagData {
   room: string;
   code: string;
   hasAllergy: boolean;
+  /** What the allergy is ("peanuts") — printed beside the flag when known. */
+  allergyNotes?: string;
   /**
    * When the check-in actually happened. Reprinting a badge on Monday must not
    * stamp it with Monday's date — the date on a child's tag is evidence.
@@ -62,7 +64,7 @@ function labelHtml(d: NameTagData, o: NameTagOptions, variant: "child" | "guardi
     <div class="meta" style="font-size:${f(8)}pt">
       ${o.showRoom && d.room ? `<span>${esc(d.room)}</span>` : ""}
       ${o.showDate ? `<span>${today}</span>` : ""}
-      ${o.showAllergy && d.hasAllergy ? `<span class="allergy">ALLERGY</span>` : ""}
+      ${o.showAllergy && d.hasAllergy ? `<span class="allergy">ALLERGY${d.allergyNotes ? `: ${esc(d.allergyNotes)}` : ""}</span>` : ""}
     </div>
     ${o.showCode ? `<div class="code" style="font-size:${f(variant === "guardian" ? 22 : 14)}pt">${esc(d.code)}</div>` : ""}
   </div>`;

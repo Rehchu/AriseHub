@@ -14,6 +14,27 @@ interface Row extends Message {
   senderName: string;
 }
 
+/** Consecutive messages from one author inside this window share a header. */
+const GROUP_WINDOW_MS = 5 * 60 * 1000;
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .map((s) => s[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+/** "9:41 AM" today, "Aug 7 · 9:41 AM" before that. */
+function stamp(iso: string) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })} · ${time}`;
+}
+
 export function Thread({
   channelId,
   currentProfileId,
@@ -282,7 +303,7 @@ export function Thread({
         />
       )}
 
-      <div className="flex-1 space-y-1 overflow-y-auto bg-ink-50 px-4 py-4">
+      <div className="flex-1 overflow-y-auto bg-ink-50 px-4 py-4">
         {rows.length === 0 && (
           <p className="py-8 text-center text-sm text-ink-400">
             No messages yet — say hello 👋
@@ -290,122 +311,143 @@ export function Thread({
         )}
         {rows.map((m, i) => {
           const mine = m.sender_profile_id === currentProfileId;
-          const showName =
-            !mine && (i === 0 || rows[i - 1].sender_profile_id !== m.sender_profile_id);
+          // One header per run of messages from the same author within the
+          // grouping window; the rest hang under it, indented past the avatar.
+          const prev = i > 0 ? rows[i - 1] : null;
+          const grouped =
+            !!prev &&
+            prev.sender_profile_id === m.sender_profile_id &&
+            new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() <
+              GROUP_WINDOW_MS;
           return (
-            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className="max-w-[75%]">
-                {showName && (
-                  <p className="mb-0.5 px-1 text-xs font-medium text-ink-500">
-                    {m.senderName}
+            <div
+              key={m.id}
+              className={`group flex items-start gap-2.5 ${grouped ? "mt-0.5" : "mt-4 first:mt-0"}`}
+            >
+              {grouped ? (
+                <span className="w-8 shrink-0" aria-hidden="true" />
+              ) : (
+                <span className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-full bg-ink-100 text-[11px] font-semibold text-ink-700">
+                  {initials(m.senderName)}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                {!grouped && (
+                  <p className="flex items-baseline gap-2">
+                    <span className="truncate text-[13.5px] font-semibold leading-5 text-ink-900">
+                      {m.senderName}
+                    </span>
+                    <span className="shrink-0 text-[11px] text-ink-400">
+                      {stamp(m.created_at)}
+                    </span>
                   </p>
                 )}
-                <div
-                  className={`group relative rounded-2xl px-3.5 py-2 text-sm ${
-                    mine
-                      ? "bg-accent text-onaccent"
-                      : "bg-white text-ink-800 shadow-sm"
-                  }`}
-                >
-                  {m.deleted_at ? (
-                    <span className="italic opacity-60">message deleted</span>
-                  ) : (
-                    <>
-                      {m.attachment_url && (
-                        <SignedAttachment
-                          pathOrUrl={m.attachment_url}
-                          type={m.attachment_type}
-                          name={m.attachment_name}
-                        />
-                      )}
-                      {m.body && (
-                        <span className="whitespace-pre-wrap break-words">{m.body}</span>
-                      )}
-                    </>
-                  )}
-                  {mine && !m.deleted_at && (
-                    // `hidden … group-hover:block` meant this only ever existed
-                    // on a mouse — on a phone, which is where the app mostly
-                    // gets used, you could not delete your own message at all.
-                    // Always present, faded until hover/focus.
-                    <button
-                      onClick={() => softDelete(m.id)}
-                      className="ah-tight absolute -left-7 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-ink-400 opacity-60 transition hover:text-brand-600 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
-                      aria-label="Delete message"
-                    >
-                      <Icon name="x" size={14} />
-                    </button>
-                  )}
-                </div>
+                {m.deleted_at ? (
+                  <p className="text-sm italic leading-[1.5] text-ink-400">
+                    message deleted
+                  </p>
+                ) : (
+                  <div className="text-sm leading-[1.5] text-ink-700">
+                    {m.attachment_url && (
+                      <SignedAttachment
+                        pathOrUrl={m.attachment_url}
+                        type={m.attachment_type}
+                        name={m.attachment_name}
+                      />
+                    )}
+                    {m.body && (
+                      <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                    )}
+                  </div>
+                )}
               </div>
+              {mine && !m.deleted_at && (
+                // `hidden … group-hover:block` meant this only ever existed on
+                // a mouse — on a phone, which is where the app mostly gets
+                // used, you could not delete your own message at all. Always
+                // present, faded until hover/focus.
+                <button
+                  onClick={() => softDelete(m.id)}
+                  className="ah-tight flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 opacity-50 transition hover:bg-ink-100 hover:text-ink-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+                  aria-label="Delete message"
+                >
+                  <Icon name="x" size={13} />
+                </button>
+              )}
             </div>
           );
         })}
         <div ref={bottomRef} />
       </div>
 
-      <div className="border-t border-ink-100 bg-white">
+      <div className="bg-ink-50 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-1 sm:px-4">
         {uploadError && (
-          <p className="px-4 pt-2 text-xs text-brand-600">{uploadError}</p>
+          <p className="px-1 pb-1.5 text-xs text-brand-700">{uploadError}</p>
         )}
-        {filePreview && (
-          <div className="flex items-center gap-2 px-4 pt-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={filePreview} alt="" className="h-14 w-14 rounded-lg object-cover" />
-            <span className="flex-1 truncate text-xs text-ink-500">{file?.name}</span>
-            <button
-              type="button"
-              onClick={() => {
-                setFile(null);
-                setFilePreview(null);
+        {/* One bordered surface; everything inside it is borderless. */}
+        <form onSubmit={send} className="rounded-xl border border-ink-100 bg-white">
+          {file && (
+            <div className="flex items-center gap-2 border-b border-ink-100 px-3 py-2">
+              {filePreview && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={filePreview} alt="" className="h-12 w-12 rounded-lg object-cover" />
+              )}
+              <span className="flex-1 truncate text-xs text-ink-500">{file.name}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setFile(null);
+                  setFilePreview(null);
+                }}
+                className="ah-tight flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                aria-label="Remove attachment"
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </div>
+          )}
+          <div className="flex items-end gap-1 px-1.5 py-1.5">
+            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-50 hover:text-ink-700">
+              <Icon name="link" size={17} />
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setFile(f);
+                  if (f.type.startsWith("image/")) {
+                    const r = new FileReader();
+                    r.onload = () => setFilePreview(String(r.result));
+                    r.readAsDataURL(f);
+                  } else setFilePreview(null);
+                }}
+              />
+            </label>
+            <textarea
+              className="max-h-32 min-h-0 w-full flex-1 resize-none bg-transparent px-1.5 py-2 text-sm text-ink-900 outline-none placeholder:text-ink-400"
+              rows={1}
+              placeholder={`Message ${title}`}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send(e);
+                }
               }}
-              className="text-ink-400 hover:text-brand-500"
+            />
+            <button
+              type="submit"
+              disabled={sending || (!body.trim() && !file)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-onaccent transition hover:bg-accent-strong disabled:opacity-50"
+              aria-label="Send"
             >
-              <Icon name="x" size={16} />
+              <Icon name="send" size={17} />
             </button>
           </div>
-        )}
-      <form onSubmit={send} className="flex items-end gap-2 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-ink-100 text-ink-600 hover:bg-ink-200">
-          <Icon name="link" size={18} />
-          <input
-            type="file"
-            accept="image/*,application/pdf"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              setFile(f);
-              if (f.type.startsWith("image/")) {
-                const r = new FileReader();
-                r.onload = () => setFilePreview(String(r.result));
-                r.readAsDataURL(f);
-              } else setFilePreview(null);
-            }}
-          />
-        </label>
-        <textarea
-          className="ah-input max-h-32 min-h-0 w-full flex-1 resize-none py-2"
-          rows={1}
-          placeholder={`Message ${title}`}
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send(e);
-            }
-          }}
-        />
-        <button
-          type="submit"
-          disabled={sending || (!body.trim() && !file)}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-onaccent transition hover:bg-accent-strong disabled:opacity-50"
-          aria-label="Send"
-        >
-          <Icon name="send" />
-        </button>
-      </form>
+        </form>
       </div>
     </div>
   );

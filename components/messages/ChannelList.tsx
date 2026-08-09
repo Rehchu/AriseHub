@@ -185,28 +185,35 @@ export function ChannelList({
             <p className="px-3 text-sm text-ink-400">Loading…</p>
           ) : (
             <>
-              <button
-                onClick={openItThread}
-                disabled={openingIt}
-                className="mb-3 flex w-full items-center gap-2.5 rounded-lg bg-ink-50 px-3 py-2.5 text-left text-sm font-medium text-ink-800 transition hover:bg-ink-100 disabled:opacity-60"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-onaccent">
-                  <Icon name="help" size={16} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  {openingIt ? "Opening…" : "Message IT"}
-                  <span className="block text-xs font-normal text-ink-400">
-                    Private — only you and IT can see it
-                  </span>
-                </span>
-              </button>
-              {itError && (
-                <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">{itError}</p>
-              )}
-
-              <Section title="Department chats" rows={departments} pathname={pathname} icon="group" />
-              <Section title="Support" rows={support} pathname={pathname} icon="help" empty="No support conversations." />
+              <Section title="Channels" rows={departments} pathname={pathname} icon="group" empty="No channels yet." />
               <Section title="Direct messages" rows={directs} pathname={pathname} icon="chat" empty="No direct messages yet." />
+              {/* "Message IT" is a normal row here, not a top-billed card — the
+                  RPC returns the existing thread, so pressing it twice is safe. */}
+              <Section
+                title="Support"
+                rows={support}
+                pathname={pathname}
+                icon="help"
+                after={
+                  <>
+                    <button
+                      onClick={openItThread}
+                      disabled={openingIt}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-ink-700 transition hover:bg-ink-50 disabled:opacity-60"
+                    >
+                      <Icon name="help" size={18} className="text-ink-400" />
+                      <span className="flex-1 truncate">
+                        {openingIt ? "Opening…" : "Message IT"}
+                      </span>
+                    </button>
+                    {itError && (
+                      <p className="mt-1 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+                        {itError}
+                      </p>
+                    )}
+                  </>
+                }
+              />
             </>
           )}
         </div>
@@ -228,16 +235,19 @@ function Section({
   pathname,
   icon,
   empty,
+  after,
 }: {
   title: string;
   rows: ChannelRow[];
   pathname: string;
   icon: string;
   empty?: string;
+  /** Extra rows rendered after the channel rows (e.g. the Message IT action). */
+  after?: React.ReactNode;
 }) {
   return (
     <div className="mb-4">
-      <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">
+      <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
         {title}
       </p>
       {rows.length === 0 && empty && (
@@ -267,6 +277,7 @@ function Section({
           </Link>
         );
       })}
+      {after}
     </div>
   );
 }

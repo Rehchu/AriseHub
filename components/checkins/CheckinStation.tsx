@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
@@ -46,6 +46,7 @@ export interface PersonRow {
   id: string;
   full_name: string;
   has_allergy: boolean;
+  allergy_notes: string | null;
   date_of_birth: string | null;
 }
 export interface CheckinRow {
@@ -191,6 +192,14 @@ export function CheckinStation({
   // Check-ins that gave up syncing. Kept rather than deleted — an attendance
   // record for a child should not vanish because the network misbehaved.
   const [stuck, setStuck] = useState<QueuedCheckin[]>([]);
+  // Staffed-desk presentation only (stat strip + label studio). The ref holds
+  // whatever print() last sent out so "Reprint last" always has it; the counter
+  // is state because the stat strip displays it. Both are set inside print(),
+  // and the re-render the counter causes is what keeps the button's disabled
+  // state honest.
+  const lastPrintedRef = useRef<NameTagData | null>(null);
+  const [labelsPrinted, setLabelsPrinted] = useState(0);
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null);
 
   // Check-in must survive flaky WiFi: queue locally, sync when we're back.
   useEffect(() => {
@@ -268,6 +277,10 @@ export function CheckinStation({
   // DYMO Connect on this machine → the shared desktop print agent (for iPads)
   // → the browser print dialog. First one that works wins.
   async function print(d: NameTagData) {
+    // Purely observational — the print chain below is untouched. Remember what
+    // went out (for "Reprint last") and that it went out (for the stat strip).
+    lastPrintedRef.current = d;
+    setLabelsPrinted((n) => n + 1);
     // The church-wide setting wins over whatever this device happens to have in
     // localStorage, so every station prints the same number of labels.
     const opts = { ...tagOpts, showGuardianTag: printGuardianTag };
@@ -293,7 +306,10 @@ export function CheckinStation({
           room: d.room,
           code: d.code,
           church: opts.churchName,
-          hasAllergy: d.hasAllergy,
+          // The Show-allergy toggle governs designed templates too, not just
+          // the built-in layout — one switch, one meaning.
+          hasAllergy: opts.showAllergy && d.hasAllergy,
+          allergyNotes: d.allergyNotes,
           campus: d.campus,
           guardian: d.guardian,
           service: d.service,
@@ -350,6 +366,59 @@ export function CheckinStation({
   }, [present]);
 
   const checkedInIds = useMemo(() => new Set(present.map((c) => c.profile_id)), [present]);
+
+  // ---- Staffed-desk stat strip + label studio. Never rendered in kiosk. ----
+
+  // Fullest room: fill ratio where capacity is known; a room with no capacity
+  // set ranks by raw headcount, beneath any known ratio (the /1000 keeps it
+  // there). Rooms with children in them beat empty rooms regardless.
+  const fillScore = (r: RoomRow) =>
+    r.capacity != null && r.capacity > 0
+      ? (occupancy[r.id] ?? 0) / r.capacity
+      : (occupancy[r.id] ?? 0) / 1000;
+  const roomsInUse = activeRooms.filter((r) => (occupancy[r.id] ?? 0) > 0);
+  const fullestPool = roomsInUse.length > 0 ? roomsInUse : activeRooms;
+  const fullest =
+    fullestPool.length > 0
+      ? fullestPool.reduce((a, b) => (fillScore(b) > fillScore(a) ? b : a))
+      : null;
+  const fullestCount = fullest ? (occupancy[fullest.id] ?? 0) : 0;
+  const nearCapacity =
+    fullest?.capacity != null && fullest.capacity > 0 && fullestCount / fullest.capacity >= 0.85;
+
+  // Label-studio preview: the default child design rendered with PLACEHOLDER
+  // values — an idle desk screen must never display a real child's name.
+  // Same template choice as print()'s forKind("child"), so the preview shows
+  // the design that will actually come out of the printer.
+  const previewTemplate =
+    templates.find((t) => t.kind === "child" && t.is_default) ??
+    templates.find((t) => t.kind === "child") ??
+    null;
+  const previewRoom = activeRooms[0]?.name ?? "Arise Kids";
+  useEffect(() => {
+    if (kiosk) return; // the studio never renders there — skip the canvas work
+    if (!previewTemplate) {
+      setPreviewSrc(null);
+      return;
+    }
+    let live = true;
+    renderTagToPng(
+      previewTemplate,
+      {
+        name: "Noah R.",
+        room: previewRoom,
+        code: "AH-041",
+        church: tagOpts.churchName,
+        hasAllergy: false,
+      },
+      150, // small on-screen preview; real labels keep PRINT_DPI
+    ).then((png) => {
+      if (live) setPreviewSrc(png);
+    });
+    return () => {
+      live = false;
+    };
+  }, [kiosk, previewTemplate, previewRoom, tagOpts.churchName]);
 
   const matches = q.trim()
     ? people.filter((p) => p.full_name.toLowerCase().includes(q.toLowerCase())).slice(0, 12)
@@ -448,6 +517,7 @@ export function CheckinStation({
         code,
         room: roomName,
         hasAllergy: person.has_allergy,
+        allergyNotes: person.allergy_notes ?? undefined,
         checkedInAt: nowIso,
       });
       setBusy(false);
@@ -480,6 +550,7 @@ export function CheckinStation({
       code,
       room: room?.name ?? "",
       hasAllergy: person.has_allergy,
+      allergyNotes: person.allergy_notes ?? undefined,
     };
     setLastBadge(badge);
     setQ("");
@@ -938,6 +1009,44 @@ export function CheckinStation({
         </div>
       )}
 
+      {/* Stat strip (handoff screen 7) — the desk's at-a-glance numbers, one
+          bordered container with internal dividers. Not rendered in kiosk mode:
+          a parent doesn't need occupancy figures or a print counter. */}
+      {!kiosk && (
+        <div className="mb-5 grid grid-cols-2 rounded-xl border border-ink-100 bg-white sm:grid-cols-4 sm:divide-x sm:divide-ink-100">
+          <StatCell
+            kicker="Checked in now"
+            value={String(present.length)}
+            status={present.length === 0 ? "nobody here yet" : "in the building"}
+          />
+          <StatCell
+            kicker="Fullest room"
+            value={
+              fullest
+                ? fullest.capacity != null
+                  ? `${fullestCount}/${fullest.capacity}`
+                  : String(fullestCount)
+                : "—"
+            }
+            status={
+              fullest
+                ? nearCapacity
+                  ? `${fullest.name} — near capacity`
+                  : fullest.name
+                : "no rooms yet"
+            }
+            attention={nearCapacity}
+          />
+          <StatCell kicker="Labels printed" value={String(labelsPrinted)} status="this session" />
+          <StatCell
+            kicker="Rooms active"
+            value={String(activeRooms.length)}
+            status={rooms.length === 0 ? "add rooms in Admin" : `of ${rooms.length} configured`}
+            attention={rooms.length === 0}
+          />
+        </div>
+      )}
+
       {tab === "checkin" ? (
         <div className={kiosk ? "grid gap-6" : "grid gap-6 lg:grid-cols-2"}>
           {/* Check IN */}
@@ -1240,6 +1349,57 @@ export function CheckinStation({
             )}
           </section>
           )}
+
+          {/* Label studio (handoff screen 7) — staffed desk only. A small live
+              render of the default child design so the volunteer can see what
+              the printer will produce, plus one-tap reprint of whatever went
+              out last. The full designer stays behind Name tags → Open
+              designer, exactly where it was. */}
+          {!kiosk && (
+            <section aria-label="Label studio">
+              <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+                Label studio
+              </h2>
+              <div className="rounded-xl border border-ink-100 bg-white p-3">
+                {previewTemplate ? (
+                  previewSrc ? (
+                    <img
+                      src={previewSrc}
+                      alt={`Preview of the default child name tag (${previewTemplate.name})`}
+                      className="w-full max-w-[320px] rounded-lg border border-ink-100"
+                    />
+                  ) : (
+                    <div className="flex h-24 w-full max-w-[320px] items-center justify-center rounded-lg border border-ink-100 bg-ink-50 text-xs text-ink-400">
+                      Rendering preview…
+                    </div>
+                  )
+                ) : (
+                  <p className="rounded-lg border border-dashed border-ink-200 px-3 py-4 text-center text-xs text-ink-400">
+                    No child tag designed yet — the built-in layout prints until
+                    one exists. Design one under Name tags → Open designer.
+                  </p>
+                )}
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate text-xs text-ink-500">
+                    {previewTemplate
+                      ? `${previewTemplate.name} · ${previewTemplate.width_in}″ × ${previewTemplate.height_in}″`
+                      : "Built-in layout"}
+                  </p>
+                  <button
+                    disabled={labelsPrinted === 0}
+                    onClick={() => {
+                      const d = lastPrintedRef.current;
+                      if (d) void print(d);
+                    }}
+                    title="Print the most recent name tag again"
+                    className="shrink-0 rounded-lg bg-ink-100 px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-ink-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Reprint last
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -1338,6 +1498,30 @@ export function CheckinStation({
           &quot;ask a lead&quot;.
         </p>
       )}
+    </div>
+  );
+}
+
+/** One cell of the stat strip: 10px kicker, 26px number, 12px status line. */
+function StatCell({
+  kicker,
+  value,
+  status,
+  attention = false,
+}: {
+  kicker: string;
+  value: string;
+  status: string;
+  /** Renders the status line in brand-700 — "look at this now". */
+  attention?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="font-display text-[26px] font-bold leading-tight text-ink-900">{value}</p>
+      <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>
+        {status}
+      </p>
     </div>
   );
 }

@@ -45,7 +45,7 @@ export default async function KioskPage() {
       .order("checked_in_at", { ascending: false }),
     supabase
       .from("checkin_people")
-      .select("id, full_name, has_allergy, date_of_birth")
+      .select("id, full_name, has_allergy, allergy_notes, date_of_birth")
       .is("archived_at", null)
       .order("full_name")
       .limit(500),

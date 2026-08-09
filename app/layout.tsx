@@ -43,8 +43,10 @@ export default function RootLayout({
           href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
+        {/* Inter is the redesign's one family (headings by size, not weight);
+            Poppins stays loaded for the tag designer's font list. */}
         <link
-          href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap"
           rel="stylesheet"
         />
       </head>
@@ -53,7 +55,9 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var t=localStorage.getItem('arisehub-theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}",
+              // Nocturne is the app's direction, so dark is the DEFAULT rather
+              // than following the OS — an explicit choice still wins.
+              "try{var t=localStorage.getItem('arisehub-theme');document.documentElement.setAttribute('data-theme',t==='light'?'light':'dark')}catch(e){}",
           }}
         />
         {children}

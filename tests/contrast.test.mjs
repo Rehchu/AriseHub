@@ -102,7 +102,9 @@ const TEXT_PAIRS = [
   ["sidebar person name", "chrome-50", "chrome-900"],
   ["sidebar person role", "chrome-300", "chrome-900"],
   ['sidebar "Soon" chip', "chrome-300", "chrome-700"],
-  ["sidebar active item", "chrome-50", "accent"],
+  // onaccent, not chrome-50: the dark theme's accent is a light blurple, so
+  // the text ON it is dark — chrome-50 there measured 2.9:1.
+  ["sidebar active item", "onaccent", "accent"],
 ];
 
 /** Non-text UI parts only need 3:1 (WCAG 1.4.11). */

@@ -153,6 +153,8 @@ export interface TagValues {
   code: string;
   church: string;
   hasAllergy: boolean;
+  /** What the allergy IS ("peanuts") — {allergy} prints this when present. */
+  allergyNotes?: string;
   /** Optional extras — merge fields resolve to "" when these aren't supplied. */
   campus?: string;
   guardian?: string;
@@ -299,6 +301,7 @@ export const MERGE_FIELDS: { token: string; label: string }[] = [
   { token: "{service}", label: "Service" },
   { token: "{age}", label: "Age" },
   { token: "{allergy}", label: "“ALLERGY” when flagged, else blank" },
+  { token: "{allergyNotes}", label: "What the allergy is (e.g. peanuts), else blank" },
 ];
 
 function resolveField(token: string, v: TagValues): string {
@@ -320,6 +323,9 @@ function resolveField(token: string, v: TagValues): string {
     case "service": return v.service ?? "";
     case "age": return v.age == null ? "" : String(v.age);
     case "allergy": return v.hasAllergy ? "ALLERGY" : "";
+    // Gated on the flag, not just the notes: stale notes on a child whose
+    // allergy was cleared must not resurrect the warning.
+    case "allergynotes": return v.hasAllergy ? (v.allergyNotes ?? "").trim() : "";
     default: return "";
   }
 }

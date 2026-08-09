@@ -17,6 +17,7 @@ export interface Item {
   item_type: "song" | "scripture" | "sermon" | "announcement" | "transition" | "prayer" | "other";
   duration_minutes: number | null;
   notes: string | null;
+  song_key: string | null;
 }
 export interface Assignment {
   id: string;
@@ -42,6 +43,11 @@ const ITEM_TYPES: Item["item_type"][] = [
   "other",
 ];
 
+/** Elapsed minutes → a running-clock label ("0:00", "0:24", "1:05"). */
+function clockAt(min: number) {
+  return Math.floor(min / 60) + ":" + String(min % 60).padStart(2, "0");
+}
+
 export function PlanDetail({
   plan,
   initialItems,
@@ -53,6 +59,7 @@ export function PlanDetail({
   blockouts = [],
   patterns = [],
   alreadyServing = {},
+  departmentName = null,
 }: {
   plan: Plan;
   initialItems: Item[];
@@ -64,10 +71,19 @@ export function PlanDetail({
   blockouts?: Blockout[];
   patterns?: ServingPattern[];
   alreadyServing?: Record<string, string>;
+  departmentName?: string | null;
 }) {
   const supabase = createClient();
   const [items, setItems] = useState<Item[]>(initialItems);
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments);
+
+  // A volunteer arriving from a "you've been scheduled" push wants their
+  // invitation front and centre; everyone else wants the running order.
+  const [tab, setTab] = useState<"order" | "teams">(() =>
+    initialAssignments.some((a) => a.profile_id === currentProfileId && a.status === "invited")
+      ? "teams"
+      : "order",
+  );
 
   const [itTitle, setItTitle] = useState("");
   const [itType, setItType] = useState<Item["item_type"]>("song");
@@ -76,6 +92,7 @@ export function PlanDetail({
 
   const [posName, setPosName] = useState("");
   const [posPerson, setPosPerson] = useState("");
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [dupDate, setDupDate] = useState("");
   const [dupPeople, setDupPeople] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
@@ -85,7 +102,7 @@ export function PlanDetail({
   // Availability label for the person picker, e.g. 'Away — Vacation'.
   function availLabel(profileId: string): { text: string; tone: string } | null {
     if (alreadyServing[profileId]) {
-      return { text: "Already on " + alreadyServing[profileId], tone: "text-amber-700" };
+      return { text: "Already on " + alreadyServing[profileId], tone: "text-brand-700" };
     }
     const a = availabilityFor(profileId, planDate, blockouts, patterns);
     if (a.state === "blocked") return { text: "Away — " + (a.reason ?? ""), tone: "text-brand-600" };
@@ -98,9 +115,27 @@ export function PlanDetail({
     [items],
   );
 
+  // Running clock: each row starts where the previous durations end. The plan
+  // stores no start-of-service time, so this is elapsed time from the top.
+  const startTimes = useMemo(() => {
+    let acc = 0;
+    return items.map((i) => {
+      const start = acc;
+      acc += i.duration_minutes ?? 0;
+      return start;
+    });
+  }, [items]);
+
+  const filled = assignments.filter((a) => a.profile_id).length;
+  const acceptedCount = assignments.filter((a) => a.status === "accepted").length;
+  const pendingCount = assignments.filter((a) => a.profile_id && a.status === "invited").length;
+  const declinedCount = assignments.filter((a) => a.status === "declined").length;
+  const unfilled = assignments.length - filled;
+
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
     if (!itTitle.trim()) return;
+    const chosenSong = itType === "song" && itSong ? songs.find((s) => s.id === itSong) : undefined;
     const { data } = await supabase
       .from("plan_items")
       .insert({
@@ -108,7 +143,8 @@ export function PlanDetail({
         title: itTitle.trim(),
         item_type: itType,
         duration_minutes: itDur ? Number(itDur) : null,
-        song_id: itType === "song" && itSong ? itSong : null,
+        song_id: chosenSong?.id ?? null,
+        song_key: chosenSong?.default_key ?? null,
         sort_order: items.length,
       })
       .select("*")
@@ -116,6 +152,7 @@ export function PlanDetail({
     if (data) setItems((it) => [...it, data as Item]);
     setItTitle("");
     setItDur("");
+    setItSong("");
   }
 
   async function removeItem(id: string) {
@@ -155,6 +192,32 @@ export function PlanDetail({
     }
     setPosName("");
     setPosPerson("");
+  }
+
+  /** Fill an existing unfilled position — same invite semantics as adding one. */
+  async function assignPerson(a: Assignment, personId: string) {
+    const fullName = people.find((p) => p.id === personId)?.full_name ?? "";
+    setAssignments((as) =>
+      as.map((x) =>
+        x.id === a.id
+          ? { ...x, profile_id: personId, status: "invited", assignee: { full_name: fullName } }
+          : x,
+      ),
+    );
+    setPickerFor(null);
+    await supabase
+      .from("plan_assignments")
+      .update({ profile_id: personId, status: "invited" })
+      .eq("id", a.id);
+    if (personId !== currentProfileId) {
+      notify(
+        personId,
+        "You've been scheduled",
+        plan.title + " — " + a.position + " on " +
+          planDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }),
+        "/services/" + plan.id,
+      );
+    }
   }
 
   async function removePosition(id: string) {
@@ -200,6 +263,7 @@ export function PlanDetail({
           item_type: i.item_type,
           duration_minutes: i.duration_minutes,
           notes: i.notes,
+          song_key: i.song_key,
           sort_order: idx,
         })),
       );
@@ -225,209 +289,424 @@ export function PlanDetail({
     await supabase.from("plan_assignments").update({ status }).eq("id", a.id);
   }
 
+  const twoCol = "mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]";
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <a href="/services" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-brand-600">
         ← All plans
       </a>
-      <h1 className="font-display text-2xl font-bold text-ink-900">{plan.title}</h1>
-      <p className="mt-1 text-ink-500">
-        {new Date(plan.service_date + "T00:00:00").toLocaleDateString(undefined, {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-        })}
-      </p>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
-        {/* Running sheet */}
-        <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Order of service</h2>
-            <span className="text-xs font-medium text-ink-500">{totalMin} min total</span>
-          </div>
-          <div className="space-y-2">
-            {items.map((i, idx) => (
-              <div key={i.id} className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-3">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink-100 text-xs font-medium text-ink-500">
-                  {idx + 1}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-ink-800">{i.title}</p>
-                  <p className="text-xs capitalize text-ink-400">{i.item_type}</p>
-                </div>
-                {i.duration_minutes != null && (
-                  <span className="text-xs text-ink-400">{i.duration_minutes}m</span>
-                )}
-                {canManage && (
-                  <button onClick={() => removeItem(i.id)} className="text-ink-400 hover:text-brand-600" aria-label="Remove item">
-                    <Icon name="trash" size={15} />
-                  </button>
-                )}
-              </div>
-            ))}
-            {items.length === 0 && (
-              <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-sm text-ink-400">
-                No items yet.
-              </p>
-            )}
-          </div>
-          {canManage && (
-            <form onSubmit={addItem} className="mt-3 space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
-              {itType === "song" && songs.length > 0 ? (
-                <select
-                  className="ah-input"
-                  value={itSong}
-                  onChange={(e) => {
-                    setItSong(e.target.value);
-                    const s = songs.find((x) => x.id === e.target.value);
-                    if (s) setItTitle(s.title + (s.default_key ? " (" + s.default_key + ")" : ""));
-                  }}
-                >
-                  <option value="">Choose a song…</option>
-                  {songs.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                      {s.artist ? " — " + s.artist : ""}
-                      {s.default_key ? " · " + s.default_key : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input className="ah-input" placeholder="Item (e.g. Great Are You Lord)" value={itTitle} onChange={(e) => setItTitle(e.target.value)} />
-              )}
-              <div className="flex gap-2">
-                <select className="ah-input capitalize" value={itType} onChange={(e) => setItType(e.target.value as Item["item_type"])}>
-                  {ITEM_TYPES.map((t) => (
-                    <option key={t} value={t} className="capitalize">
-                      {t}
-                    </option>
-                  ))}
-                </select>
-                <input type="number" min={0} className="ah-input w-24" placeholder="min" value={itDur} onChange={(e) => setItDur(e.target.value)} />
-                <button type="submit" className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">
-                  Add
-                </button>
-              </div>
-            </form>
-          )}
-        </section>
-
-          {canManage && (
-            <div className="mt-4 rounded-xl border border-ink-100 bg-white p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-                Reuse this plan
-              </p>
-              <p className="mt-1 text-xs text-ink-500">
-                Copies the whole running order to another date.
-              </p>
-              <div className="mt-2 flex flex-wrap items-end gap-2">
-                <input
-                  type="date"
-                  className="ah-input w-auto"
-                  value={dupDate}
-                  onChange={(e) => setDupDate(e.target.value)}
-                />
-                <button
-                  onClick={duplicate}
-                  disabled={!dupDate || duplicating}
-                  className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-50"
-                >
-                  {duplicating ? "Copying…" : "Duplicate"}
-                </button>
-              </div>
-              <label className="mt-2 flex items-center gap-2 text-sm text-ink-700">
-                <input
-                  type="checkbox"
-                  checked={dupPeople}
-                  onChange={(e) => setDupPeople(e.target.checked)}
-                />
-                Keep the same people (they&apos;ll still need to accept)
-              </label>
-            </div>
-          )}
-
-        {/* Volunteer scheduling */}
-        <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">Team</h2>
-          <div className="space-y-2">
-            {assignments.map((a) => {
-              const mine = a.profile_id === currentProfileId;
-              return (
-                <div key={a.id} className="rounded-xl border border-ink-100 bg-white p-3">
-                  <div className="flex items-center gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-ink-800">{a.position}</p>
-                      <p className="text-xs text-ink-400">{a.assignee?.full_name ?? "Unassigned"}</p>
-                    </div>
-                    <StatusBadge status={a.status} />
-                    {canManage && (
-                      <button onClick={() => removePosition(a.id)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
-                        <Icon name="x" size={14} />
-                      </button>
-                    )}
-                  </div>
-                  {a.profile_id && availLabel(a.profile_id) && (
-                    <p className={"mt-1 flex items-center gap-1 text-xs " + (availLabel(a.profile_id)!.tone)}>
-                      <Icon name="help" size={12} /> {availLabel(a.profile_id)!.text}
-                    </p>
-                  )}
-                  {mine && a.status === "invited" && (
-                    <div className="mt-2 flex gap-2">
-                      <button onClick={() => respond(a, "accepted")} className="flex-1 rounded-lg bg-emerald-700 py-1.5 text-sm font-medium text-onaccent hover:bg-emerald-800">
-                        Accept
-                      </button>
-                      <button onClick={() => respond(a, "declined")} className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200">
-                        Decline
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
+      {/* Header: title, date beside it, plan-level actions on the right. */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="font-display text-2xl font-bold text-ink-900">{plan.title}</h1>
+          <p className="text-sm text-ink-500">
+            {planDate.toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "long",
+              day: "numeric",
             })}
-            {assignments.length === 0 && (
-              <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-sm text-ink-400">
-                No positions yet.
-              </p>
-            )}
+          </p>
+        </div>
+        {canManage && (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              className="ah-input w-auto"
+              value={dupDate}
+              onChange={(e) => setDupDate(e.target.value)}
+              aria-label="Duplicate to date"
+            />
+            <label
+              className="flex items-center gap-1.5 text-xs text-ink-500"
+              title="Copied people are re-invited — they still need to accept"
+            >
+              <input
+                type="checkbox"
+                checked={dupPeople}
+                onChange={(e) => setDupPeople(e.target.checked)}
+              />
+              Keep people
+            </label>
+            <button
+              onClick={duplicate}
+              disabled={!dupDate || duplicating}
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-50"
+            >
+              {duplicating ? "Copying…" : "Duplicate"}
+            </button>
           </div>
-          {canManage && (
-            <form onSubmit={addPosition} className="mt-3 space-y-2 rounded-xl border border-ink-100 bg-ink-50 p-3">
-              <input className="ah-input" placeholder="Position (e.g. Acoustic Guitar)" value={posName} onChange={(e) => setPosName(e.target.value)} />
-              <div className="flex gap-2">
-                <select className="ah-input" value={posPerson} onChange={(e) => setPosPerson(e.target.value)}>
-                  <option value="">Assign later</option>
-                  {people.map((p) => {
-                    const a = availLabel(p.id);
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name}{a ? " · " + a.text : ""}
-                      </option>
-                    );
-                  })}
-                </select>
-                <button type="submit" className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">
-                  Add
-                </button>
-              </div>
-            </form>
-          )}
-        </section>
+        )}
       </div>
+
+      {/* Stat strip */}
+      <div className="mt-6 grid grid-cols-3 divide-x divide-ink-100 rounded-xl border border-ink-100 bg-white">
+        <StatCell
+          kicker="Run time"
+          number={totalMin + "m"}
+          status={items.length ? items.length + (items.length === 1 ? " item" : " items") + " in the order" : "no items yet"}
+        />
+        <StatCell
+          kicker="Positions"
+          number={filled + "/" + assignments.length}
+          status={
+            assignments.length === 0
+              ? "no positions yet"
+              : unfilled > 0
+                ? unfilled + " unfilled"
+                : "every position filled"
+          }
+          attention={unfilled > 0}
+        />
+        <StatCell
+          kicker="Confirmed"
+          number={acceptedCount + "/" + (filled || 0)}
+          status={
+            pendingCount > 0
+              ? pendingCount + " awaiting reply"
+              : declinedCount > 0
+                ? declinedCount + " declined — re-cover"
+                : filled > 0
+                  ? "all confirmed"
+                  : "nobody assigned yet"
+          }
+          attention={pendingCount > 0 || declinedCount > 0}
+        />
+      </div>
+
+      {/* Tab row */}
+      <div className="mt-6 flex gap-5 border-b border-ink-100" role="tablist">
+        {(
+          [
+            ["order", "Order of service"],
+            ["teams", "Teams"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={
+              tab === id
+                ? "-mb-px border-b-2 border-accent pb-2 text-sm font-semibold text-brand-700"
+                : "-mb-px border-b-2 border-transparent pb-2 text-sm font-medium text-ink-500 hover:text-ink-700"
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* ---------------- Order of service ---------------- */}
+      {tab === "order" && (
+        <div className={canManage ? twoCol : "mt-6"}>
+          <section>
+            <div className="overflow-x-auto rounded-xl border border-ink-100 bg-white">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-ink-100">
+                    <th className="w-16 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      Time
+                    </th>
+                    <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      Item
+                    </th>
+                    <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                      Length
+                    </th>
+                    {canManage && (
+                      <th className="w-10 px-3 py-2">
+                        <span className="sr-only">Remove</span>
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-ink-100">
+                  {items.map((i, idx) => (
+                    <tr key={i.id}>
+                      <td className="w-16 px-3 py-2 align-top text-xs font-medium tabular-nums text-ink-500">
+                        {clockAt(startTimes[idx] ?? 0)}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-medium text-ink-800">{i.title}</span>
+                          {i.item_type === "song" && i.song_key && (
+                            <span className="rounded bg-brand-50 px-1.5 text-[11px] font-medium text-brand-700">
+                              {i.song_key}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] uppercase tracking-wide text-ink-400">{i.item_type}</p>
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs tabular-nums text-ink-500">
+                        {i.duration_minutes != null ? i.duration_minutes + "m" : "—"}
+                      </td>
+                      {canManage && (
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            onClick={() => removeItem(i.id)}
+                            className="text-ink-400 hover:text-brand-600"
+                            aria-label="Remove item"
+                          >
+                            <Icon name="trash" size={15} />
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {items.length === 0 && (
+                <p className="px-3 py-6 text-center text-sm text-ink-400">No items yet.</p>
+              )}
+            </div>
+          </section>
+
+          {canManage && (
+            <aside>
+              <form onSubmit={addItem} className="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Add to the order
+                </p>
+                {itType === "song" && songs.length > 0 ? (
+                  <select
+                    className="ah-input"
+                    value={itSong}
+                    onChange={(e) => {
+                      setItSong(e.target.value);
+                      const s = songs.find((x) => x.id === e.target.value);
+                      if (s) setItTitle(s.title);
+                    }}
+                  >
+                    <option value="">Choose a song…</option>
+                    {songs.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.title}
+                        {s.artist ? " — " + s.artist : ""}
+                        {s.default_key ? " · " + s.default_key : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="ah-input"
+                    placeholder="Item (e.g. Great Are You Lord)"
+                    value={itTitle}
+                    onChange={(e) => setItTitle(e.target.value)}
+                  />
+                )}
+                <div className="flex gap-2">
+                  <select
+                    className="ah-input capitalize"
+                    value={itType}
+                    onChange={(e) => setItType(e.target.value as Item["item_type"])}
+                  >
+                    {ITEM_TYPES.map((t) => (
+                      <option key={t} value={t} className="capitalize">
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    className="ah-input w-20"
+                    placeholder="min"
+                    value={itDur}
+                    onChange={(e) => setItDur(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                  >
+                    Add
+                  </button>
+                </div>
+              </form>
+            </aside>
+          )}
+        </div>
+      )}
+
+      {/* ---------------- Teams ---------------- */}
+      {tab === "teams" && (
+        <div className={canManage ? twoCol : "mt-6"}>
+          <section>
+            <div className="rounded-xl border border-ink-100 bg-white">
+              <div className="flex items-center justify-between border-b border-ink-100 px-3 py-2">
+                <p className="text-sm font-semibold text-ink-900">
+                  {departmentName ?? "Serving team"}
+                </p>
+                <p className="text-xs text-ink-500">
+                  {acceptedCount}/{assignments.length} confirmed
+                </p>
+              </div>
+              <ul className="divide-y divide-ink-100">
+                {assignments.map((a) => {
+                  const mine = a.profile_id === currentProfileId;
+                  const avail = a.profile_id ? availLabel(a.profile_id) : null;
+                  return (
+                    <li key={a.id} className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-ink-800">{a.position}</p>
+                          {a.assignee && (
+                            <p className="text-xs text-ink-500">{a.assignee.full_name}</p>
+                          )}
+                        </div>
+                        {a.profile_id ? (
+                          a.status === "accepted" ? (
+                            <span className="flex items-center gap-1 rounded bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                              <Icon name="check" size={12} /> Confirmed
+                            </span>
+                          ) : a.status === "declined" ? (
+                            <span className="rounded border border-ink-200 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">
+                              Declined
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-medium text-ink-400">Pending</span>
+                          )
+                        ) : canManage ? (
+                          <button
+                            onClick={() => setPickerFor(pickerFor === a.id ? null : a.id)}
+                            className="rounded-lg border border-dashed border-ink-200 px-2 py-1 text-xs font-medium text-brand-700 hover:bg-brand-50"
+                          >
+                            Find someone
+                          </button>
+                        ) : (
+                          <span className="text-[11px] font-medium text-ink-400">Unfilled</span>
+                        )}
+                        {canManage && (
+                          <button
+                            onClick={() => removePosition(a.id)}
+                            className="text-ink-400 hover:text-brand-600"
+                            aria-label="Remove"
+                          >
+                            <Icon name="x" size={14} />
+                          </button>
+                        )}
+                      </div>
+                      {avail && (
+                        <p className={"mt-1 flex items-center gap-1 text-xs " + avail.tone}>
+                          <Icon name="help" size={12} /> {avail.text}
+                        </p>
+                      )}
+                      {canManage && pickerFor === a.id && !a.profile_id && (
+                        <div className="mt-2 flex gap-2">
+                          <select
+                            className="ah-input"
+                            defaultValue=""
+                            autoFocus
+                            onChange={(e) => {
+                              if (e.target.value) assignPerson(a, e.target.value);
+                            }}
+                          >
+                            <option value="">Choose a person…</option>
+                            {people.map((p) => {
+                              const pl = availLabel(p.id);
+                              return (
+                                <option key={p.id} value={p.id}>
+                                  {p.full_name}
+                                  {pl ? " · " + pl.text : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setPickerFor(null)}
+                            className="shrink-0 rounded-lg bg-ink-100 px-2.5 text-sm font-medium text-ink-600 hover:bg-ink-200"
+                            aria-label="Cancel"
+                          >
+                            <Icon name="x" size={14} />
+                          </button>
+                        </div>
+                      )}
+                      {mine && a.status === "invited" && (
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            onClick={() => respond(a, "accepted")}
+                            className="flex-1 rounded-lg bg-accent py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => respond(a, "declined")}
+                            className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              {assignments.length === 0 && (
+                <p className="px-3 py-6 text-center text-sm text-ink-400">No positions yet.</p>
+              )}
+            </div>
+          </section>
+
+          {canManage && (
+            <aside>
+              <form onSubmit={addPosition} className="space-y-2 rounded-xl border border-ink-100 bg-white p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Add a position
+                </p>
+                <input
+                  className="ah-input"
+                  placeholder="Position (e.g. Acoustic Guitar)"
+                  value={posName}
+                  onChange={(e) => setPosName(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <select className="ah-input" value={posPerson} onChange={(e) => setPosPerson(e.target.value)}>
+                    <option value="">Assign later</option>
+                    {people.map((p) => {
+                      const a = availLabel(p.id);
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {p.full_name}
+                          {a ? " · " + a.text : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    type="submit"
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                  >
+                    Add
+                  </button>
+                </div>
+              </form>
+            </aside>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function StatusBadge({ status }: { status: Assignment["status"] }) {
-  const style =
-    status === "accepted"
-      ? "bg-emerald-50 text-emerald-700"
-      : status === "declined"
-        ? "bg-ink-100 text-ink-400"
-        : "bg-amber-50 text-amber-700";
+function StatCell({
+  kicker,
+  number,
+  status,
+  attention = false,
+}: {
+  kicker: string;
+  number: string;
+  status: string;
+  attention?: boolean;
+}) {
   return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${style}`}>
-      {status}
-    </span>
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="font-display text-[26px] font-semibold leading-tight text-ink-900">{number}</p>
+      <p className={"truncate text-xs " + (attention ? "text-brand-700" : "text-ink-500")}>{status}</p>
+    </div>
   );
 }

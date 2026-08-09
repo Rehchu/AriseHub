@@ -62,7 +62,9 @@
   --color-accent-strong: #b8232e;
   --color-onaccent: #ffffff;
 
-  --font-display: "Poppins", ui-sans-serif, system-ui, sans-serif;
+  /* Nocturne: one family everywhere, hierarchy by size and space. Poppins
+     remains available to the tag designer's font picker only. */
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ---------------------------------------------------------------------------
@@ -84,53 +86,109 @@
 /* Unlayered on purpose: Tailwind emits @theme into `@layer theme`, and an
    override inside that same layer loses to it on source order. Unlayered CSS
    beats layered CSS in the cascade, so these always win. */
+/* Dark = Nocturne (design handoff 2026-08-09). Page #161826, raised surface
+   #232532, text #e9e9ed, and the chrome accent moves to the handoff's blurple
+   ramp — the flame logo keeps brand red (brand-500 doesn't shift). Light mode
+   is unchanged: it remains the existing red-accented theme, per the handoff's
+   own "Modernist is reference only". Ratios re-checked by tests/contrast. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --color-white: #17181c;
-    --color-ink-50: #101013;
-    --color-ink-100: #26272c;
-    --color-ink-200: #34353b;
-    --color-ink-300: #4c4d54;
-    --color-ink-400: #9a9ba1;
-    --color-ink-500: #b4b5bb;
-    --color-ink-600: #c5c6ca;
-    --color-ink-700: #d8d9dc;
-    --color-ink-800: #e8e8ea;
-    --color-ink-900: #f6f6f7;
+    --color-white: #232532;
+    --color-ink-50: #161826;
+    --color-ink-100: #2c2f40;
+    --color-ink-200: #3f424d;
+    --color-ink-300: #595d6c;
+    --color-ink-400: #9397ab;
+    --color-ink-500: #b2b6ca;
+    --color-ink-600: #cfd3e5;
+    --color-ink-700: #dfe2f0;
+    --color-ink-800: #e9e9ed;
+    --color-ink-900: #f3f5fe;
 
-    --color-brand-50: #3a1519;
-    --color-brand-100: #4d1a20;
-    --color-brand-200: #6b1f27;
-    --color-brand-600: #e4525f;
-    --color-brand-700: #f0959e;
-    --color-brand-800: #f6bcc2;
-    --color-brand-900: #fbe0e2;
+    /* Tints go blurple (accent-900..100 of the Nocturne ramp); 500 stays the
+       red anchor because that is the logo. */
+    --color-brand-50: #2b2741;
+    --color-brand-100: #423a6a;
+    --color-brand-200: #5d5294;
+    --color-brand-600: #b5abfc;
+    --color-brand-700: #d2cefd;
+    --color-brand-800: #e7e5fe;
+    --color-brand-900: #f5f4ff;
+
+    /* Filled controls: blurple with dark text — 5.2:1, hover 7.6:1. */
+    --color-accent: #9184d9;
+    --color-accent-strong: #b5abfc;
+    --color-onaccent: #161826;
+
+    /* onaccent turned dark with the blurple, so every OTHER filled control
+       (success/warning/etc pair their fill with text-onaccent too) must
+       brighten to carry dark text — same light-fill/dark-text logic as the
+       accent. Ratios 7.2:1–11:1 against #161826. */
+    --color-emerald-700: #10b981;
+    --color-emerald-800: #34d399;
+    --color-amber-700: #f59e0b;
+    --color-amber-800: #fbbf24;
+    --color-teal-700: #14b8a6;
+    --color-cyan-700: #06b6d4;
+    --color-green-700: #22c55e;
+
+    /* Sidebar sits one step LIGHTER than the page in Nocturne. */
+    --color-chrome-50: #f3f5fe;
+    --color-chrome-200: #cfd3e5;
+    --color-chrome-300: #9397ab;
+    --color-chrome-400: #75798c;
+    --color-chrome-600: #3f424d;
+    --color-chrome-700: #2c2f40;
+    --color-chrome-800: #232532;
+    --color-chrome-900: #1c1e2b;
 
     color-scheme: dark;
   }
 }
 
-/* An explicit pick in the theme switcher beats the system setting. */
+/* An explicit pick in the theme switcher beats the system setting. Keep this
+   block IDENTICAL to the media-query block above. */
 :root[data-theme="dark"] {
-  --color-white: #17181c;
-  --color-ink-50: #101013;
-  --color-ink-100: #26272c;
-  --color-ink-200: #34353b;
-  --color-ink-300: #4c4d54;
-  --color-ink-400: #9a9ba1;
-  --color-ink-500: #b4b5bb;
-  --color-ink-600: #c5c6ca;
-  --color-ink-700: #d8d9dc;
-  --color-ink-800: #e8e8ea;
-  --color-ink-900: #f6f6f7;
+  --color-white: #232532;
+  --color-ink-50: #161826;
+  --color-ink-100: #2c2f40;
+  --color-ink-200: #3f424d;
+  --color-ink-300: #595d6c;
+  --color-ink-400: #9397ab;
+  --color-ink-500: #b2b6ca;
+  --color-ink-600: #cfd3e5;
+  --color-ink-700: #dfe2f0;
+  --color-ink-800: #e9e9ed;
+  --color-ink-900: #f3f5fe;
 
-  --color-brand-50: #3a1519;
-  --color-brand-100: #4d1a20;
-  --color-brand-200: #6b1f27;
-  --color-brand-600: #e4525f;
-  --color-brand-700: #f0959e;
-  --color-brand-800: #f6bcc2;
-  --color-brand-900: #fbe0e2;
+  --color-brand-50: #2b2741;
+  --color-brand-100: #423a6a;
+  --color-brand-200: #5d5294;
+  --color-brand-600: #b5abfc;
+  --color-brand-700: #d2cefd;
+  --color-brand-800: #e7e5fe;
+  --color-brand-900: #f5f4ff;
+
+  --color-accent: #9184d9;
+  --color-accent-strong: #b5abfc;
+  --color-onaccent: #161826;
+
+  --color-emerald-700: #10b981;
+  --color-emerald-800: #34d399;
+  --color-amber-700: #f59e0b;
+  --color-amber-800: #fbbf24;
+  --color-teal-700: #14b8a6;
+  --color-cyan-700: #06b6d4;
+  --color-green-700: #22c55e;
+
+  --color-chrome-50: #f3f5fe;
+  --color-chrome-200: #cfd3e5;
+  --color-chrome-300: #9397ab;
+  --color-chrome-400: #75798c;
+  --color-chrome-600: #3f424d;
+  --color-chrome-700: #2c2f40;
+  --color-chrome-800: #232532;
+  --color-chrome-900: #1c1e2b;
 
   color-scheme: dark;
 }
@@ -148,7 +206,7 @@ body {
 body {
   background: var(--color-ink-50);
   color: var(--color-ink-800);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 

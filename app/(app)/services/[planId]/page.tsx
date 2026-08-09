@@ -24,15 +24,18 @@ export default async function PlanPage({
 
   const { data: plan } = await supabase
     .from("service_plans")
-    .select("id, title, service_date, notes")
+    .select("id, title, service_date, notes, department:departments(name)")
     .eq("id", planId)
     .maybeSingle();
   if (!plan) notFound();
 
+  const dept = (plan as { department?: { name: string } | { name: string }[] | null }).department;
+  const departmentName = (Array.isArray(dept) ? dept[0]?.name : dept?.name) ?? null;
+
   const [{ data: items }, { data: assignments }, { data: people }] = await Promise.all([
     supabase
       .from("plan_items")
-      .select("id, sort_order, title, item_type, duration_minutes, notes")
+      .select("id, sort_order, title, item_type, duration_minutes, notes, song_key")
       .eq("plan_id", planId)
       .order("sort_order"),
     supabase
@@ -78,7 +81,8 @@ export default async function PlanPage({
 
   return (
     <PlanDetail
-      plan={plan as { id: string; title: string; service_date: string; notes: string | null }}
+      plan={plan as unknown as { id: string; title: string; service_date: string; notes: string | null }}
+      departmentName={departmentName}
       initialItems={(items ?? []) as Item[]}
       initialAssignments={normAssignments}
       people={(people ?? []) as { id: string; full_name: string }[]}
