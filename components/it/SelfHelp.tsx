@@ -92,7 +92,7 @@ export function SelfHelp({
           rel="noopener noreferrer"
           className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-4 transition hover:shadow-md"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-700 text-onaccent">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-chrome-700 text-chrome-50">
             <Icon name="link" />
           </span>
           <span>

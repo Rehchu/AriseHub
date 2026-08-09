@@ -61,7 +61,7 @@ export function ITPortal({
           rel="noopener noreferrer"
           className="flex flex-col rounded-xl border border-ink-100 bg-white p-5 transition hover:shadow-md"
         >
-          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-ink-700 text-onaccent">
+          <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-chrome-700 text-chrome-50">
             <Icon name="task" />
           </span>
           <h3 className="font-display font-semibold text-ink-900">My requests</h3>

@@ -36,14 +36,17 @@ export default async function JoinPage({
 
   const campus = Array.isArray(l?.campuses) ? l?.campuses[0] : l?.campuses;
 
+  // chrome-*, not ink-*. The ink scale inverts, so this hero went near-white in
+  // dark mode while text-onaccent stayed white — and this is a brand-new
+  // member's very first screen.
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-ink-900 px-4 py-10">
-      <div className="mb-6 flex flex-col items-center gap-3 text-onaccent">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-chrome-900 px-4 py-10">
+      <div className="mb-6 flex flex-col items-center gap-3 text-chrome-50">
         <Logo size={52} />
         <h1 className="font-display text-2xl font-bold">
           Arise<span className="text-brand-500">Hub</span>
         </h1>
-        <p className="text-sm text-ink-300">Arise Church · Pineville, LA</p>
+        <p className="text-sm text-chrome-300">Arise Church · Pineville, LA</p>
       </div>
 
       <div className="w-full max-w-sm">

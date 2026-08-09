@@ -55,14 +55,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-ink-900 px-4">
+    /* chrome-900, not ink-900. The ink scale INVERTS, so this hero turned
+       near-white in dark mode while text-onaccent stayed white — the wordmark
+       and the whole sign-in heading vanished. chrome-* exists for exactly this:
+       a surface that stays dark in both themes. */
+    <div className="flex min-h-screen items-center justify-center bg-chrome-900 px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-3 text-onaccent">
+        <div className="mb-8 flex flex-col items-center gap-3 text-chrome-50">
           <Logo size={56} />
           <h1 className="font-display text-2xl font-bold">
             Arise<span className="text-brand-500">Hub</span>
           </h1>
-          <p className="text-sm text-ink-300">Arise Church · Pineville, LA</p>
+          <p className="text-sm text-chrome-300">Arise Church · Pineville, LA</p>
         </div>
 
         <form

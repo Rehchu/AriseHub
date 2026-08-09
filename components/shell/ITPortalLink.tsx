@@ -19,11 +19,15 @@ export function ITPortalLink({ onNavigate }: { onNavigate?: () => void }) {
     <a
       href={IT_PORTAL}
       onClick={open}
-      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-onaccent"
+      /* chrome-*, matching every other item in this nav. The sidebar never
+         inverts, but ink-200 does — so in dark mode this sat at 1.61:1 on a
+         surface that stayed near-black, i.e. the one link that disappeared
+         while its neighbours stayed put. */
+      className="group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"
     >
       <Icon name="wrench" />
       <span className="flex-1">IT Portal</span>
-      <span className="text-[10px] text-ink-400">{busy ? "…" : "↗"}</span>
+      <span className="text-[10px] text-chrome-300">{busy ? "…" : "↗"}</span>
     </a>
   );
 }

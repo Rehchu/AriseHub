@@ -122,7 +122,7 @@ export function NotificationToggle({ profileId }: { profileId: string }) {
         <button
           onClick={enable}
           disabled={busy}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-onaccent disabled:opacity-60"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50 disabled:opacity-60"
         >
           <Icon name="help" /> Enable notifications
         </button>
@@ -130,7 +130,7 @@ export function NotificationToggle({ profileId }: { profileId: string }) {
         <div className="space-y-1">
           <button
             onClick={test}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-ink-200 transition hover:bg-ink-700 hover:text-onaccent"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-chrome-200 transition hover:bg-chrome-700 hover:text-chrome-50"
           >
             <Icon name="send" /> Send test notification
           </button>

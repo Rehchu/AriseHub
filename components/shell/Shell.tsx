@@ -94,7 +94,10 @@ export function Shell({
     <div className="flex h-[100dvh] overflow-hidden bg-ink-50">
       <RegisterServiceWorker />
       {/* Desktop sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col bg-chrome-900 py-5 lg:flex">
+      {/* overflow-y-auto: the shell is h-[100dvh] overflow-hidden, so on any
+          laptop shorter than about 920px the footer — My profile, theme,
+          Sign out — was simply cut off with no way to reach it. */}
+      <aside className="hidden w-64 shrink-0 flex-col overflow-y-auto bg-chrome-900 py-5 lg:flex">
         <div className="mb-6 flex items-center gap-2.5 px-5 text-chrome-50">
           <Logo size={30} />
           <span className="font-display text-lg font-bold">
@@ -113,7 +116,7 @@ export function Shell({
             onClick={() => setDrawerOpen(false)}
           />
           <Dismissible onDismiss={() => setDrawerOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col bg-chrome-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
+          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col overflow-y-auto bg-chrome-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
             <div className="mb-6 flex items-center justify-between px-5 text-chrome-50">
               <span className="flex items-center gap-2.5">
                 <Logo size={28} />

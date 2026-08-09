@@ -477,6 +477,7 @@ export function CheckinStation({
    */
   async function checkOut(c: CheckinRow, releasedTo?: string | null, note?: string | null) {
     setError(null);
+    const previous = { status: c.status, checked_out_at: c.checked_out_at };
     setCheckins((cs) =>
       cs.map((x) =>
         x.id === c.id
@@ -484,7 +485,7 @@ export function CheckinStation({
           : x,
       ),
     );
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("checkins")
       .update({
         status: "checked_out",
@@ -493,8 +494,21 @@ export function CheckinStation({
         released_to_profile_id: releasedTo ?? null,
         release_note: note?.trim() || null,
       })
-      .eq("id", c.id);
-    if (error) setError(error.message);
+      .eq("id", c.id)
+      .select("id");
+    // The roster is the record of who is still in the building. A release that
+    // failed but LOOKS successful means a child is marked gone while they are
+    // still in the room — the roster stops being a headcount, and at the end of
+    // the morning nobody goes looking for them. `.select("id")` makes the write
+    // authoritative: an RLS refusal returns zero rows and a null error, which an
+    // unchecked update cannot tell from success.
+    if (error || !data?.length) {
+      setCheckins((cs) => cs.map((x) => (x.id === c.id ? { ...x, ...previous } : x)));
+      setError(
+        error?.message ??
+          "That check-out didn't save — the child is still shown as present. Try again.",
+      );
+    }
   }
 
   // Pickup: match the guardian's claim tag to a present child.
@@ -990,7 +1004,15 @@ export function CheckinStation({
                     </p>
                   </div>
                 ) : claimMatch ? (
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  /* A green EDGE, not a green fill. emerald-50 is a stock shade
+                     with no dark override, so it stays near-white in both
+                     themes — while every ink-* foreground inside it inverts. In
+                     dark mode the child's name measured 1.03:1 and their room
+                     1.96:1, so a volunteer saw a list of adults to release a
+                     child to with no readable indication of WHICH child. That is
+                     exactly the mistake the pickup code exists to prevent.
+                     A surface and its text have to invert together. */
+                  <div className="rounded-xl border-2 border-emerald-600 bg-white p-4">
                     <p className="text-center font-display text-lg font-bold text-ink-900">
                       {claimMatch.child?.full_name}
                     </p>
@@ -1131,8 +1153,23 @@ export function CheckinStation({
               >
                 ⎙
               </button>
+              {/* The roster's own Check out bypasses the pickup flow entirely:
+                  no code, no guardian named, no reason recorded. It exists for
+                  the case where a child leaves and nobody scanned — so it stays
+                  — but it must not be a one-tap release of a child sitting next
+                  to a tap-happy toddler. Confirm by name, and record WHY, since
+                  that note is the only trace this happened. */}
               <button
-                onClick={() => checkOut(c)}
+                onClick={() => {
+                  const who = c.child?.full_name ?? "this child";
+                  if (
+                    !window.confirm(
+                      `Check out ${who} without the guardian's code?\n\nUse this only when the code isn't available — the release is recorded as unverified.`,
+                    )
+                  )
+                    return;
+                  checkOut(c, null, "Checked out from the roster without a code");
+                }}
                 className="shrink-0 rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700 hover:bg-ink-200"
               >
                 Check out

@@ -264,6 +264,48 @@ describe("token discipline", () => {
     }
   });
 
+  test("a surface and its text belong to the same inversion family", () => {
+    // The bug this exists for, found in an audit and NOT catchable by the pair
+    // checks above: a foreground whose token inverts, on a surface whose token
+    // does not (or the reverse). Each is fine in one theme and unreadable in
+    // the other, and nothing about the line looks wrong.
+    //
+    // The worst instance was the pickup panel — `bg-emerald-50` (a stock shade,
+    // never inverts) holding `text-ink-900` (inverts). In dark mode the child's
+    // name measured 1.03:1, so a volunteer saw a list of adults to release a
+    // child to with no readable indication of which child.
+    //
+    // Families:
+    //   inverting     — ink-*, white, brand-50/100/200/600/700/800/900
+    //   never-inverts — chrome-*, accent*, onaccent, and every stock Tailwind
+    //                   hue (emerald, amber, cyan, teal, rose, …)
+    const INVERTING_BG = /\bbg-(ink-\d{2,3}|white)\b/;
+    const FIXED_BG = /\bbg-(chrome-\d{2,3}|accent|accent-strong|(?:emerald|amber|cyan|teal|rose|green|sky|violet|indigo|orange|lime|red|blue|purple|pink|fuchsia|slate|gray|zinc|neutral|stone|yellow)-\d{2,3})\b/;
+    const INVERTING_FG = /\btext-(ink-\d{2,3}|white)\b/;
+    const FIXED_FG = /\btext-(chrome-\d{2,3}|onaccent|(?:emerald|amber|cyan|teal|rose|green|sky|violet|indigo|orange|lime|red|blue|purple|pink|fuchsia|slate|gray|zinc|neutral|stone|yellow)-\d{2,3})\b/;
+
+    const offenders = [];
+    for (const [p, src] of sources()) {
+      src.split("\n").forEach((line, i) => {
+        // Same className string only — a foreground three elements away is a
+        // judgement call, and a rule that guesses is a rule people disable.
+        const m = line.match(/class(?:Name)?=["`]([^"`]+)["`]/g);
+        if (!m) return;
+        for (const chunk of m) {
+          const mixedA = FIXED_BG.test(chunk) && INVERTING_FG.test(chunk);
+          const mixedB = INVERTING_BG.test(chunk) && FIXED_FG.test(chunk);
+          if (mixedA || mixedB) offenders.push(`${p}:${i + 1}`);
+        }
+      });
+    }
+    assert.deepEqual(
+      offenders,
+      [],
+      "a fixed surface with inverting text (or vice versa) is readable in exactly one theme:\n  " +
+        offenders.join("\n  "),
+    );
+  });
+
   test("the viewport does not disable pinch-zoom", () => {
     const layout = fs.readFileSync(new URL("../app/layout.tsx", import.meta.url), "utf8");
     assert.ok(
