@@ -1,3 +1,5 @@
+import { printHtmlInFrame } from "./print-frame";
+
 // DYMO Connect Web Service integration.
 //
 // The SDK talks to the DYMO Connect service running on the SAME computer
@@ -367,18 +369,11 @@ export async function printImageViaServer(
 
 /** Browser-print fallback for a rendered design. */
 export function printImageViaBrowser(pngDataUrl: string, widthIn: number, heightIn: number) {
-  const win = window.open("", "_blank", "width=460,height=340");
-  if (!win) {
-    alert("Allow pop-ups for this site to print name tags.");
-    return;
-  }
-  win.document.write(`<!doctype html><html><head><title>Name tag</title><style>
+  printHtmlInFrame(`<!doctype html><html><head><title>Name tag</title><style>
     @page { size: ${widthIn}in ${heightIn}in; margin: 0; }
     html,body { margin:0; padding:0; }
     img { width:${widthIn}in; height:${heightIn}in; display:block; }
-  </style></head><body><img src="${pngDataUrl}" alt="" />
-  <script>window.onload=function(){window.print();};</script></body></html>`);
-  win.document.close();
+  </style></head><body><img src="${pngDataUrl}" alt="" /></body></html>`);
 }
 
 // Label XML for a 30252 Address label (landscape). Object names are referenced

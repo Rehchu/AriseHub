@@ -1,3 +1,5 @@
+import { printHtmlInFrame } from "./print-frame";
+
 // Name-tag printing for check-in.
 //
 // The church prints on a DYMO LabelWriter using 30252 Address labels
@@ -68,15 +70,10 @@ function labelHtml(d: NameTagData, o: NameTagOptions, variant: "child" | "guardi
 
 /** Opens a print window containing the child tag (+ optional guardian tag). */
 export function printNameTag(d: NameTagData, o: NameTagOptions) {
-  const win = window.open("", "_blank", "width=420,height=320");
-  if (!win) {
-    alert("Allow pop-ups for this site to print name tags.");
-    return;
-  }
   const labels =
     labelHtml(d, o, "child") + (o.showGuardianTag ? labelHtml(d, o, "guardian") : "");
 
-  win.document.write(`<!doctype html><html><head><title>Name tag — ${esc(d.name)}</title>
+  printHtmlInFrame(`<!doctype html><html><head><title>Name tag — ${esc(d.name)}</title>
 <style>
   /* DYMO 30252 Address label: 3.5in x 1.125in, printed landscape. */
   @page { size: 3.5in 1.125in; margin: 0; }
@@ -96,7 +93,5 @@ export function printNameTag(d: NameTagData, o: NameTagOptions) {
   .code { font-family: ui-monospace, "Courier New", monospace; font-weight: 800; letter-spacing: .14em; }
   @media screen { body { background:#eee; padding: 12px; } .label { background:#fff; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.2); } }
 </style></head><body>${labels}
-<script>window.onload = function () { window.print(); };</script>
 </body></html>`);
-  win.document.close();
 }
