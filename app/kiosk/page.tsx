@@ -82,7 +82,10 @@ export default async function KioskPage() {
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-ink-50">
-      <header className="flex items-center gap-2 border-b border-ink-100 bg-white px-4 py-3 pt-safe safe-x">
+      <header
+        className="flex items-center gap-2 border-b border-ink-100 bg-white px-4 py-3 pt-safe safe-x"
+        style={{ "--safe-pad-x": "1rem", "--safe-pad-top": "0.75rem" } as React.CSSProperties}
+      >
         <Logo size={26} />
         <span className="font-display font-bold text-ink-900">
           Arise<span className="text-brand-500">Hub</span>

@@ -356,7 +356,7 @@ export function FamilyRegister({
                     <button
                       type="button"
                       onClick={() => setChildren((cs) => cs.filter((x) => x.key !== c.key))}
-                      className="self-center px-2 text-ink-300 hover:text-brand-500"
+                      className="self-center px-2 text-ink-400 hover:text-brand-600"
                       aria-label="Remove child"
                     >
                       <Icon name="trash" size={16} />

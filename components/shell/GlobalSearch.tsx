@@ -135,7 +135,7 @@ export function GlobalSearch() {
               <Icon name="search" size={18} className="text-ink-400" />
               <input
                 ref={inputRef}
-                className="flex-1 border-0 bg-transparent text-base outline-none placeholder:text-ink-300"
+                className="flex-1 border-0 bg-transparent text-base outline-none placeholder:text-ink-400"
                 placeholder="Search people, tasks, events, groups, plans…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}

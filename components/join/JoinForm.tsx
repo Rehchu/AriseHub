@@ -38,11 +38,23 @@ export function JoinForm({
     }
     setBusy(true);
 
-    const res = await fetch("/api/join", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, email, password, fullName, turnstileToken }),
-    });
+    // Unguarded, this left the button reading "Creating your account…" forever
+    // on a dropped connection — and this is somebody's first minute in the app,
+    // on church wifi, with no way to tell whether an account now exists. The
+    // route is idempotent enough to retry: a duplicate email is refused with a
+    // clear message rather than creating a second account.
+    let res: Response;
+    try {
+      res = await fetch("/api/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, email, password, fullName, turnstileToken }),
+      });
+    } catch {
+      setBusy(false);
+      setError("Couldn't reach AriseHub — check your connection and try again.");
+      return;
+    }
     const j = (await res.json().catch(() => ({}))) as { error?: string };
 
     if (!res.ok) {

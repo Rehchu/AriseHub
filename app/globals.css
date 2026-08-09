@@ -157,15 +157,24 @@ body {
 }
 
 /* Safe-area insets for installed PWAs on notched devices (iPhone, etc.). */
+/* These are UNLAYERED, so they beat Tailwind's layered padding utilities.
+   That meant `px-4 py-3 pt-safe safe-x` silently threw the px-4 and the top
+   py-3 away, and on any device without a notch — every desktop, a tablet in
+   landscape — env() is 0px, so the kiosk header's logo sat flush against the
+   left edge with no padding at all.
+
+   max() keeps whichever is larger: the layout's own padding on a plain screen,
+   the inset on a notched one. --safe-pad-* lets a call site say what its base
+   padding is; the defaults match the most common use. */
 .pt-safe {
-  padding-top: env(safe-area-inset-top);
+  padding-top: max(var(--safe-pad-top, 0px), env(safe-area-inset-top));
 }
 .pb-safe {
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: max(var(--safe-pad-bottom, 0px), env(safe-area-inset-bottom));
 }
 .safe-x {
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
+  padding-left: max(var(--safe-pad-x, 0px), env(safe-area-inset-left));
+  padding-right: max(var(--safe-pad-x, 0px), env(safe-area-inset-right));
 }
 
 /* Prevent iOS from zooming when focusing inputs (it only does this when the
@@ -205,6 +214,19 @@ body {
    who needs contrast, which on a check-in desk is anyone in a hurry. */
 .ah-input::placeholder {
   color: var(--color-ink-400);
+}
+
+/* A big, unmistakable code field.
+
+   .ah-input pins font-size, and because it is UNLAYERED it beats Tailwind's
+   layered utilities — so `text-2xl` on a .ah-input silently did nothing and the
+   guardian's pickup code rendered at 14px. On a tablet, at arm's length, for
+   the one field a volunteer types with a queue waiting. Unlayered too, and
+   after .ah-input, so it wins the same way. */
+.ah-input-code {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  font-weight: 600;
 }
 
 /* Focus must be visible on every control, not only .ah-input.

@@ -134,7 +134,10 @@ export function Shell({
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-18 shrink-0 items-center gap-2 border-b border-ink-100 bg-white px-3 pt-safe safe-x lg:min-h-14 lg:gap-3 lg:px-4">
+        <header
+          className="flex min-h-18 shrink-0 items-center gap-2 border-b border-ink-100 bg-white px-3 pt-safe safe-x lg:min-h-14 lg:gap-3 lg:px-4"
+          style={{ "--safe-pad-x": "0.75rem" } as React.CSSProperties}
+        >
           <button
             onClick={() => setDrawerOpen(true)}
             className="-ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-ink-700 active:bg-ink-100 lg:hidden"

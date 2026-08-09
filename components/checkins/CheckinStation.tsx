@@ -841,8 +841,18 @@ export function CheckinStation({
       {tab === "checkin" ? (
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Check IN */}
+          {/* lg:col-span-2. This is a direct child of `lg:grid-cols-2`, so on a
+              wide screen it was taking the LEFT column to itself and stretching
+              to the full height of the row — pushing check-in into the right
+              half and leaving a tall amber slab beside it. It is a banner; it
+              spans. */}
           {(offline || queued > 0) && (
-            <div className={"mb-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm " + (offline ? "bg-amber-50 text-amber-800" : "bg-ink-100 text-ink-600")}>
+            <div
+              className={
+                "mb-3 flex items-center gap-2 rounded-xl px-3 py-2 text-sm lg:col-span-2 " +
+                (offline ? "bg-amber-50 text-amber-800" : "bg-ink-100 text-ink-600")
+              }
+            >
               <Icon name="help" size={16} />
               <span className="flex-1">
                 {offline
@@ -850,7 +860,18 @@ export function CheckinStation({
                   : "Syncing " + queued + " check-in" + (queued === 1 ? "" : "s") + "…"}
               </span>
               {queued > 0 && (
-                <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold">{queued}</span>
+                // Explicit colours, not inherited. `bg-white` inverts and
+                // amber-800 does not, so the count — the number that decides
+                // whether you can hand the tablet over — was dark-brown on
+                // near-black in dark mode.
+                <span
+                  className={
+                    "rounded-full px-2 py-0.5 text-xs font-semibold " +
+                    (offline ? "bg-amber-200 text-amber-900" : "bg-white text-ink-700")
+                  }
+                >
+                  {queued}
+                </span>
               )}
             </div>
           )}
@@ -895,7 +916,10 @@ export function CheckinStation({
                       )}
                     </div>
                     {already ? (
-                      <p className="mt-1 text-xs text-emerald-700">Already checked in</p>
+                      // ink-500, not emerald-700: this sits on bg-white, which
+                      // inverts, while emerald-700 does not — 3.25:1 in dark.
+                      // The green carried no meaning the words did not.
+                      <p className="mt-1 text-xs text-ink-500">Already checked in</p>
                     ) : (
                       <>
                         {/* Siblings still to check in. Each still gets their own
@@ -983,7 +1007,7 @@ export function CheckinStation({
               Pickup — enter the guardian&apos;s code
             </h2>
             <input
-              className="ah-input text-center font-mono text-2xl tracking-[0.3em] uppercase"
+              className="ah-input ah-input-code text-center font-mono tracking-[0.3em] uppercase"
               placeholder="ABCDEF"
               maxLength={CODE_LENGTH}
               value={claim}
