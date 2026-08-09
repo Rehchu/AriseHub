@@ -57,6 +57,17 @@ export async function GET(req: NextRequest) {
           { relay: relayFromEnv() },
         );
         if (r.expired) dead.push(s.id);
+        else {
+          await admin
+            .from("push_subscriptions")
+            .update({
+              last_sent_at: new Date().toISOString(),
+              last_status: r.ok
+                ? `accepted${r.relayed ? " via relay" : ""}`
+                : `failed (${r.status})`,
+            })
+            .eq("id", s.id);
+        }
       }),
     );
     if (dead.length) await admin.from("push_subscriptions").delete().in("id", dead);

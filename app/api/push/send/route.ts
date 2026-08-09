@@ -144,6 +144,20 @@ export async function POST(req: NextRequest) {
         }
         failures.push({ status: r.status, service, detail: r.detail });
       }
+      // Per-device delivery state, so the settings page can answer "is THIS
+      // device receiving?" without anyone querying the database by hand.
+      // Skipped for pruned rows — they are about to be deleted.
+      if (!r.expired) {
+        await admin
+          .from("push_subscriptions")
+          .update({
+            last_sent_at: new Date().toISOString(),
+            last_status: r.ok
+              ? `accepted${r.relayed ? " via relay" : ""}`
+              : `failed (${r.status})`,
+          })
+          .eq("id", s.id);
+      }
     }),
   );
 

@@ -39,7 +39,13 @@ export function NotificationSettings({
   canTest = false,
 }: {
   profileId: string;
-  devices: { id: string; user_agent: string | null; created_at: string }[];
+  devices: {
+    id: string;
+    user_agent: string | null;
+    created_at: string;
+    last_sent_at?: string | null;
+    last_status?: string | null;
+  }[];
   canTest?: boolean;
 }) {
   // Memoised so check() can depend on it without re-running every render.
@@ -381,10 +387,34 @@ export function NotificationSettings({
           </h2>
           <div className="mt-2 space-y-1">
             {devices.map((dev) => (
-              <p key={dev.id} className="truncate rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600">
-                {dev.user_agent?.slice(0, 90) ?? "Unknown device"} ·{" "}
-                {new Date(dev.created_at).toLocaleDateString()}
-              </p>
+              <div key={dev.id} className="rounded-lg bg-ink-50 px-3 py-2 text-xs">
+                <p className="truncate text-ink-600">
+                  {dev.user_agent?.slice(0, 90) ?? "Unknown device"} ·{" "}
+                  {new Date(dev.created_at).toLocaleDateString()}
+                </p>
+                {/* Delivery state per device, so "is THIS one receiving?" is
+                    answered here instead of by someone reading the database. */}
+                <p
+                  className={
+                    dev.last_status?.startsWith("failed")
+                      ? "mt-0.5 font-medium text-brand-700"
+                      : "mt-0.5 text-ink-400"
+                  }
+                >
+                  {dev.last_status
+                    ? `${dev.last_status}${
+                        dev.last_sent_at
+                          ? ` · ${new Date(dev.last_sent_at).toLocaleString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}`
+                          : ""
+                      }`
+                    : "nothing sent to this device yet"}
+                </p>
+              </div>
             ))}
           </div>
         </div>

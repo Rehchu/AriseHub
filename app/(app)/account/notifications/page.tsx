@@ -31,7 +31,7 @@ export default async function NotificationsPage() {
   // "it works on my laptop but not my phone".
   const { data: subs } = await supabase
     .from("push_subscriptions")
-    .select("id, user_agent, created_at")
+    .select("id, user_agent, created_at, last_sent_at, last_status")
     .eq("profile_id", p?.id ?? "");
 
   return (
