@@ -21,6 +21,7 @@ import { createServer as createHttpServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { networkInterfaces } from "node:os";
 import { execFileSync } from "node:child_process";
+import { X509Certificate } from "node:crypto";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +81,21 @@ const CERT_DIR = join(HERE, "certs");
 const CERT_FILE = join(CERT_DIR, "agent.crt");
 const KEY_FILE = join(CERT_DIR, "agent.key");
 
+/** Does this certificate name every address a tablet might dial? */
+function certCovers(certPem, addrs) {
+  if (addrs.length === 0) return true;
+  try {
+    // Compare whole entries, not substrings: "10.0.0.1" is a substring of
+    // "10.0.0.18", so includes() would call a stale certificate good.
+    const entries = (new X509Certificate(certPem).subjectAltName ?? "")
+      .split(",")
+      .map((s) => s.trim().replace(/^(IP Address|DNS):/, ""));
+    return addrs.every((a) => entries.includes(a));
+  } catch {
+    return false; // unreadable cert — safer to rebuild than to serve it
+  }
+}
+
 function argValue(flag) {
   const i = args.indexOf(flag);
   return i !== -1 ? args[i + 1] : null;
@@ -91,7 +107,15 @@ function ensureCert() {
   if (certArg && keyArg) return { cert: readFileSync(certArg), key: readFileSync(keyArg) };
 
   if (existsSync(CERT_FILE) && existsSync(KEY_FILE)) {
-    return { cert: readFileSync(CERT_FILE), key: readFileSync(KEY_FILE) };
+    const cert = readFileSync(CERT_FILE);
+    // A cached certificate names the IPs this machine had when it was made.
+    // Move the laptop from home to the church, or let DHCP hand it a new
+    // address, and iOS rejects it for the address the tablet actually dials —
+    // silently, because a refused TLS handshake looks like "printer not found".
+    // So check, and rebuild it when the addresses have drifted.
+    if (certCovers(cert, lanAddresses())) return { cert, key: readFileSync(KEY_FILE) };
+    console.log("  This machine's IP changed since the certificate was made — regenerating.");
+    console.log("  Each tablet will need to accept the new certificate once.\n");
   }
 
   // The cert must name the IPs the tablet will actually dial, or iOS rejects it
