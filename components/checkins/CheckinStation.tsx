@@ -113,6 +113,10 @@ export function CheckinStation({
   const [tab, setTab] = useState<"checkin" | "roster">("checkin");
   const [q, setQ] = useState("");
   const [claim, setClaim] = useState("");
+  // The kiosk opens on a two-button home screen. A parent holding a toddler
+  // makes one decision at a time; the staffed desk keeps both panels side by
+  // side because a volunteer is doing this fifty times in ten minutes.
+  const [kioskView, setKioskView] = useState<"home" | "in" | "out">("home");
   // Pickup authorisation for the child whose code was just entered.
   const [guardians, setGuardians] = useState<
     { id: string; name: string; canPickup: boolean; notes: string | null }[]
@@ -582,15 +586,78 @@ export function CheckinStation({
   // alone. With it off, the code IS the check.
   const canRelease = !requirePickup || !!releaseTo || releaseNote.trim().length >= 3;
 
+  const leaveKioskView = () => {
+    setKioskView("home");
+    setQ("");
+    setClaim("");
+    setReleaseTo("");
+  };
+
+  // KIOSK HOME — the whole screen is two targets. No tabs, no roster, no name
+  // tag settings: those belong to whoever set the tablet up, not to the parent
+  // standing in front of it. The tag design comes from whichever template is
+  // marked default, so there is nothing to choose here either.
+  if (kiosk && kioskView === "home") {
+    return (
+      <div className="mx-auto flex min-h-[75vh] max-w-3xl flex-col justify-center px-5 py-8">
+        <div className="mb-10 text-center">
+          <h1 className="font-display text-4xl font-bold text-ink-900 sm:text-5xl">Welcome</h1>
+          <p className="mt-3 text-lg text-ink-500">
+            {present.length === 0
+              ? "Nobody is checked in yet"
+              : `${present.length} checked in right now`}
+          </p>
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <button
+            onClick={() => setKioskView("in")}
+            className="flex min-h-[11rem] flex-col items-center justify-center gap-3 rounded-3xl bg-accent px-6 py-10 text-onaccent shadow-lg transition hover:bg-accent-strong active:scale-[0.98]"
+          >
+            <Icon name="check" size={44} />
+            <span className="font-display text-3xl font-bold">Check in</span>
+          </button>
+          <button
+            onClick={() => setKioskView("out")}
+            className="flex min-h-[11rem] flex-col items-center justify-center gap-3 rounded-3xl border-2 border-ink-200 bg-white px-6 py-10 text-ink-900 shadow-sm transition hover:bg-ink-50 active:scale-[0.98]"
+          >
+            <Icon name="badge" size={44} />
+            <span className="font-display text-3xl font-bold">Check out</span>
+          </button>
+        </div>
+
+        {activeRooms.length === 0 && (
+          <p className="mt-8 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">
+            No rooms exist yet. Add rooms before running check-in.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-ink-900">Check-In</h1>
-        <p className="mt-1 text-ink-500">
-          {present.length} checked in right now
-          {activeRooms.length === 0 && " · no rooms set up yet"}
-        </p>
-      </div>
+      {kiosk ? (
+        <div className="mb-6 flex items-center gap-3">
+          <button
+            onClick={leaveKioskView}
+            className="flex items-center gap-1.5 rounded-2xl bg-ink-100 px-5 py-3.5 text-base font-semibold text-ink-700 hover:bg-ink-200 active:scale-[0.98]"
+          >
+            <span aria-hidden className="text-lg leading-none">←</span> Back
+          </button>
+          <h1 className="font-display text-2xl font-bold text-ink-900">
+            {kioskView === "in" ? "Check in" : "Check out"}
+          </h1>
+        </div>
+      ) : (
+        <div className="mb-6">
+          <h1 className="font-display text-2xl font-bold text-ink-900">Check-In</h1>
+          <p className="mt-1 text-ink-500">
+            {present.length} checked in right now
+            {activeRooms.length === 0 && " · no rooms set up yet"}
+          </p>
+        </div>
+      )}
 
       {activeRooms.length === 0 && (
         <p className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -599,6 +666,10 @@ export function CheckinStation({
         </p>
       )}
 
+      {/* Tabs, the roster and the name tag settings belong to the staffed desk.
+          Not rendered rather than hidden: on a kiosk, display:none still leaves
+          them reachable by tab key, and the roster is every child's name. */}
+      {!kiosk && (
       <div className="mb-5 flex items-center gap-1 border-b border-ink-100">
         <TabBtn active={tab === "checkin"} onClick={() => setTab("checkin")}>Check in / out</TabBtn>
         <TabBtn active={tab === "roster"} onClick={() => setTab("roster")}>Roster ({present.length})</TabBtn>
@@ -621,6 +692,7 @@ export function CheckinStation({
           <Icon name="form" size={16} /> Name tags
         </button>
       </div>
+      )}
 
       {showTagSettings && (
         <div className="mb-5 rounded-xl border border-ink-100 bg-white p-4">
@@ -853,7 +925,7 @@ export function CheckinStation({
       )}
 
       {tab === "checkin" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className={kiosk ? "grid gap-6" : "grid gap-6 lg:grid-cols-2"}>
           {/* Check IN */}
           {/* lg:col-span-2. This is a direct child of `lg:grid-cols-2`, so on a
               wide screen it was taking the LEFT column to itself and stretching
@@ -890,6 +962,7 @@ export function CheckinStation({
             </div>
           )}
 
+          {(!kiosk || kioskView === "in") && (
           <section>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
@@ -1014,8 +1087,10 @@ export function CheckinStation({
               )}
             </div>
           </section>
+          )}
 
           {/* Check OUT by claim code */}
+          {(!kiosk || kioskView === "out") && (
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
               Pickup — enter the guardian&apos;s code
@@ -1150,6 +1225,7 @@ export function CheckinStation({
               </div>
             )}
           </section>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
