@@ -20,10 +20,11 @@ export default async function CheckinsPage() {
     campus_id: string | null;
     is_checkin_lead: boolean;
   } | null;
-  // Matches public.is_checkin_role() — see lib/roles.ts. This used to admit
+  // ASKS public.is_checkin_role() rather than re-implementing it, so this page
+  // and the fifteen policies protecting children's records cannot disagree. This used to admit
   // IT_Admin (whose every insert RLS then refused) and redirect Volunteers away
   // from the desk they are meant to be working.
-  if (!p || !canRunCheckin(p.role)) redirect("/dashboard");
+  if (!p || !(await canRunCheckin(supabase))) redirect("/dashboard");
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);

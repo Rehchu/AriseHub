@@ -1,4 +1,5 @@
 import type { UserRole } from "@/lib/database.types";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Who may run check-in.
@@ -10,20 +11,45 @@ import type { UserRole } from "@/lib/database.types";
  *   nav menu     Super_Admin, IT_Admin, Staff   (lib/modules.ts)
  *
  * So a Volunteer — the role the whole check-in half of the schema is written
- * for, from profiles_checkin_insert through families, guardians, allergy notes
- * and room staffing — was redirected away from the page. And an IT_Admin could
- * open it, see the roster, then have every insert refused by RLS.
+ * for — was redirected away from the page, while an IT_Admin could open it, see
+ * the roster, then have every insert refused by RLS.
  *
- * The database is the authority here: is_checkin_role() is what actually
- * decides whether the work succeeds, and 0001 states the intent plainly —
- * "Staff/Volunteer/Super_Admin can read the directory and run check-in". IT
- * runs IT; children's ministry is not their job.
+ * The rule is no longer expressible as a role list at all (0064). It is:
  *
- * tests/rls asserts this array still matches the SQL function, so the two
- * cannot drift apart again.
+ *   Super_Admin, Admin or Staff anywhere,
+ *   OR any member of a department with can_check_in.
+ *
+ * A Praise Team volunteer never checks anyone in; a Children's Department
+ * member whose role is only Member does it every Sunday. Departments know that
+ * and a role list cannot.
  */
-export const CHECKIN_ROLES: UserRole[] = ["Super_Admin", "Staff", "Volunteer"];
+export const ELEVATED_CHECKIN_ROLES: UserRole[] = ["Super_Admin", "Admin", "Staff"];
 
-export function canRunCheckin(role: string | null | undefined): boolean {
-  return !!role && (CHECKIN_ROLES as string[]).includes(role);
+/**
+ * The role half of the rule, for places that have a role and nothing else —
+ * the nav menu deciding whether to show the Check-Ins item.
+ *
+ * Deliberately INCOMPLETE and deliberately generous: it cannot see departments,
+ * so it answers "might this person run check-in?". Showing a nav item to
+ * somebody the page then redirects is a small annoyance; hiding it from the
+ * volunteer who needs it on a Sunday is not.
+ */
+export function mayRunCheckin(role: string | null | undefined): boolean {
+  return !!role && ((ELEVATED_CHECKIN_ROLES as string[]).includes(role) || role === "Volunteer" || role === "Member");
+}
+
+/**
+ * The real guard. Asks the database, so the page and the fifteen policies that
+ * protect children's records can never disagree — which is exactly how the
+ * three lists above drifted apart in the first place.
+ *
+ * Fails CLOSED: if the call errors we redirect rather than let someone through
+ * to a page whose every write RLS would refuse anyway.
+ */
+export async function canRunCheckin(
+  supabase: Pick<SupabaseClient, "rpc">,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc("is_checkin_role");
+  if (error) return false;
+  return data === true;
 }

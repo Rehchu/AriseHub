@@ -133,6 +133,21 @@ export async function seed(client) {
     );
   }
 
+  // The Volunteer persona serves in the Children's Department, because that is
+  // how a volunteer earns check-in now (0064) — the role alone no longer grants
+  // it. Without this the fixture models a volunteer who never checks anyone in,
+  // and every test about the check-in desk would be exercising the wrong person.
+  await client.query(
+    `update public.departments set can_check_in = true where slug = 'children-s-department'`,
+  );
+  await client.query(
+    `insert into public.department_members (department_id, profile_id, role)
+     select d.id, p.id, 'member' from public.departments d, public.profiles p
+      where d.slug = 'children-s-department' and p.user_id = $1
+     on conflict (department_id, profile_id) do nothing`,
+    [ids.Volunteer],
+  );
+
   // A lead of Praise Team — leads get extra reach through can_see_contact_info().
   await client.query(
     `insert into public.department_members (department_id, profile_id, role)

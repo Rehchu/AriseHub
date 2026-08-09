@@ -400,6 +400,15 @@ describe("audit trail actually records", () => {
       [fx.ids.Volunteer],
     );
     assert.ok((await auditCount("profile.privileged_change")) > before, "role change went unrecorded");
+
+    // Put it back. This left the Volunteer persona as Staff for the rest of the
+    // run, so every later test that thought it was exercising a volunteer was
+    // exercising a staff member. It went unnoticed for as long as both roles
+    // could run check-in; the moment 0064 made them differ, five tests started
+    // lying. Fixtures shared across a transaction have to be returned as found.
+    await db.query(`update public.profiles set role = 'Volunteer' where user_id = $1`, [
+      fx.ids.Volunteer,
+    ]);
   });
 
   test("granting pickup authorisation is recorded", async (t) => {
@@ -571,27 +580,47 @@ describe("check-in access agrees between app and database", () => {
   // There were three lists and they disagreed: the page guard admitted
   // IT_Admin (whose inserts RLS then refused) and redirected Volunteers away
   // from the desk the whole check-in schema is written for.
-  test("lib/roles.ts CHECKIN_ROLES matches public.is_checkin_role()", async (t) => {
+  test("the elevated roles in lib/roles.ts match public.is_checkin_role()", async (t) => {
     if (!requireDb(t)) return;
+    // Only the ROLE half can be compared as a list. Since 0064 the rule is
+    // "elevated role OR a department with can_check_in", and the department half
+    // has no equivalent in TypeScript at all — which is the point: the page
+    // guard now CALLS is_checkin_role() instead of re-implementing it, so the
+    // two cannot drift the way the three original lists did.
     const src = (
       await db.query(`select prosrc from pg_proc where proname = 'is_checkin_role'`)
     ).rows[0].prosrc;
-    const fromSql = [...src.matchAll(/'([A-Za-z_]+)'/g)]
-      .map((m) => m[1])
-      .filter((r) => ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"].includes(r));
+    const ROLES = ["Super_Admin", "Admin", "IT_Admin", "Staff", "Volunteer", "Member"];
+    const fromSql = [...new Set(
+      [...src.matchAll(/'([A-Za-z_]+)'/g)].map((m) => m[1]).filter((r) => ROLES.includes(r)),
+    )].sort();
 
-    // lib/roles.ts is TypeScript; read it as text rather than importing.
     const fs = await import("node:fs");
     const text = fs.readFileSync(new URL("../../lib/roles.ts", import.meta.url), "utf8");
-    const fromApp = [...text.matchAll(/"([A-Za-z_]+)"/g)]
-      .map((m) => m[1])
-      .filter((r) => ["Super_Admin", "IT_Admin", "Staff", "Volunteer", "Member"].includes(r));
+    const listed = text.match(/ELEVATED_CHECKIN_ROLES[^=]*=\s*\[([^\]]*)\]/);
+    const fromApp = [...new Set(
+      [...(listed?.[1] ?? "").matchAll(/"([A-Za-z_]+)"/g)].map((m) => m[1]),
+    )].sort();
 
     assert.deepEqual(
-      [...new Set(fromApp)].sort(),
-      [...new Set(fromSql)].sort(),
-      "the app and the database disagree about who may run check-in",
+      fromApp,
+      fromSql,
+      "the app and the database disagree about which roles run check-in regardless of department",
     );
+  });
+
+  test("the page guard does not re-implement the rule", async (t) => {
+    if (!requireDb(t)) return;
+    // The original bug was three copies of the rule in three places. A guard
+    // that hardcodes roles again would pass every other test in this file and
+    // still let somebody onto a page whose every write RLS refuses.
+    const fs = await import("node:fs");
+    const offenders = [];
+    for (const rel of ["../../app/(app)/checkins/page.tsx", "../../app/kiosk/page.tsx"]) {
+      const text = fs.readFileSync(new URL(rel, import.meta.url), "utf8");
+      if (!/canRunCheckin\(\s*supabase\s*\)/.test(text)) offenders.push(rel);
+    }
+    assert.deepEqual(offenders, [], "a check-in page guard stopped asking the database");
   });
 
   test("a Volunteer can actually insert a check-in", async (t) => {
@@ -911,5 +940,119 @@ describe("ministry titles", () => {
       before.rows[0].role,
       "setting a title silently changed someone's access level",
     );
+  });
+});
+
+describe("check-in follows the department", () => {
+  // 0064. Before this, check-in was Super_Admin/Staff/Volunteer church-wide,
+  // which was wrong in both directions: every Praise Team volunteer could reach
+  // children's records and never used it, while a Children's Department member
+  // whose role was only Member could not and needed it every Sunday.
+  //
+  // These run inside the suite's rolled-back transaction. I verified the same
+  // two cases directly against production first and it COMMITTED, creating two
+  // fixture accounts that had to be deleted by hand. Twice now. Nothing that
+  // seeds a user goes anywhere near execute_sql again.
+  async function inDept(profileUserId, slug) {
+    await db.query(
+      `insert into public.department_members (department_id, profile_id, role)
+       select d.id, p.id, 'member' from public.departments d, public.profiles p
+        where d.slug = $2 and p.user_id = $1
+       on conflict (department_id, profile_id) do nothing`,
+      [profileUserId, slug],
+    );
+  }
+  const canCheckIn = async (userId) => {
+    const res = await asUser(db, userId, `select public.is_checkin_role() as ok`);
+    return res.ok ? res.rows[0].ok : null;
+  };
+
+  test("a Volunteer whose only department is Praise Team cannot run check-in", async (t) => {
+    if (!requireDb(t)) return;
+    // ONLY Praise Team. The seed and the live data both put people in several
+    // departments — the church has Volunteers and Leadership ticked too — so
+    // without clearing first the fixture qualifies through a department that has
+    // nothing to do with what is being tested.
+    await db.query(
+      `delete from public.department_members dm using public.profiles p
+        where dm.profile_id = p.id and p.user_id = $1`,
+      [fx.ids.Volunteer],
+    );
+    await db.query(`update public.departments set can_check_in = false where slug = 'praise-team'`);
+    await inDept(fx.ids.Volunteer, "praise-team");
+
+    // Assert the setup, not just the outcome. This failed once because an
+    // earlier test in the shared transaction had left different state, and
+    // "true !== false" gave no clue which half was wrong.
+    const state = await asUser(
+      db,
+      fx.ids.Volunteer,
+      `select public.current_profile_role()::text as role,
+              coalesce((select string_agg(d.name || '=' || d.can_check_in, ', ')
+                          from public.department_members dm
+                          join public.departments d on d.id = dm.department_id
+                         where dm.profile_id = public.current_profile_id()), '(none)') as depts,
+              public.is_checkin_role() as checkin`,
+    );
+    const s = state.ok ? state.rows[0] : {};
+    assert.equal(s.role, "Volunteer", `precondition: role is ${s.role}, not Volunteer`);
+    assert.equal(
+      s.checkin,
+      false,
+      `a Praise Team volunteer still reaches children's records — role=${s.role}, departments=${s.depts}`,
+    );
+  });
+
+  test("a plain Member in a check-in department CAN run check-in", async (t) => {
+    if (!requireDb(t)) return;
+    await db.query(`update public.departments set can_check_in = true where slug = 'children-s-department'`);
+    await inDept(fx.ids.Member, "children-s-department");
+    assert.equal(await canCheckIn(fx.ids.Member), true, "the person who runs check-in every Sunday lost access");
+  });
+
+  test("ticking the flag off removes access again", async (t) => {
+    if (!requireDb(t)) return;
+    await inDept(fx.ids.Member, "children-s-department");
+    await db.query(`update public.departments set can_check_in = false where slug = 'children-s-department'`);
+    assert.equal(await canCheckIn(fx.ids.Member), false, "the toggle in Admin > Departments does not actually revoke");
+  });
+
+  test("Staff and Super_Admin keep it regardless of department", async (t) => {
+    if (!requireDb(t)) return;
+    await db.query(`update public.departments set can_check_in = false`);
+    for (const role of ["Staff", "Super_Admin"]) {
+      assert.equal(await canCheckIn(fx.ids[role]), true, `${role} lost check-in with every flag off`);
+    }
+  });
+
+  test("a Member with no department still cannot", async (t) => {
+    if (!requireDb(t)) return;
+    await db.query(`delete from public.department_members dm using public.profiles p
+                     where dm.profile_id = p.id and p.user_id = $1`, [fx.ids.Member]);
+    assert.equal(await canCheckIn(fx.ids.Member), false, "check-in leaked to someone in no department at all");
+  });
+
+  test("the flag actually gates a child's medical row, not just the boolean", async (t) => {
+    if (!requireDb(t)) return;
+    // is_checkin_role() backs 15 policies. This asserts the WRITE path a
+    // volunteer uses, so the test fails if the function is right but a policy
+    // stopped calling it.
+    await db.query(`update public.departments set can_check_in = true where slug = 'children-s-department'`);
+    await inDept(fx.ids.Member, "children-s-department");
+    const kid = (
+      await db.query(
+        `insert into public.profiles (full_name, is_child, role, campus_id)
+         values ('ZZ Ratio Kid', true, 'Member', $1) returning id`,
+        [fx.campus],
+      )
+    ).rows[0].id;
+    const res = await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.profile_medical (profile_id, has_allergy, allergy_notes)
+       values ($1, true, 'peanuts')`,
+      [kid],
+    );
+    assert.ok(res.ok, `a check-in department member could not record an allergy: ${res.error}`);
   });
 });

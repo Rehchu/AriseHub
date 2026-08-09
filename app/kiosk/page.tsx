@@ -27,8 +27,9 @@ export default async function KioskPage() {
     campus_id: string | null;
     is_checkin_lead: boolean;
   } | null;
-  // Matches public.is_checkin_role() — see lib/roles.ts.
-  if (!p || !canRunCheckin(p.role)) redirect("/dashboard");
+  // ASKS public.is_checkin_role() rather than re-implementing it, so this page
+  // and the fifteen policies protecting children's records cannot disagree.
+  if (!p || !(await canRunCheckin(supabase))) redirect("/dashboard");
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
