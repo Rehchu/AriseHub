@@ -63,10 +63,12 @@ export function SelfHelp({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-bold text-ink-900">IT Support</h1>
-      <p className="mt-1 text-ink-500">
-        Try a quick fix below — if it doesn&apos;t work, send it to Arise IT.
-      </p>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-ink-100 pb-4">
+        <h1 className="font-display text-2xl font-bold text-ink-900">IT Support</h1>
+        <p className="text-sm text-ink-500">
+          try a quick fix below — if it doesn&apos;t work, send it to Arise IT
+        </p>
+      </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <button
@@ -77,10 +79,10 @@ export function SelfHelp({
             <Icon name="help" />
           </span>
           <span>
-            <span className="block font-display font-semibold text-ink-900">
+            <span className="block font-display text-sm font-semibold text-ink-900">
               Submit a request
             </span>
-            <span className="block text-sm text-ink-600">
+            <span className="block text-xs text-ink-600">
               Your name and campus are filled in for you.
             </span>
           </span>
@@ -92,38 +94,38 @@ export function SelfHelp({
           rel="noopener noreferrer"
           className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-4 transition hover:shadow-md"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-chrome-700 text-chrome-50">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
             <Icon name="link" />
           </span>
           <span>
-            <span className="block font-display font-semibold text-ink-900">
+            <span className="block font-display text-sm font-semibold text-ink-900">
               Quick Access board
             </span>
-            <span className="block text-sm text-ink-600">
+            <span className="block text-xs text-ink-600">
               WiFi passwords & equipment info — needs an access code.
             </span>
           </span>
         </a>
       </div>
 
-      <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-ink-400">
+      <h2 className="mt-8 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
         Try this first
       </h2>
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
         {FIXES.map((f, i) => (
-          <div key={f.title} className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+          <div key={f.title}>
             <button
               onClick={() => setOpen(open === i ? null : i)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left"
+              className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition hover:bg-ink-50"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
-                <Icon name={f.icon} size={18} />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-600">
+                <Icon name={f.icon} size={16} />
               </span>
-              <span className="flex-1 font-medium text-ink-900">{f.title}</span>
+              <span className="flex-1 text-sm font-medium text-ink-900">{f.title}</span>
               <span className="text-ink-400">{open === i ? "−" : "+"}</span>
             </button>
             {open === i && (
-              <ol className="list-decimal space-y-1.5 border-t border-ink-100 bg-ink-50 px-4 py-3 pl-9 text-sm text-ink-700">
+              <ol className="list-decimal space-y-1.5 border-t border-ink-100 bg-ink-50 px-4 py-3 pl-10 text-sm text-ink-700">
                 {f.steps.map((s) => (
                   <li key={s}>{s}</li>
                 ))}

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Icon } from "@/components/shell/Icon";
+import { StatStrip, StatCell } from "@/components/dashboard/StatStrip";
 
 // A single reporting surface. Every query runs under the viewer's RLS, so a
 // Staff member only aggregates what they can see; Super_Admin sees church-wide.
@@ -94,27 +94,82 @@ export default async function ReportsPage() {
     byCampus[key] = (byCampus[key] ?? 0) + count;
   }
 
+  // Grid-position borders for a 7-cell strip: 2-up small, 4-up large.
+  const cell = [
+    "",
+    "border-l border-ink-100",
+    "border-t border-ink-100 lg:border-l lg:border-t-0",
+    "border-l border-t border-ink-100 lg:border-t-0",
+    "border-t border-ink-100",
+    "border-l border-t border-ink-100",
+    "border-t border-ink-100 lg:border-l",
+  ];
+
+  const open = n(tasksOpen);
+  const plans = n(upcomingPlans);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-bold text-ink-900">Reports</h1>
-      <p className="mt-1 text-ink-500">A church-wide snapshot across every module.</p>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon="users" accent="#7c3aed" label="People" value={peopleTotal} />
-        <Stat icon="group" accent="#059669" label="Groups" value={n(groupsCount)} sub={`${n(groupMembers)} memberships`} />
-        <Stat icon="task" accent="#0891b2" label="Open tasks" value={n(tasksOpen)} sub={`${n(tasksDone)} done`} />
-        <Stat icon="music" accent="#db2777" label="Upcoming plans" value={n(upcomingPlans)} />
-        <Stat icon="form" accent="#0d9488" label="Form submissions" value={n(submissions)} />
-        <Stat icon="group" accent="#4b5563" label="Departments" value={n(departmentsCount)} />
-        <Stat icon="home" accent="#d2303b" label="Campuses" value={(campuses.data ?? []).length} />
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-ink-100 pb-4">
+        <h1 className="font-display text-2xl font-bold text-ink-900">Reports</h1>
+        <p className="text-sm text-ink-500">A church-wide snapshot across every module.</p>
       </div>
 
-      <div className="mt-8 grid gap-6 sm:grid-cols-2">
-        <Trend title="Check-ins — last 8 weeks" data={attendanceTrend} accent="#0891b2" />
-        <Trend title="New people — last 8 weeks" data={growthTrend} accent="#059669" />
+      <div className="mt-5">
+        <StatStrip>
+          <StatCell
+            className={cell[0]}
+            kicker="People"
+            value={String(peopleTotal)}
+            status="in the directory"
+          />
+          <StatCell
+            className={cell[1]}
+            kicker="Groups"
+            value={String(n(groupsCount))}
+            status={`${n(groupMembers)} memberships`}
+          />
+          <StatCell
+            className={cell[2]}
+            kicker="Open tasks"
+            value={String(open)}
+            status={`${n(tasksDone)} done`}
+            attention={open > 0}
+          />
+          <StatCell
+            className={cell[3]}
+            kicker="Upcoming plans"
+            value={String(plans)}
+            status={plans > 0 ? "on the calendar" : "none scheduled"}
+            attention={plans === 0}
+          />
+          <StatCell
+            className={cell[4]}
+            kicker="Form submissions"
+            value={String(n(submissions))}
+            status="all-time responses"
+          />
+          <StatCell
+            className={cell[5]}
+            kicker="Departments"
+            value={String(n(departmentsCount))}
+            status="serving teams"
+          />
+          <StatCell
+            className={cell[6]}
+            kicker="Campuses"
+            value={String((campuses.data ?? []).length)}
+            status="locations"
+          />
+        </StatStrip>
       </div>
 
-      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+      <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <Trend title="Check-ins — last 8 weeks" data={attendanceTrend} />
+        <Trend title="New people — last 8 weeks" data={growthTrend} />
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <Breakdown title="People by role" data={byRole} />
         <Breakdown title="People by campus" data={byCampus} />
       </div>
@@ -122,51 +177,15 @@ export default async function ReportsPage() {
   );
 }
 
-function Stat({
-  icon,
-  accent,
-  label,
-  value,
-  sub,
-}: {
-  icon: string;
-  accent: string;
-  label: string;
-  value: number;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-ink-100 bg-white p-4">
-      <span
-        className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg text-onaccent"
-        style={{ backgroundColor: accent }}
-      >
-        <Icon name={icon} size={18} />
-      </span>
-      <p className="text-2xl font-bold text-ink-900">{value}</p>
-      <p className="text-sm text-ink-500">{label}</p>
-      {sub && <p className="text-xs text-ink-400">{sub}</p>}
-    </div>
-  );
-}
-
 /** Compact weekly bar chart — enough to see a direction at a glance. */
-function Trend({
-  title,
-  data,
-  accent,
-}: {
-  title: string;
-  data: { week: string; count: number }[];
-  accent: string;
-}) {
+function Trend({ title, data }: { title: string; data: { week: string; count: number }[] }) {
   const max = Math.max(1, ...data.map((d) => d.count));
   const total = data.reduce((s, d) => s + d.count, 0);
   return (
     <div className="rounded-xl border border-ink-100 bg-white p-5">
-      <div className="mb-3 flex items-baseline justify-between">
+      <div className="mb-3 flex items-baseline justify-between gap-3">
         <h2 className="font-display font-semibold text-ink-900">{title}</h2>
-        <span className="text-sm text-ink-500">{total} total</span>
+        <span className="text-xs text-ink-500">{total} total</span>
       </div>
       {total === 0 ? (
         <p className="text-sm text-ink-400">No data yet.</p>
@@ -175,12 +194,8 @@ function Trend({
           {data.map((d) => (
             <div key={d.week} className="flex flex-1 flex-col items-center gap-1">
               <div
-                className="w-full rounded-t"
-                style={{
-                  height: Math.max(2, (d.count / max) * 72),
-                  backgroundColor: accent,
-                  opacity: d.count === 0 ? 0.15 : 1,
-                }}
+                className={`w-full rounded-t ${d.count === 0 ? "bg-ink-100" : "bg-accent"}`}
+                style={{ height: Math.max(2, (d.count / max) * 72) }}
                 title={d.week + ": " + d.count}
               />
               <span className="text-[9px] text-ink-400">

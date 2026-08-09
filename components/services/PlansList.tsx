@@ -13,11 +13,37 @@ export interface PlanRow {
   myStatus: string | null;
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  accepted: "bg-emerald-50 text-emerald-700",
-  declined: "bg-ink-100 text-ink-400",
-  invited: "bg-amber-50 text-amber-700",
-};
+/** "2026-08-16" → { kicker: "AUG 16", weekday: "Sunday" }. */
+function dateBits(iso: string) {
+  const d = new Date(iso + "T00:00:00");
+  return {
+    kicker: d
+      .toLocaleDateString(undefined, { month: "short", day: "numeric" })
+      .toUpperCase(),
+    weekday: d.toLocaleDateString(undefined, { weekday: "long" }),
+  };
+}
+
+/** Your own standing on a plan. Brand tint = it is waiting on you. */
+function StatusTag({ status }: { status: string }) {
+  if (status === "accepted")
+    return (
+      <span className="inline-block rounded bg-ink-100 px-2 py-0.5 text-[11px] font-medium text-ink-600">
+        Confirmed
+      </span>
+    );
+  if (status === "declined")
+    return (
+      <span className="inline-block rounded border border-ink-200 px-2 py-0.5 text-[11px] text-ink-500">
+        Declined
+      </span>
+    );
+  return (
+    <span className="inline-block rounded bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">
+      Needs response
+    </span>
+  );
+}
 
 export function PlansList({
   initial,
@@ -62,45 +88,48 @@ export function PlansList({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <div className="flex-1">
+      {/* Header: title + context, section links and the primary action on the same row. */}
+      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-ink-100 pb-4">
+        <div className="flex items-baseline gap-3">
           <h1 className="font-display text-2xl font-bold text-ink-900">Services</h1>
-          <p className="mt-1 text-ink-500">
-            {canManage ? "Service plans & volunteer scheduling." : "Your serving schedule."}
+          <p className="text-sm text-ink-500">
+            {canManage ? "plans & volunteer scheduling" : "your serving schedule"}
           </p>
         </div>
-        <a
-          href="/services/my"
-          className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
-        >
-          My schedule
-        </a>
-        <a
-          href="/services/songs"
-          className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
-        >
-          Songs
-        </a>
-        <a
-          href="/services/schedule"
-          className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
-        >
-          Schedule calendar
-        </a>
-        <a
-          href="/services/availability"
-          className="rounded-lg bg-ink-100 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-ink-200"
-        >
-          My availability
-        </a>
-        {canManage && (
-          <button
-            onClick={() => setCreating((c) => !c)}
-            className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+        <div className="ml-auto flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <a
+            href="/services/my"
+            className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
           >
-            <Icon name="music" size={18} /> New plan
-          </button>
-        )}
+            My schedule
+          </a>
+          <a
+            href="/services/songs"
+            className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
+          >
+            Songs
+          </a>
+          <a
+            href="/services/schedule"
+            className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
+          >
+            Schedule calendar
+          </a>
+          <a
+            href="/services/availability"
+            className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
+          >
+            My availability
+          </a>
+          {canManage && (
+            <button
+              onClick={() => setCreating((c) => !c)}
+              className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+            >
+              <Icon name="music" size={18} /> New plan
+            </button>
+          )}
+        </div>
       </div>
 
       {creating && canManage && (
@@ -123,36 +152,64 @@ export function PlansList({
         </form>
       )}
 
-      <div className="space-y-2">
-        {plans.map((p) => (
-          <Link key={p.id} href={`/services/${p.id}`} className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-4 transition hover:shadow-md">
-            <span className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg bg-pink-50 text-pink-600">
-              <span className="text-[10px] uppercase leading-none">
-                {new Date(p.service_date + "T00:00:00").toLocaleDateString(undefined, { month: "short" })}
-              </span>
-              <span className="text-lg font-bold leading-none">
-                {new Date(p.service_date + "T00:00:00").getDate()}
-              </span>
-            </span>
-            <div className="flex-1">
-              <p className="font-display font-semibold text-ink-900">{p.title}</p>
-              <p className="text-xs text-ink-400">
-                {new Date(p.service_date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long" })}
-              </p>
-            </div>
-            {p.myStatus && (
-              <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[p.myStatus]}`}>
-                {p.myStatus === "invited" ? "Needs response" : p.myStatus}
-              </span>
-            )}
-          </Link>
-        ))}
-        {plans.length === 0 && (
-          <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
-            {canManage ? "No plans yet — create your first service plan." : "You're not scheduled on any plans yet."}
-          </p>
-        )}
-      </div>
+      {plans.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
+          {canManage ? "No plans yet — create your first service plan." : "You're not scheduled on any plans yet."}
+        </p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-ink-100">
+                <th className="w-28 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Date
+                </th>
+                <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Service
+                </th>
+                <th className="w-36 px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Status
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100">
+              {plans.map((p) => {
+                const d = dateBits(p.service_date);
+                return (
+                  <tr
+                    key={p.id}
+                    onClick={() => router.push(`/services/${p.id}`)}
+                    className="cursor-pointer transition hover:bg-ink-50"
+                  >
+                    <td className="px-3 py-2 align-top">
+                      <p className="whitespace-nowrap text-xs font-semibold tracking-wide text-ink-600">
+                        {d.kicker}
+                      </p>
+                      <p className="text-[11px] text-ink-400">{d.weekday}</p>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link
+                        href={`/services/${p.id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-medium text-ink-900 hover:text-brand-600"
+                      >
+                        {p.title}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {p.myStatus ? (
+                        <StatusTag status={p.myStatus} />
+                      ) : (
+                        <span className="text-xs text-ink-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

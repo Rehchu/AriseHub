@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Icon } from "@/components/shell/Icon";
 
 export interface PersonField {
   id: string;
@@ -80,20 +79,19 @@ export function FieldsAdmin({ initial }: { initial: PersonField[] }) {
 
       {error && <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
 
-      <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+      <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
         {fields.map((f) => (
-          <div key={f.id} className="flex items-center gap-3 border-b border-ink-100 px-4 py-3 last:border-0">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-500">
-              <Icon name="form" />
-            </span>
-            <div className="flex-1">
-              <p className="font-medium text-ink-900">{f.label}</p>
-              <p className="text-xs capitalize text-ink-400">
-                {f.field_type}
-                {f.options && f.options.length > 0 && ` · ${f.options.join(", ")}`}
-              </p>
+          <div key={f.id} className="flex items-center gap-3 px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-ink-900">{f.label}</p>
+              {f.options && f.options.length > 0 && (
+                <p className="truncate text-xs text-ink-400">{f.options.join(", ")}</p>
+              )}
             </div>
-            <button onClick={() => remove(f.id)} className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50">
+            <span className="rounded bg-ink-100 px-2 py-0.5 text-[11px] capitalize text-ink-600">
+              {f.field_type}
+            </span>
+            <button onClick={() => remove(f.id)} className="rounded px-2 py-1 text-[13px] font-medium text-brand-600 hover:bg-brand-50">
               Delete
             </button>
           </div>

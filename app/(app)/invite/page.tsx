@@ -50,12 +50,14 @@ export default async function InvitePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-bold text-ink-900">Invite people</h1>
-      <p className="mt-1 mb-6 text-ink-500">
-        {isSuper
-          ? "Create a link, share it, and people register themselves."
-          : "Create a link for your department and share it — people register themselves."}
-      </p>
+      <div className="mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-ink-100 pb-4">
+        <h1 className="font-display text-2xl font-bold text-ink-900">Invite people</h1>
+        <p className="text-sm text-ink-500">
+          {isSuper
+            ? "create a link, share it, and people register themselves"
+            : "create a link for your department — people register themselves"}
+        </p>
+      </div>
       <InvitePanel
         departments={visible}
         campuses={(campuses ?? []) as Campus[]}

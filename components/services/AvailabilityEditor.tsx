@@ -101,30 +101,33 @@ export function AvailabilityEditor({
       >
         ← Services
       </a>
-      <h1 className="font-display text-2xl font-bold text-ink-900">My availability</h1>
-      <p className="mt-1 text-ink-500">
-        Tell schedulers when you can&apos;t serve, and when you normally do. They&apos;ll
-        see this before assigning you.
-      </p>
+
+      {/* Header: title with the "why" beside it. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-ink-100 pb-4">
+        <h1 className="font-display text-2xl font-bold text-ink-900">My availability</h1>
+        <p className="text-sm text-ink-500">
+          schedulers see this before assigning you
+        </p>
+      </div>
 
       {error && (
         <p className="mt-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
       )}
 
       {/* ---- Recurring pattern ---- */}
-      <section className="mt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+      <section className="mt-6">
+        <h2 className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
           When I normally serve
         </h2>
-        <p className="mt-1 text-sm text-ink-500">
+        <p className="mt-1 text-xs text-ink-500">
           Pick the days you usually serve. Leave weeks unselected for &ldquo;every
           week&rdquo;.
         </p>
-        <div className="mt-3 space-y-2">
+        <div className="mt-2 divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
           {WEEKDAYS.map((day, i) => {
             const pat = patterns.find((p) => p.weekday === i);
             return (
-              <div key={day} className="rounded-xl border border-ink-100 bg-white p-3">
+              <div key={day} className="px-3 py-2">
                 <label className="flex items-center gap-2.5">
                   <input
                     type="checkbox"
@@ -132,7 +135,7 @@ export function AvailabilityEditor({
                     onChange={() => toggleDay(i)}
                     className="h-4 w-4"
                   />
-                  <span className="font-medium text-ink-800">{day}</span>
+                  <span className="text-sm font-medium text-ink-800">{day}</span>
                   {pat && (
                     <span className="text-xs text-ink-400">
                       {pat.weeks.length === 0
@@ -142,7 +145,7 @@ export function AvailabilityEditor({
                   )}
                 </label>
                 {pat && (
-                  <div className="mt-2 flex flex-wrap gap-1.5 pl-7">
+                  <div className="mt-2 flex flex-wrap gap-1.5 pb-1 pl-7">
                     {[1, 2, 3, 4, 5].map((w) => {
                       const on = pat.weeks.includes(w);
                       return (
@@ -169,12 +172,12 @@ export function AvailabilityEditor({
 
       {/* ---- Blockouts ---- */}
       <section className="mt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+        <h2 className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
           Dates I&apos;m unavailable
         </h2>
         <form
           onSubmit={addBlockout}
-          className="mt-3 flex flex-wrap items-end gap-2 rounded-xl border border-ink-100 bg-white p-3"
+          className="mt-2 flex flex-wrap items-end gap-2 rounded-xl border border-ink-100 bg-white p-3"
         >
           <label className="text-sm">
             <span className="mb-1 block text-xs font-medium text-ink-500">From</span>
@@ -216,37 +219,32 @@ export function AvailabilityEditor({
           </button>
         </form>
 
-        <div className="mt-3 space-y-2">
-          {blockouts.map((b) => (
-            <div
-              key={b.id}
-              className="flex items-center gap-3 rounded-xl border border-ink-100 bg-white p-3"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
-                <Icon name="calendar" size={18} />
-              </span>
-              <div className="flex-1">
-                <p className="font-medium text-ink-900">
-                  {fmt(b.starts_on)}
-                  {b.ends_on !== b.starts_on && ` – ${fmt(b.ends_on)}`}
-                </p>
-                {b.reason && <p className="text-xs text-ink-400">{b.reason}</p>}
+        {blockouts.length === 0 ? (
+          <p className="mt-3 rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-400">
+            No blockout dates — you&apos;re available unless you say otherwise.
+          </p>
+        ) : (
+          <div className="mt-3 divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
+            {blockouts.map((b) => (
+              <div key={b.id} className="flex items-center gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink-900">
+                    {fmt(b.starts_on)}
+                    {b.ends_on !== b.starts_on && ` – ${fmt(b.ends_on)}`}
+                  </p>
+                  {b.reason && <p className="truncate text-xs text-ink-400">{b.reason}</p>}
+                </div>
+                <button
+                  onClick={() => removeBlockout(b.id)}
+                  className="text-ink-400 hover:text-brand-600"
+                  aria-label="Remove"
+                >
+                  <Icon name="trash" size={16} />
+                </button>
               </div>
-              <button
-                onClick={() => removeBlockout(b.id)}
-                className="text-ink-300 hover:text-brand-500"
-                aria-label="Remove"
-              >
-                <Icon name="trash" size={16} />
-              </button>
-            </div>
-          ))}
-          {blockouts.length === 0 && (
-            <p className="rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-400">
-              No blockout dates — you&apos;re available unless you say otherwise.
-            </p>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Icon } from "@/components/shell/Icon";
 
 export function SetPassword() {
   const supabase = createClient();
@@ -31,14 +32,15 @@ export function SetPassword() {
 
   if (done) {
     return (
-      <div className="rounded-xl bg-emerald-50 p-4 text-emerald-800">
+      <div className="flex items-center gap-2 rounded-xl border border-ink-100 bg-white p-4 text-sm font-medium text-ink-700">
+        <Icon name="check" size={18} />
         Password saved. Taking you to your dashboard…
       </div>
     );
   }
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-2xl border border-ink-100 bg-white p-5">
+    <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink-100 bg-white p-4">
       <label className="block">
         <span className="mb-1 block text-sm font-medium text-ink-600">New password</span>
         <input

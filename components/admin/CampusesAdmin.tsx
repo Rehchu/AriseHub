@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Campus } from "@/lib/database.types";
-import { Icon } from "@/components/shell/Icon";
 
 export function CampusesAdmin({ initial }: { initial: Campus[] }) {
   const supabase = createClient();
@@ -72,19 +71,15 @@ export function CampusesAdmin({ initial }: { initial: Campus[] }) {
         </p>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+      <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
         {campuses.map((c) => (
-          <div
-            key={c.id}
-            className="flex items-center gap-3 border-b border-ink-100 px-4 py-3 last:border-0"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-500">
-              <Icon name="home" />
-            </span>
-            <p className="flex-1 font-medium text-ink-900">{c.name}</p>
+          <div key={c.id} className="flex items-center gap-3 px-3 py-2">
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
+              {c.name}
+            </p>
             <button
               onClick={() => rename(c.id, c.name)}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+              className="rounded px-2 py-1 text-[13px] font-medium text-ink-600 hover:bg-ink-50"
             >
               Rename
             </button>

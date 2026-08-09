@@ -20,8 +20,10 @@ export default async function MyProfilePage() {
   const p = profile as (MyProfile & { campus_id: string | null }) | null;
   if (!p) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-12 text-center text-ink-500">
-        We couldn&apos;t find your profile. Ask an admin to check your account.
+      <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6">
+        <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
+          We couldn&apos;t find your profile. Ask an admin to check your account.
+        </p>
       </div>
     );
   }

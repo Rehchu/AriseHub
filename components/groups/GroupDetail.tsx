@@ -95,18 +95,54 @@ export function GroupDetail({
       <a href="/groups" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-brand-600">
         ← All groups
       </a>
-      <h1 className="font-display text-2xl font-bold text-ink-900">{group.name}</h1>
-      <p className="mt-1 text-ink-500">
-        {group.group_type.replace("_", " ")}
-        {group.meeting_schedule && ` · ${group.meeting_schedule}`}
-      </p>
-      {group.description && <p className="mt-2 text-ink-600">{group.description}</p>}
+      <div className="border-b border-ink-100 pb-4">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h1 className="font-display text-2xl font-bold text-ink-900">{group.name}</h1>
+          <p className="text-sm capitalize text-ink-500">
+            {group.group_type.replace("_", " ")}
+            {group.meeting_schedule && ` · ${group.meeting_schedule}`}
+          </p>
+        </div>
+        {group.description && <p className="mt-2 text-sm text-ink-600">{group.description}</p>}
+      </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-2">
+      <div className="mt-5 grid divide-y divide-ink-100 rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <Stat
+          kicker="Members"
+          value={String(members.length)}
+          note={
+            members.some((m) => m.role === "leader")
+              ? `${members.filter((m) => m.role === "leader").length} leader${
+                  members.filter((m) => m.role === "leader").length === 1 ? "" : "s"
+                }`
+              : "no leader yet"
+          }
+          attention={!members.some((m) => m.role === "leader")}
+        />
+        <Stat
+          kicker="Meetings"
+          value={String(mtgs.length)}
+          note={
+            mtgs.length > 0
+              ? `last on ${new Date(mtgs[0].meets_at).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })}`
+              : "none recorded yet"
+          }
+        />
+        <Stat
+          kicker="Enrollment"
+          value={group.is_open ? "Open" : "Closed"}
+          note={group.is_open ? "anyone can join" : "leaders add members"}
+        />
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
         {/* Roster */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">
+            <h2 className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
               Members ({members.length})
             </h2>
             {canManage && (
@@ -145,10 +181,10 @@ export function GroupDetail({
             </select>
           )}
 
-          <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+          <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
             {members.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 border-b border-ink-100 px-3 py-2 last:border-0">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">
+              <div key={m.id} className="flex items-center gap-2.5 px-3 py-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
                   {m.full_name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase()}
                 </span>
                 <span className="flex-1 truncate text-sm text-ink-800">{m.full_name}</span>
@@ -163,7 +199,13 @@ export function GroupDetail({
                     <option value="member">Member</option>
                   </select>
                 ) : (
-                  <span className="text-xs capitalize text-ink-400">{m.role}</span>
+                  <span
+                    className={`rounded px-2 py-0.5 text-[11px] capitalize ${
+                      m.role === "leader" ? "bg-brand-50 text-brand-700" : "bg-ink-100 text-ink-600"
+                    }`}
+                  >
+                    {m.role}
+                  </span>
                 )}
                 {canManage && (
                   <button onClick={() => removeMember(m)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
@@ -179,36 +221,37 @@ export function GroupDetail({
         {/* Meetings */}
         <section>
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-ink-400">Meetings</h2>
+            <h2 className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">Meetings</h2>
             {canManage && (
               <button onClick={addMeeting} className="text-sm font-medium text-brand-600 hover:underline">
                 + New meeting
               </button>
             )}
           </div>
-          <div className="space-y-2">
-            {mtgs.map((mt) => (
-              <button
-                key={mt.id}
-                onClick={() => canManage && setAttendMeeting(mt)}
-                className={`block w-full rounded-xl border border-ink-100 bg-white p-3 text-left ${canManage ? "hover:shadow-md" : ""}`}
-              >
-                <p className="font-medium text-ink-800">
-                  {new Date(mt.meets_at).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                  })}
-                </p>
-                {canManage && <p className="text-xs text-brand-600">Take attendance →</p>}
-              </button>
-            ))}
-            {mtgs.length === 0 && (
-              <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-sm text-ink-400">
-                No meetings recorded.
-              </p>
-            )}
-          </div>
+          {mtgs.length > 0 ? (
+            <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
+              {mtgs.map((mt) => (
+                <button
+                  key={mt.id}
+                  onClick={() => canManage && setAttendMeeting(mt)}
+                  className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left ${canManage ? "transition hover:bg-ink-50" : "cursor-default"}`}
+                >
+                  <span className="text-sm font-medium text-ink-800">
+                    {new Date(mt.meets_at).toLocaleDateString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  {canManage && <span className="shrink-0 text-xs text-brand-600">Take attendance →</span>}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-ink-200 px-3 py-6 text-center text-sm text-ink-400">
+              No meetings recorded.
+            </p>
+          )}
         </section>
       </div>
 
@@ -219,6 +262,27 @@ export function GroupDetail({
           onClose={() => setAttendMeeting(null)}
         />
       )}
+    </div>
+  );
+}
+
+/** One cell of the header stat strip — kicker, 26px number, 12px status. */
+function Stat({
+  kicker,
+  value,
+  note,
+  attention = false,
+}: {
+  kicker: string;
+  value: string;
+  note: string;
+  attention?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">{value}</p>
+      <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>{note}</p>
     </div>
   );
 }

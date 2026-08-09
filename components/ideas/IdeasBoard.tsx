@@ -23,9 +23,11 @@ const CATEGORY_LABEL: Record<Idea["category"], string> = {
   improvement: "Improvement",
   problem: "Something's wrong",
 };
+// Token pairs only: a problem report is the one category that asks for
+// attention (brand tint); the other two are quiet. The label does the rest.
 const CATEGORY_STYLE: Record<Idea["category"], string> = {
-  idea: "bg-violet-50 text-violet-700",
-  improvement: "bg-sky-50 text-sky-700",
+  idea: "bg-ink-100 text-ink-600",
+  improvement: "bg-ink-100 text-ink-600",
   problem: "bg-brand-50 text-brand-700",
 };
 const STATUS_LABEL: Record<Idea["status"], string> = {
@@ -35,11 +37,13 @@ const STATUS_LABEL: Record<Idea["status"], string> = {
   done: "Done",
   declined: "Not planned",
 };
+// Active commitments read brand; resolved states go quiet (their rows also
+// fade and sink to the bottom of the list).
 const STATUS_STYLE: Record<Idea["status"], string> = {
   open: "bg-ink-100 text-ink-600",
-  planned: "bg-amber-50 text-amber-700",
-  in_progress: "bg-sky-50 text-sky-700",
-  done: "bg-emerald-50 text-emerald-700",
+  planned: "bg-brand-50 text-brand-700",
+  in_progress: "bg-brand-50 text-brand-700",
+  done: "border border-ink-200 text-ink-500",
   declined: "bg-ink-100 text-ink-400",
 };
 
@@ -74,6 +78,13 @@ export function IdeasBoard({
     const rank = (s: Idea["status"]) => (s === "done" || s === "declined" ? 1 : 0);
     return [...list].sort((a, b) => rank(a.status) - rank(b.status) || b.votes - a.votes);
   }, [ideas, filter]);
+
+  // Strip numbers come from rows already on the client — no extra query.
+  const openCount = ideas.filter((i) => i.status === "open").length;
+  const inMotionCount = ideas.filter(
+    (i) => i.status === "planned" || i.status === "in_progress",
+  ).length;
+  const shippedCount = ideas.filter((i) => i.status === "done").length;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -161,24 +172,26 @@ export function IdeasBoard({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex-1">
-          <h1 className="font-display text-2xl font-bold text-ink-900">Ideas & requests</h1>
-          {writeError && (
-            <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
-              {writeError}
+      <div className="mb-5 border-b border-ink-100 pb-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h1 className="font-display text-2xl font-bold text-ink-900">Ideas &amp; requests</h1>
+            <p className="text-sm text-ink-500">
+              Something missing or annoying? Say so — and vote for what matters most.
             </p>
-          )}
-          <p className="mt-1 text-ink-500">
-            Something missing or annoying? Say so — and vote for what matters most.
-          </p>
+          </div>
+          <button
+            onClick={() => setAdding((a) => !a)}
+            className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong"
+          >
+            <Icon name="chart" size={18} /> Suggest something
+          </button>
         </div>
-        <button
-          onClick={() => setAdding((a) => !a)}
-          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
-        >
-          <Icon name="chart" size={18} /> Suggest something
-        </button>
+        {writeError && (
+          <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
+            {writeError}
+          </p>
+        )}
       </div>
 
       {adding && (
@@ -222,6 +235,17 @@ export function IdeasBoard({
         </form>
       )}
 
+      <div className="mb-5 grid divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <StatCell
+          kicker="Open"
+          value={openCount}
+          note={canManage ? "awaiting triage" : "gathering votes"}
+          attention={canManage && openCount > 0}
+        />
+        <StatCell kicker="In motion" value={inMotionCount} note="planned or being built" />
+        <StatCell kicker="Shipped" value={shippedCount} note="done and delivered" />
+      </div>
+
       <div className="mb-3 flex flex-wrap gap-1.5">
         {(["all", "open", "planned", "in_progress", "done"] as const).map((f) => (
           <button
@@ -236,74 +260,95 @@ export function IdeasBoard({
         ))}
       </div>
 
-      <div className="space-y-2">
-        {shown.map((i) => (
-          <div
-            key={i.id}
-            className={`flex gap-3 rounded-xl border border-ink-100 bg-white p-4 ${
-              i.status === "done" || i.status === "declined" ? "opacity-70" : ""
-            }`}
-          >
-            <button
-              onClick={() => toggleVote(i)}
-              className={`flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg border transition ${
-                i.voted
-                  ? "border-brand-500 bg-brand-50 text-brand-600"
-                  : "border-ink-200 text-ink-500 hover:border-brand-300"
+      {shown.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
+          Nothing here yet — be the first to suggest something.
+        </p>
+      ) : (
+        <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
+          {shown.map((i) => (
+            <div
+              key={i.id}
+              className={`flex gap-3 px-3 py-2.5 ${
+                i.status === "done" || i.status === "declined" ? "opacity-70" : ""
               }`}
-              aria-label={i.voted ? "Remove vote" : "Vote"}
             >
-              <span className="text-xs leading-none">▲</span>
-              <span className="text-sm font-bold leading-tight">{i.votes}</span>
-            </button>
+              <button
+                onClick={() => toggleVote(i)}
+                className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg border transition ${
+                  i.voted
+                    ? "border-brand-600 bg-brand-50 text-brand-700"
+                    : "border-ink-200 text-ink-500 hover:border-brand-400"
+                }`}
+                aria-label={i.voted ? "Remove vote" : "Vote"}
+              >
+                <span className="text-[10px] leading-none">▲</span>
+                <span className="text-sm font-bold leading-tight">{i.votes}</span>
+              </button>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${CATEGORY_STYLE[i.category]}`}>
-                  {CATEGORY_LABEL[i.category]}
-                </span>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_STYLE[i.status]}`}>
-                  {STATUS_LABEL[i.status]}
-                </span>
-              </div>
-              <p className="mt-1 font-medium text-ink-900">{i.title}</p>
-              {i.detail && <p className="mt-0.5 text-sm text-ink-600">{i.detail}</p>}
-              {i.admin_note && (
-                <p className="mt-1.5 rounded-lg bg-ink-50 px-2 py-1 text-xs text-ink-600">
-                  <strong>Note:</strong> {i.admin_note}
-                </p>
-              )}
-              <p className="mt-1 text-xs text-ink-400">
-                {i.author} · {new Date(i.created_at).toLocaleDateString()}
-              </p>
-
-              {canManage && (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <select
-                    value={i.status}
-                    onChange={(e) => setStatus(i, e.target.value as Idea["status"])}
-                    className="ah-input w-auto py-1 text-xs"
-                  >
-                    {(Object.keys(STATUS_LABEL) as Idea["status"][]).map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABEL[s]}
-                      </option>
-                    ))}
-                  </select>
-                  <button onClick={() => remove(i)} className="text-ink-400 hover:text-brand-600" aria-label="Delete">
-                    <Icon name="trash" size={15} />
-                  </button>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${CATEGORY_STYLE[i.category]}`}>
+                    {CATEGORY_LABEL[i.category]}
+                  </span>
+                  <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLE[i.status]}`}>
+                    {STATUS_LABEL[i.status]}
+                  </span>
                 </div>
-              )}
+                <p className="mt-1 text-sm font-semibold text-ink-900">{i.title}</p>
+                {i.detail && <p className="mt-0.5 text-sm text-ink-600">{i.detail}</p>}
+                {i.admin_note && (
+                  <p className="mt-1.5 rounded-lg bg-ink-50 px-2 py-1 text-xs text-ink-600">
+                    <strong>Note:</strong> {i.admin_note}
+                  </p>
+                )}
+                <p className="mt-1 text-xs text-ink-400">
+                  {i.author} · {new Date(i.created_at).toLocaleDateString()}
+                </p>
+
+                {canManage && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <select
+                      value={i.status}
+                      onChange={(e) => setStatus(i, e.target.value as Idea["status"])}
+                      className="ah-input w-auto py-1 text-xs"
+                    >
+                      {(Object.keys(STATUS_LABEL) as Idea["status"][]).map((s) => (
+                        <option key={s} value={s}>
+                          {STATUS_LABEL[s]}
+                        </option>
+                      ))}
+                    </select>
+                    <button onClick={() => remove(i)} className="text-ink-400 hover:text-brand-600" aria-label="Delete">
+                      <Icon name="trash" size={15} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-        {shown.length === 0 && (
-          <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
-            Nothing here yet — be the first to suggest something.
-          </p>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatCell({
+  kicker,
+  value,
+  note,
+  attention = false,
+}: {
+  kicker: string;
+  value: number;
+  note: string;
+  attention?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">{value}</p>
+      <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>{note}</p>
     </div>
   );
 }

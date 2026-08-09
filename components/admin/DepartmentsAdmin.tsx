@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Department } from "@/lib/database.types";
-import { Icon } from "@/components/shell/Icon";
 
 function slugify(name: string) {
   return name
@@ -110,17 +109,14 @@ export function DepartmentsAdmin({
         </p>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+      <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
         {depts.map((d) => (
           <div
             key={d.id}
-            className="flex items-center gap-3 border-b border-ink-100 px-4 py-3 last:border-0"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-500">
-              <Icon name="group" />
-            </span>
             <div className="min-w-0 flex-1">
-              <p className="font-medium text-ink-900">{d.name}</p>
+              <p className="truncate text-sm font-semibold text-ink-900">{d.name}</p>
               <p className="text-xs text-ink-400">
                 {counts[d.id] ?? 0} member{(counts[d.id] ?? 0) === 1 ? "" : "s"} ·
                 auto group chat
@@ -138,13 +134,13 @@ export function DepartmentsAdmin({
             </label>
             <button
               onClick={() => rename(d.id, d.name)}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+              className="rounded px-2 py-1 text-[13px] font-medium text-ink-600 hover:bg-ink-50"
             >
               Rename
             </button>
             <button
               onClick={() => remove(d.id, d.name)}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50"
+              className="rounded px-2 py-1 text-[13px] font-medium text-brand-600 hover:bg-brand-50"
             >
               Delete
             </button>

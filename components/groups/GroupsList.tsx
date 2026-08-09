@@ -115,20 +115,22 @@ export function GroupsList({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Groups</h1>
-          <p className="mt-1 text-ink-500">Small groups, ministries, and classes.</p>
-          {error && (
-            <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
-          )}
+      <div className="mb-5 border-b border-ink-100 pb-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-display text-2xl font-bold text-ink-900">Groups</h1>
+            <p className="text-sm text-ink-500">Small groups, ministries, and classes.</p>
+          </div>
+          <button
+            onClick={() => setCreating((c) => !c)}
+            className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong"
+          >
+            <Icon name="group" size={18} /> New group
+          </button>
         </div>
-        <button
-          onClick={() => setCreating((c) => !c)}
-          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
-        >
-          <Icon name="group" size={18} /> New group
-        </button>
+        {error && (
+          <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
+        )}
       </div>
 
       {creating && (
@@ -154,28 +156,28 @@ export function GroupsList({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((g) => (
           <div key={g.id} className="flex flex-col rounded-xl border border-ink-100 bg-white p-4">
-            <div className="flex items-center gap-2">
-              <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-700">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
                 {TYPE_LABEL[g.group_type] ?? "Group"}
               </span>
               {/* brand-700 on brand-50, not brand-600: the tint pair is what the
                   scale inverts together (7.55:1 light, 7.30:1 dark). brand-600 is
                   tuned to sit on a CARD, and on the tint it fell to 4.36:1 in
-                  dark — under AA for 10px uppercase text. */}
+                  dark — under AA for small text. */}
               {g.isMember && (
-                <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-brand-700">
+                <span className="rounded bg-brand-50 px-2 py-0.5 text-[11px] text-brand-700">
                   Member
                 </span>
               )}
+              <span className="ml-auto rounded bg-ink-100 px-2 py-0.5 text-[11px] text-ink-600">
+                {g.memberCount} member{g.memberCount === 1 ? "" : "s"}
+              </span>
             </div>
-            <Link href={`/groups/${g.id}`} className="mt-2 font-display font-semibold text-ink-900 hover:text-brand-600">
+            <Link href={`/groups/${g.id}`} className="mt-2 truncate font-display font-semibold text-ink-900 hover:text-brand-600">
               {g.name}
             </Link>
-            {g.meeting_schedule && <p className="text-xs text-ink-400">{g.meeting_schedule}</p>}
-            <p className="mt-1 text-xs text-ink-500">
-              {g.memberCount} member{g.memberCount === 1 ? "" : "s"}
-            </p>
-            <div className="mt-3 flex gap-2">
+            {g.meeting_schedule && <p className="mt-0.5 text-xs text-ink-500">{g.meeting_schedule}</p>}
+            <div className="mt-auto flex gap-2 pt-3">
               <Link href={`/groups/${g.id}`} className="flex-1 rounded-lg bg-ink-50 py-1.5 text-center text-sm font-medium text-ink-700 hover:bg-ink-100">
                 Open
               </Link>
@@ -197,6 +199,48 @@ export function GroupsList({
           </p>
         )}
       </div>
+
+      {groups.length > 0 && (
+        <div className="mt-6 grid divide-y divide-ink-100 rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <Stat kicker="Groups" value={String(groups.length)} note="across the church" />
+          <Stat
+            kicker="You're in"
+            value={String(groups.filter((g) => g.isMember).length)}
+            note={
+              groups.some((g) => g.isMember)
+                ? "see you there"
+                : "join one below"
+            }
+            attention={!groups.some((g) => g.isMember)}
+          />
+          <Stat
+            kicker="Open to join"
+            value={String(groups.filter((g) => g.is_open).length)}
+            note="accepting new members"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** One cell of the bottom stat strip — kicker, 26px number, 12px status. */
+function Stat({
+  kicker,
+  value,
+  note,
+  attention = false,
+}: {
+  kicker: string;
+  value: string;
+  note: string;
+  attention?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">{value}</p>
+      <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>{note}</p>
     </div>
   );
 }

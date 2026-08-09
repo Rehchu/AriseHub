@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { UserRole } from "@/lib/database.types";
-import { Icon } from "@/components/shell/Icon";
 
 export interface MinistryTitle {
   id: string;
@@ -159,49 +158,49 @@ export function TitlesAdmin({ initial }: { initial: MinistryTitle[] }) {
         <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
       )}
 
-      <div className="space-y-2">
-        {titles.map((t) => (
-          <div
-            key={t.id}
-            className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-100 bg-white p-3"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
-              <Icon name="badge" size={18} />
-            </span>
-            <span className="min-w-0 flex-1 font-medium text-ink-900">{t.name}</span>
-            <label className="flex items-center gap-1.5 text-xs text-ink-500">
-              Grants
-              <select
-                className="ah-input w-auto py-1 text-sm"
-                value={t.role ?? ""}
-                onChange={(e) => setTitleRole(t.id, e.target.value)}
+      {titles.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
+          No titles yet — add one above.
+        </p>
+      ) : (
+        <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
+          {titles.map((t) => (
+            <div
+              key={t.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink-900">
+                {t.name}
+              </span>
+              <label className="flex items-center gap-1.5 text-xs text-ink-500">
+                Grants
+                <select
+                  className="ah-input w-auto py-1 text-sm"
+                  value={t.role ?? ""}
+                  onChange={(e) => setTitleRole(t.id, e.target.value)}
+                >
+                  <option value="">nothing</option>
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={() => rename(t)}
+                className="rounded px-2 py-1 text-[13px] font-medium text-ink-600 hover:bg-ink-50"
               >
-                <option value="">nothing</option>
-                {ROLES.map((r) => (
-                  <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-                ))}
-              </select>
-            </label>
-            <button
-              onClick={() => rename(t)}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
-            >
-              Rename
-            </button>
-            <button
-              onClick={() => remove(t)}
-              className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50"
-            >
-              Delete
-            </button>
-          </div>
-        ))}
-        {titles.length === 0 && (
-          <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
-            No titles yet — add one above.
-          </p>
-        )}
-      </div>
+                Rename
+              </button>
+              <button
+                onClick={() => remove(t)}
+                className="rounded px-2 py-1 text-[13px] font-medium text-brand-600 hover:bg-brand-50"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

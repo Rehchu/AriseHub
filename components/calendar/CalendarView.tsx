@@ -34,11 +34,13 @@ export interface EventRow {
   type: { name: string; color: string } | null;
 }
 
+// Pending is the one that needs a human, so it alone gets the brand tint;
+// settled states read as quiet neutral tags.
 const STATUS_STYLE: Record<string, string> = {
-  approved: "bg-emerald-50 text-emerald-700",
-  pending: "bg-amber-50 text-amber-700",
-  declined: "bg-ink-100 text-ink-400",
-  cancelled: "bg-ink-100 text-ink-400",
+  approved: "bg-ink-100 text-ink-600",
+  pending: "bg-brand-50 text-brand-700",
+  declined: "bg-ink-100 text-ink-600",
+  cancelled: "bg-ink-100 text-ink-600",
 };
 
 function dayKey(iso: string) {
@@ -69,16 +71,21 @@ function TypeChip({
 }: {
   active: boolean;
   onClick: () => void;
-  color: string;
+  /** Event-type colour from the row's data; omitted for "All", which uses the accent token. */
+  color?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
       className={`rounded-full px-2.5 py-1 text-xs font-medium transition ${
-        active ? "text-onaccent" : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
+        active
+          ? color
+            ? "text-onaccent"
+            : "bg-accent text-onaccent"
+          : "bg-white text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
       }`}
-      style={active ? { backgroundColor: color } : undefined}
+      style={active && color ? { backgroundColor: color } : undefined}
     >
       {children}
     </button>
@@ -140,26 +147,58 @@ export function CalendarView({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">Calendar</h1>
-          <p className="mt-1 text-ink-500">Events & facility booking.</p>
+      <div className="mb-5 border-b border-ink-100 pb-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-display text-2xl font-bold text-ink-900">Calendar</h1>
+            <p className="text-sm text-ink-500">Events & facility booking.</p>
+          </div>
+          <button
+            onClick={() => setShowNew(true)}
+            className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong"
+          >
+            <Icon name="calendar" size={18} /> Request event
+          </button>
         </div>
-        <button
-          onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
-        >
-          <Icon name="calendar" size={18} /> Request event
-        </button>
+        {error && (
+          <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
+        )}
       </div>
 
-      {error && (
-        <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
+      {events.length > 0 && (
+        <div className="mb-6 grid divide-y divide-ink-100 rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <Stat
+            kicker="On the calendar"
+            value={String(events.filter((e) => e.status !== "cancelled" && e.status !== "declined").length)}
+            note="from today forward"
+          />
+          <Stat
+            kicker="Pending"
+            value={String(events.filter((e) => e.status === "pending").length)}
+            note={
+              events.some((e) => e.status === "pending")
+                ? canApprove
+                  ? "awaiting your approval"
+                  : "awaiting approval"
+                : "nothing waiting"
+            }
+            attention={events.some((e) => e.status === "pending")}
+          />
+          <Stat
+            kicker="Rooms booked"
+            value={String(
+              events.filter(
+                (e) => e.room_id && e.status !== "cancelled" && e.status !== "declined",
+              ).length,
+            )}
+            note="events with a room held"
+          />
+        </div>
       )}
 
       {/* Filter by type */}
       <div className="mb-5 flex flex-wrap gap-1.5">
-        <TypeChip active={!filterType} onClick={() => setFilterType("")} color="#4b5563">
+        <TypeChip active={!filterType} onClick={() => setFilterType("")}>
           All
         </TypeChip>
         {eventTypes.map((t) => (
@@ -171,8 +210,8 @@ export function CalendarView({
 
       {/* Upcoming highlights — camps, VBS, conferences, guest speakers */}
       {featured.length > 0 && (
-        <div className="mb-8">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+        <div className="mb-6">
+          <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
             Upcoming events
           </h2>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -192,7 +231,7 @@ export function CalendarView({
                 )}
                 <p className="font-display font-semibold text-ink-900">{e.title}</p>
                 <p className="text-sm text-ink-500">{dateRange(e)}</p>
-                {e.description && <p className="mt-1 text-sm text-ink-600">{e.description}</p>}
+                {e.description && <p className="mt-1 text-xs text-ink-600">{e.description}</p>}
               </div>
             ))}
           </div>
@@ -205,11 +244,11 @@ export function CalendarView({
         </p>
       ) : (
         Object.entries(grouped).map(([day, list]) => (
-          <div key={day} className="mb-6">
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">{day}</h2>
-            <div className="space-y-2">
+          <div key={day} className="mb-5">
+            <h2 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">{day}</h2>
+            <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
               {list.map((e) => (
-                <div key={e.id} className="rounded-xl border border-ink-100 bg-white p-4">
+                <div key={e.id} className="px-4 py-2.5">
                   <div className="flex flex-wrap items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -221,9 +260,9 @@ export function CalendarView({
                             {e.type.name}
                           </span>
                         )}
-                        <p className="font-medium text-ink-900">{e.title}</p>
+                        <p className="text-sm font-semibold text-ink-900">{e.title}</p>
                       </div>
-                      <p className="text-sm text-ink-500">
+                      <p className="text-xs text-ink-500">
                         {e.all_day ? "All day" : `${time(e.starts_at)} – ${time(e.ends_at)}`}
                         {e.room?.name && ` · ${e.room.name}`}
                       </p>
@@ -232,18 +271,24 @@ export function CalendarView({
                           +{e.setup_minutes}m setup / +{e.teardown_minutes}m teardown
                         </p>
                       )}
-                      {e.description && <p className="mt-1 text-sm text-ink-600">{e.description}</p>}
+                      {e.description && <p className="mt-0.5 text-xs text-ink-600">{e.description}</p>}
                     </div>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[e.status]}`}>
+                    <span className={`rounded px-2 py-0.5 text-[11px] capitalize ${STATUS_STYLE[e.status]}`}>
                       {e.status}
                     </span>
                   </div>
                   {canApprove && e.status === "pending" && (
-                    <div className="mt-3 flex gap-2">
-                      <button onClick={() => setStatus(e, "approved")} className="flex-1 rounded-lg bg-emerald-700 py-1.5 text-sm font-medium text-onaccent hover:bg-emerald-800">
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => setStatus(e, "approved")}
+                        className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-onaccent transition hover:bg-accent-strong"
+                      >
                         Approve
                       </button>
-                      <button onClick={() => setStatus(e, "declined")} className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200">
+                      <button
+                        onClick={() => setStatus(e, "declined")}
+                        className="rounded-lg bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-600 transition hover:bg-ink-200"
+                      >
                         Decline
                       </button>
                     </div>
@@ -266,6 +311,27 @@ export function CalendarView({
           onCreated={(e) => setEvents((es) => [...es, e].sort((a, b) => a.starts_at.localeCompare(b.starts_at)))}
         />
       )}
+    </div>
+  );
+}
+
+/** One cell of the header stat strip — kicker, 26px number, 12px status. */
+function Stat({
+  kicker,
+  value,
+  note,
+  attention = false,
+}: {
+  kicker: string;
+  value: string;
+  note: string;
+  attention?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">{value}</p>
+      <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>{note}</p>
     </div>
   );
 }

@@ -54,6 +54,12 @@ export function TasksBoard({
     [tasks],
   );
 
+  // Strip numbers come from the rows already on the client — no extra query.
+  const openCount = tasks.filter((t) => t.status === "open").length;
+  const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const mineOpen = mine.filter((t) => t.status !== "done").length;
+
   async function setStatus(id: string, status: TaskRow["status"]) {
     const completed_at = status === "done" ? new Date().toISOString() : null;
     setTasks((ts) =>
@@ -68,30 +74,41 @@ export function TasksBoard({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
+      <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-ink-100 pb-4">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <h1 className="font-display text-2xl font-bold text-ink-900">Tasks</h1>
-          <p className="mt-1 text-ink-500">
-            Assignments and things you&apos;ve logged for the record.
+          <p className="text-sm text-ink-500">
+            assignments and things you&apos;ve logged for the record
           </p>
         </div>
         <button
           onClick={() => setShowNew(true)}
-          className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+          className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-3.5 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong"
         >
           <Icon name="task" size={18} /> New task
         </button>
       </div>
 
+      <div className="mb-6 grid divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+        <StatCell
+          kicker="Open"
+          value={openCount}
+          note={mineOpen > 0 ? `${mineOpen} waiting on you` : "nothing waiting on you"}
+          attention={mineOpen > 0}
+        />
+        <StatCell kicker="In progress" value={inProgressCount} note="picked up, not finished" />
+        <StatCell kicker="Done" value={doneCount} note="logged for the record" />
+      </div>
+
       <Section title="Assigned to me" empty="Nothing assigned to you right now.">
         {mine.map((t) => (
-          <TaskCard key={t.id} t={t} onStatus={setStatus} />
+          <TaskItem key={t.id} t={t} onStatus={setStatus} />
         ))}
       </Section>
 
       <Section title="Department tasks" empty="No department tasks yet.">
         {deptTasks.map((t) => (
-          <TaskCard key={t.id} t={t} onStatus={setStatus} />
+          <TaskItem key={t.id} t={t} onStatus={setStatus} />
         ))}
       </Section>
 
@@ -109,6 +126,26 @@ export function TasksBoard({
   );
 }
 
+function StatCell({
+  kicker,
+  value,
+  note,
+  attention = false,
+}: {
+  kicker: string;
+  value: number;
+  note: string;
+  attention?: boolean;
+}) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
+      <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">{value}</p>
+      <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>{note}</p>
+    </div>
+  );
+}
+
 function Section({
   title,
   empty,
@@ -121,12 +158,14 @@ function Section({
   const arr = Array.isArray(children) ? children : [children];
   const has = arr.some(Boolean) && arr.flat().length > 0;
   return (
-    <div className="mb-8">
-      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-400">
+    <div className="mb-6">
+      <h2 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
         {title}
       </h2>
       {has ? (
-        <div className="space-y-2">{children}</div>
+        <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
+          {children}
+        </div>
       ) : (
         <p className="rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-400">
           {empty}
@@ -136,16 +175,17 @@ function Section({
   );
 }
 
-/** Same hand-copied light-theme literals as the care board had — same fix.
- *  `normal` and `low` are ink-400 and ink-300 frozen at their light values, so
- *  they stopped inverting with the card and the ranking flattened in dark mode. */
-const PRIORITY_BORDER: Record<string, string> = {
-  high: "border-l-accent",
-  normal: "border-l-ink-400",
-  low: "border-l-ink-200",
+/** Priority is a small tag, not a coloured stripe: the stripe was three
+ *  hardcoded light-theme literals whose ranking inverted in dark mode. Tags use
+ *  the token pairs (brand tint for "act on this", ink for the quiet end) that
+ *  invert together. */
+const PRIORITY_TAG: Record<TaskRow["priority"], { label: string; cls: string }> = {
+  high: { label: "High", cls: "bg-brand-50 text-brand-700" },
+  normal: { label: "Normal", cls: "bg-ink-100 text-ink-600" },
+  low: { label: "Low", cls: "bg-ink-100 text-ink-400" },
 };
 
-function TaskCard({
+function TaskItem({
   t,
   onStatus,
 }: {
@@ -158,48 +198,52 @@ function TaskCard({
     : t.assignee?.full_name
       ? t.assignee.full_name
       : "—";
+  const pr = PRIORITY_TAG[t.priority] ?? PRIORITY_TAG.normal;
   return (
-    <div
-      className={`flex items-start gap-3 rounded-xl border border-l-4 border-ink-100 bg-white p-4 ${
-        PRIORITY_BORDER[t.priority] ?? "border-l-ink-200"
-      }`}
-    >
+    <div className="flex items-start gap-3 px-3 py-2">
       <button
         onClick={() => onStatus(t.id, done ? "open" : "done")}
         className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
           done
-            ? "border-emerald-500 bg-emerald-700 text-onaccent"
-            : "border-ink-300 text-transparent hover:border-brand-400"
+            ? "border-accent bg-accent text-onaccent"
+            : "border-ink-400 text-transparent hover:border-brand-400"
         }`}
         aria-label={done ? "Mark not done" : "Mark done"}
       >
         <Icon name="check" size={14} />
       </button>
       <div className="min-w-0 flex-1">
-        <p className={`font-medium ${done ? "text-ink-400 line-through" : "text-ink-900"}`}>
+        <p
+          className={`text-sm font-semibold ${done ? "text-ink-400 line-through" : "text-ink-900"}`}
+        >
           {t.title}
         </p>
         {t.description && (
           <p className="mt-0.5 text-sm text-ink-500">{t.description}</p>
         )}
-        <p className="mt-1 text-xs text-ink-400">
+        <p className="mt-0.5 text-xs text-ink-400">
           {target}
           {t.creator?.full_name && ` · logged by ${t.creator.full_name}`}
           {t.due_at && ` · due ${new Date(t.due_at).toLocaleDateString()}`}
         </p>
       </div>
-      {t.status !== "done" && (
-        <select
-          value={t.status}
-          onChange={(e) => onStatus(t.id, e.target.value as TaskRow["status"])}
-          className="ah-input w-auto py-1 text-xs"
-          aria-label="Status"
-        >
-          <option value="open">Open</option>
-          <option value="in_progress">In progress</option>
-          <option value="done">Done</option>
-        </select>
-      )}
+      <div className="flex shrink-0 flex-col items-end gap-1.5">
+        <span className={`rounded px-2 py-0.5 text-[11px] font-medium ${pr.cls}`}>
+          {pr.label}
+        </span>
+        {t.status !== "done" && (
+          <select
+            value={t.status}
+            onChange={(e) => onStatus(t.id, e.target.value as TaskRow["status"])}
+            className="ah-input w-auto py-1 text-xs"
+            aria-label="Status"
+          >
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="done">Done</option>
+          </select>
+        )}
+      </div>
     </div>
   );
 }
@@ -307,7 +351,7 @@ function NewTask({
         className="w-full max-w-md space-y-4 rounded-2xl bg-white p-5 shadow-2xl"
       >
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold">New task</h2>
+          <h2 className="font-display text-lg font-bold text-ink-900">New task</h2>
           <button type="button" onClick={onClose} className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>

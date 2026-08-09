@@ -105,7 +105,7 @@ export function RoomsAdmin({
       </p>
 
       {campuses.length === 0 && (
-        <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">
           Add a campus first — every room belongs to one.
         </p>
       )}
@@ -161,20 +161,19 @@ export function RoomsAdmin({
         <p className="mb-4 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>
       )}
 
-      <div className="space-y-2">
+      {rooms.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
+          No rooms yet. Add your classrooms above so check-in can assign children
+          to them.
+        </p>
+      ) : (
+      <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
         {rooms.map((r) => (
-          <div key={r.id} className="rounded-xl border border-ink-100 bg-white p-3">
+          <div key={r.id} className="px-3 py-2.5">
             <div className="flex flex-wrap items-center gap-3">
-              <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-                  r.active ? "bg-cyan-50 text-cyan-600" : "bg-ink-100 text-ink-400"
-                }`}
-              >
-                <Icon name="badge" size={18} />
-              </span>
               <div className="min-w-0 flex-1">
                 <input
-                  className="w-full border-0 bg-transparent p-0 font-medium text-ink-900 outline-none focus:ring-0"
+                  className="w-full border-0 bg-transparent p-0 text-sm font-semibold text-ink-900 outline-none focus:ring-0"
                   value={r.name}
                   onChange={(e) => patch(r.id, { name: e.target.value })}
                 />
@@ -186,7 +185,12 @@ export function RoomsAdmin({
                   {r.capacity != null && ` · holds ${r.capacity}`}
                 </p>
               </div>
-              <label className="flex items-center gap-1.5 text-sm text-ink-600">
+              {!r.active && (
+                <span className="rounded bg-ink-100 px-2 py-0.5 text-[11px] text-ink-600">
+                  off
+                </span>
+              )}
+              <label className="flex items-center gap-1.5 text-xs text-ink-600">
                 <input
                   type="checkbox"
                   checked={r.active}
@@ -233,13 +237,8 @@ export function RoomsAdmin({
             </div>
           </div>
         ))}
-        {rooms.length === 0 && (
-          <p className="rounded-xl border border-dashed border-ink-200 px-4 py-10 text-center text-sm text-ink-400">
-            No rooms yet. Add your classrooms above so check-in can assign children
-            to them.
-          </p>
-        )}
       </div>
+      )}
     </div>
   );
 }

@@ -25,11 +25,12 @@ interface Result {
   errors?: string[];
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  success: "bg-emerald-50 text-emerald-700",
-  partial: "bg-amber-50 text-amber-700",
+// A failed or partial run needs a human; everything else stays quiet.
+const STATUS_TAG: Record<string, string> = {
+  success: "bg-ink-100 text-ink-600",
+  partial: "bg-brand-50 text-brand-700",
   failed: "bg-brand-50 text-brand-700",
-  running: "bg-ink-100 text-ink-500",
+  running: "bg-ink-100 text-ink-600",
 };
 
 /**
@@ -79,6 +80,9 @@ export function ElvantoSync({
     setResult(j);
   }
 
+  const last = runs[0] ?? null;
+  const lastBad = last != null && last.status !== "success" && last.status !== "running";
+
   return (
     <div>
       <p className="mb-4 rounded-lg bg-ink-50 px-3 py-2 text-sm text-ink-600">
@@ -89,11 +93,11 @@ export function ElvantoSync({
       </p>
 
       {!configured ? (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <h2 className="font-display font-semibold text-amber-900">
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <h2 className="font-display font-semibold text-brand-800">
             Elvanto isn&apos;t connected yet
           </h2>
-          <p className="mt-1 text-sm text-amber-800">
+          <p className="mt-1 text-sm text-brand-700">
             Get an API key in Elvanto (<em>Settings → Integrations → API</em>), then
             add it to the AriseHub Worker as the secret{" "}
             <code className="rounded bg-white px-1">ELVANTO_API_KEY</code>:
@@ -101,13 +105,51 @@ export function ElvantoSync({
           <pre className="mt-2 overflow-x-auto rounded-lg bg-ink-900 p-3 text-xs text-ink-100">
 npx wrangler secret put ELVANTO_API_KEY
           </pre>
-          <p className="mt-2 text-xs text-amber-700">
+          <p className="mt-2 text-xs text-brand-700">
             Keep the key out of chat and email — it can read your whole people
             database.
           </p>
         </div>
       ) : (
         <>
+          {/* The page's numbers, in one strip — nothing here needed a new
+              query; linked count and run history were already fetched. */}
+          <div className="mb-4 grid divide-y divide-ink-100 rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                Linked to Elvanto
+              </p>
+              <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">
+                {linkedCount}
+              </p>
+              <p className="truncate text-xs text-ink-500">
+                {linkedCount === 1 ? "person carries" : "people carry"} an Elvanto record
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                Last sync
+              </p>
+              <p className="mt-0.5 font-display text-[26px] font-bold capitalize leading-8 text-ink-900">
+                {last ? last.status : "—"}
+              </p>
+              <p className={`truncate text-xs ${lastBad ? "text-brand-700" : "text-ink-500"}`}>
+                {last ? new Date(last.started_at).toLocaleString() : "never run"}
+              </p>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                Last changes
+              </p>
+              <p className="mt-0.5 font-display text-[26px] font-bold leading-8 text-ink-900">
+                {last ? `+${last.people_created} / ~${last.people_updated}` : "—"}
+              </p>
+              <p className="truncate text-xs text-ink-500">
+                {last ? "people added / updated" : "no runs recorded"}
+              </p>
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => run(true)}
@@ -124,9 +166,6 @@ npx wrangler secret put ELVANTO_API_KEY
               <Icon name="arrowRight" size={16} />
               {busy === "live" ? "Syncing…" : "Sync now"}
             </button>
-            <span className="text-sm text-ink-500">
-              {linkedCount} {linkedCount === 1 ? "person" : "people"} linked to Elvanto
-            </span>
           </div>
           <p className="mt-2 text-xs text-ink-400">
             Preview reports what would change without writing anything — worth running
@@ -144,18 +183,30 @@ npx wrangler secret put ELVANTO_API_KEY
           <h3 className="font-display font-semibold text-ink-900">
             {result.dryRun ? "Preview — nothing was changed" : "Sync complete"}
           </h3>
-          <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-2 grid grid-cols-2 overflow-hidden rounded-lg border border-ink-100 sm:grid-cols-4">
             <Stat label={result.dryRun ? "Would add" : "People added"} value={result.peopleCreated} />
-            <Stat label={result.dryRun ? "Would update" : "People updated"} value={result.peopleUpdated} />
-            <Stat label="Groups added" value={result.groupsCreated} />
-            <Stat label="Groups updated" value={result.groupsUpdated} />
+            <Stat
+              label={result.dryRun ? "Would update" : "People updated"}
+              value={result.peopleUpdated}
+              className="border-l border-ink-100"
+            />
+            <Stat
+              label="Groups added"
+              value={result.groupsCreated}
+              className="border-t border-ink-100 sm:border-l sm:border-t-0"
+            />
+            <Stat
+              label="Groups updated"
+              value={result.groupsUpdated}
+              className="border-l border-t border-ink-100 sm:border-t-0"
+            />
           </div>
           {result.errors && result.errors.length > 0 && (
-            <div className="mt-3 rounded-lg bg-amber-50 p-3">
-              <p className="text-sm font-medium text-amber-900">
+            <div className="mt-3 rounded-lg bg-brand-50 p-3">
+              <p className="text-sm font-medium text-brand-800">
                 {result.errors.length} record{result.errors.length === 1 ? "" : "s"} had problems:
               </p>
-              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-amber-800">
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-brand-700">
                 {result.errors.map((e, i) => (
                   <li key={i}>{e}</li>
                 ))}
@@ -165,13 +216,15 @@ npx wrangler secret put ELVANTO_API_KEY
         </div>
       )}
 
-      <h2 className="mt-8 text-xs font-semibold uppercase tracking-wide text-ink-400">
+      <h2 className="mt-8 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
         Recent syncs
       </h2>
-      <div className="mt-2 overflow-hidden rounded-xl border border-ink-100 bg-white">
+      <div className="mt-2 divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
         {runs.map((r) => (
-          <div key={r.id} className="flex flex-wrap items-center gap-3 border-b border-ink-100 px-4 py-3 last:border-0">
-            <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${STATUS_STYLE[r.status] ?? "bg-ink-100 text-ink-500"}`}>
+          <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+            <span
+              className={`rounded px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${STATUS_TAG[r.status] ?? "bg-ink-100 text-ink-600"}`}
+            >
               {r.status}
             </span>
             <span className="text-sm text-ink-700">
@@ -193,11 +246,19 @@ npx wrangler secret put ELVANTO_API_KEY
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: number;
+  className?: string;
+}) {
   return (
-    <div className="rounded-lg bg-ink-50 p-2.5">
-      <p className="text-lg font-bold text-ink-900">{value}</p>
-      <p className="text-xs text-ink-500">{label}</p>
+    <div className={`px-3 py-2 ${className}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{label}</p>
+      <p className="mt-0.5 font-display text-xl font-bold leading-6 text-ink-900">{value}</p>
     </div>
   );
 }

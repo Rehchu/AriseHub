@@ -20,10 +20,11 @@ export interface MyPlan {
   }[];
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  accepted: "bg-emerald-50 text-emerald-700",
-  declined: "bg-ink-100 text-ink-400",
-  invited: "bg-amber-50 text-amber-700",
+/** Status dot for the rest of the team. Brand = confirmed, ink-400 = pending, hairline = declined. */
+const DOT_STYLE: Record<string, string> = {
+  accepted: "bg-brand-600",
+  declined: "bg-ink-200",
+  invited: "bg-ink-400",
 };
 
 /**
@@ -71,87 +72,96 @@ export function MySchedule({
     const me = p.team.filter((t) => t.profile_id === currentProfileId);
     const others = p.team.filter((t) => t.profile_id !== currentProfileId);
     const d = new Date(p.service_date + "T00:00:00");
+    const dateLine = `${d.toLocaleDateString(undefined, { weekday: "long" })} · ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`.toUpperCase();
 
     return (
-      <div className="rounded-xl border border-ink-100 bg-white p-4">
-        <div className="flex items-start gap-3">
-          <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-pink-50 text-pink-600">
-            <span className="text-[10px] uppercase leading-none">
-              {d.toLocaleDateString(undefined, { month: "short" })}
-            </span>
-            <span className="text-lg font-bold leading-none">{d.getDate()}</span>
-          </span>
-          <div className="min-w-0 flex-1">
-            <Link href={`/services/${p.id}`} className="font-display font-semibold text-ink-900 hover:text-brand-600">
-              {p.title}
-            </Link>
-            <p className="text-xs text-ink-400">
-              {d.toLocaleDateString(undefined, { weekday: "long" })}
-            </p>
-          </div>
+      <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+        <div className="border-b border-ink-100 px-4 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{dateLine}</p>
+          <Link
+            href={`/services/${p.id}`}
+            className="font-display font-semibold text-ink-900 hover:text-brand-600"
+          >
+            {p.title}
+          </Link>
         </div>
 
-        {/* What I'm doing */}
-        <div className="mt-3 space-y-2">
-          {me.map((t) => (
-            <div key={t.id} className="rounded-lg bg-brand-50 p-2.5">
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-ink-900">You&apos;re on {t.position}</span>
-                <span className={`ml-auto rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLE[t.status]}`}>
-                  {t.status === "invited" ? "Needs response" : t.status}
-                </span>
-              </div>
-              {t.status === "invited" && (
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => respond(p.id, t.id, "accepted")}
-                    className="flex-1 rounded-lg bg-emerald-700 py-1.5 text-sm font-medium text-onaccent hover:bg-emerald-800"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => respond(p.id, t.id, "declined")}
-                    className="flex-1 rounded-lg bg-white py-1.5 text-sm font-medium text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
-                  >
-                    Can&apos;t make it
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Who else is serving */}
-        {others.length > 0 && (
-          <div className="mt-3">
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-400">
-              Serving with you
-            </p>
-            <div className="space-y-1">
-              {others.map((t) => (
-                <div key={t.id} className="flex items-center gap-2 text-sm">
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${
-                      t.status === "accepted"
-                        ? "bg-emerald-500"
-                        : t.status === "declined"
-                          ? "bg-ink-300"
-                          : "bg-amber-500"
-                    }`}
-                    title={t.status}
-                  />
-                  <span className="font-medium text-ink-700">{t.position}</span>
-                  <span className="truncate text-ink-500">{t.name ?? "unassigned"}</span>
-                  {t.phone && (
-                    <a href={`tel:${t.phone}`} className="ml-auto shrink-0 text-xs text-brand-600 underline">
-                      Call
-                    </a>
+        <div className="px-4 py-3">
+          {/* What I'm doing */}
+          {me.length > 0 && (
+            <div className="space-y-2">
+              {me.map((t) => (
+                <div key={t.id} className="rounded-lg bg-brand-50 p-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink-900">
+                      You&apos;re on {t.position}
+                    </span>
+                    <span
+                      className={`ml-auto text-[11px] font-semibold ${
+                        t.status === "invited"
+                          ? "text-brand-700"
+                          : t.status === "accepted"
+                            ? "text-ink-600"
+                            : "text-ink-500"
+                      }`}
+                    >
+                      {t.status === "invited"
+                        ? "Needs response"
+                        : t.status === "accepted"
+                          ? "Confirmed"
+                          : "Declined"}
+                    </span>
+                  </div>
+                  {t.status === "invited" && (
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={() => respond(p.id, t.id, "accepted")}
+                        className="flex-1 rounded-lg bg-accent py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        onClick={() => respond(p.id, t.id, "declined")}
+                        className="flex-1 rounded-lg bg-white py-1.5 text-sm font-medium text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
+                      >
+                        Can&apos;t make it
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Who else is serving */}
+          {others.length > 0 && (
+            <div className={me.length > 0 ? "mt-3" : ""}>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                Serving with you
+              </p>
+              <div className="space-y-1">
+                {others.map((t) => (
+                  <div key={t.id} className="flex items-center gap-2 text-sm">
+                    <span
+                      className={`h-2 w-2 shrink-0 rounded-full ${DOT_STYLE[t.status]}`}
+                      title={t.status}
+                    />
+                    <span className="font-medium text-ink-700">{t.position}</span>
+                    <span className="truncate text-ink-500">{t.name ?? "unassigned"}</span>
+                    {t.phone && (
+                      <a
+                        href={`tel:${t.phone}`}
+                        className="ml-auto shrink-0 text-xs font-medium text-brand-600 underline"
+                      >
+                        Call
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -162,14 +172,19 @@ export function MySchedule({
         ← Services
       </Link>
 
-      <h1 className="font-display text-2xl font-bold text-ink-900">My schedule</h1>
-      <p className="mt-1 text-ink-500">
-        {upcoming.length === 0
-          ? "You're not scheduled for anything upcoming."
-          : `${upcoming.length} upcoming${needsResponse > 0 ? ` · ${needsResponse} needs a response` : ""}`}
-      </p>
+      {/* Header: title with the state of your rota beside it. */}
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-ink-100 pb-4">
+        <h1 className="font-display text-2xl font-bold text-ink-900">My schedule</h1>
+        <p className="text-sm text-ink-500">
+          {upcoming.length === 0
+            ? "nothing upcoming"
+            : `${upcoming.length} upcoming${
+                needsResponse > 0 ? ` · ${needsResponse} needs a response` : ""
+              }`}
+        </p>
+      </div>
 
-      <div className="mt-6 space-y-3">
+      <div className="mt-5 space-y-3">
         {upcoming.map((p) => (
           <PlanCard key={p.id} p={p} />
         ))}

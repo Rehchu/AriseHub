@@ -174,8 +174,8 @@ export function PeopleAdmin({
   return (
     <div className="space-y-6">
       {resetLink && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="mb-2 text-sm font-medium text-amber-900">
+        <div className="rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <p className="mb-2 text-sm font-medium text-brand-800">
             Set-password link for {resetLink.name} — send it to them directly. It
             works once and expires; nobody (including you) sees their password.
           </p>
@@ -183,13 +183,13 @@ export function PeopleAdmin({
             <input readOnly value={resetLink.link} className="ah-input bg-white text-xs" />
             <button
               onClick={() => navigator.clipboard.writeText(resetLink.link)}
-              className="shrink-0 rounded-lg bg-amber-700 px-3 py-2 text-sm font-medium text-onaccent"
+              className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-onaccent hover:bg-accent-strong"
             >
               Copy
             </button>
             <button
               onClick={() => setResetLink(null)}
-              className="shrink-0 rounded-lg px-2 text-amber-700"
+              className="shrink-0 rounded-lg px-2 text-brand-700"
               aria-label="Dismiss"
             >
               <Icon name="x" />
@@ -220,24 +220,24 @@ export function PeopleAdmin({
           ))}
         </datalist>
 
-        <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+        <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
           {filtered.map((p) => {
             const isOpen = expanded === p.id;
             const deptIds = new Set(members[p.id] ?? []);
             return (
-              <div key={p.id} className="border-b border-ink-100 last:border-0">
-                <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-                  <Avatar name={p.full_name} photo={p.photo_url} size={36} />
+              <div key={p.id}>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+                  <Avatar name={p.full_name} photo={p.photo_url} size={28} />
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-ink-900">
+                    <p className="text-sm font-semibold text-ink-900">
                       {p.full_name}
                       {p.archived_at && (
-                        <span className="ml-2 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase text-ink-400">
+                        <span className="ml-2 rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600">
                           archived
                         </span>
                       )}
                       {p.hidden_from_directory && (
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase text-amber-800">
+                        <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
                           hidden
                         </span>
                       )}
@@ -270,7 +270,7 @@ export function PeopleAdmin({
                   <select
                     value={p.role}
                     onChange={(e) => patch(p.id, { role: e.target.value as UserRole })}
-                    className="ah-input w-auto py-1.5 text-sm"
+                    className="ah-input w-auto py-1 text-sm"
                     aria-label="Role"
                   >
                     {ROLES.map((r) => (
@@ -285,7 +285,7 @@ export function PeopleAdmin({
                     onChange={(e) =>
                       patch(p.id, { campus_id: e.target.value || null })
                     }
-                    className="ah-input w-auto py-1.5 text-sm"
+                    className="ah-input w-auto py-1 text-sm"
                     aria-label="Campus"
                   >
                     <option value="">No campus</option>
@@ -301,14 +301,14 @@ export function PeopleAdmin({
                       can be set. Named for what is actually behind it. */}
                   <button
                     onClick={() => setExpanded(isOpen ? null : p.id)}
-                    className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50"
+                    className="rounded px-2 py-1 text-[13px] font-medium text-brand-600 hover:bg-brand-50"
                   >
                     {isOpen ? "Hide" : `Title & departments (${deptIds.size})`}
                   </button>
                   <button
                     onClick={() => resetPassword(p)}
                     disabled={resetting === p.id}
-                    className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-50"
+                    className="rounded px-2 py-1 text-[13px] font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-50"
                     title="Generate a set-password link for this person"
                   >
                     {resetting === p.id ? "…" : "Reset password"}
@@ -319,7 +319,7 @@ export function PeopleAdmin({
                         archived_at: p.archived_at ? null : new Date().toISOString(),
                       })
                     }
-                    className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+                    className="rounded px-2 py-1 text-[13px] font-medium text-ink-600 hover:bg-ink-50"
                   >
                     {p.archived_at ? "Restore" : "Archive"}
                   </button>

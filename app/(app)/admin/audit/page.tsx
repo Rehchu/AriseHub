@@ -87,7 +87,7 @@ export default async function AuditPage() {
   }
 
   return (
-    <div className="mt-6">
+    <div>
       <p className="mb-4 text-sm text-ink-500">
         Changes to who has authority, and to who may collect a child. Written by
         database triggers rather than by the app, so it records what happened
@@ -100,36 +100,68 @@ export default async function AuditPage() {
           Nothing recorded yet.
         </p>
       ) : (
-        <ul className="space-y-1.5">
-          {log.map((r) => (
-            <li
-              key={r.id}
-              className={
-                "rounded-lg border px-3 py-2.5 text-sm " +
-                (SERIOUS.has(r.action) ? "border-brand-200 bg-brand-50" : "border-ink-100 bg-white")
-              }
-            >
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <span
-                  className={
-                    "font-medium " + (SERIOUS.has(r.action) ? "text-brand-800" : "text-ink-800")
-                  }
-                >
-                  {LABELS[r.action] ?? r.action}
-                </span>
-                <span className="text-xs text-ink-400">
-                  {new Date(r.created_at).toLocaleString()}
-                </span>
-                <span className="flex-1" />
-                <span className="text-xs text-ink-500">
-                  {r.user_id ? (names[r.user_id] ?? "Unknown") : "System"}
-                </span>
-              </div>
-              <p className="mt-0.5 text-ink-600">{describe(r)}</p>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-ink-200 text-left">
+                <Th>Event</Th>
+                <Th className="hidden md:table-cell">Detail</Th>
+                <Th className="hidden sm:table-cell">By</Th>
+                <Th className="text-right">When</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100">
+              {log.map((r) => {
+                const serious = SERIOUS.has(r.action);
+                return (
+                  <tr key={r.id} className="align-top">
+                    <td className="px-3 py-2">
+                      <span
+                        className={
+                          "inline-block rounded px-2 py-0.5 text-[11px] font-medium " +
+                          (serious ? "bg-brand-50 text-brand-700" : "bg-ink-100 text-ink-600")
+                        }
+                      >
+                        {LABELS[r.action] ?? r.action}
+                      </span>
+                      {/* Detail and actor collapse into this cell on small screens. */}
+                      <p className="mt-1 text-xs text-ink-600 md:hidden">{describe(r)}</p>
+                      <p className="mt-0.5 text-xs text-ink-500 sm:hidden">
+                        {r.user_id ? (names[r.user_id] ?? "Unknown") : "System"}
+                      </p>
+                    </td>
+                    <td className="hidden px-3 py-2 text-[13px] text-ink-600 md:table-cell">
+                      {describe(r)}
+                    </td>
+                    <td className="hidden whitespace-nowrap px-3 py-2 text-xs text-ink-500 sm:table-cell">
+                      {r.user_id ? (names[r.user_id] ?? "Unknown") : "System"}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-xs text-ink-400">
+                      {new Date(r.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
+  );
+}
+
+function Th({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <th
+      className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400 ${className}`}
+    >
+      {children}
+    </th>
   );
 }

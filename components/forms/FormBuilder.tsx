@@ -119,12 +119,14 @@ export function FormBuilder({
       <a href="/forms" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-500 hover:text-brand-600">
         ← All forms
       </a>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-ink-900">{form.title}</h1>
-          <p className="mt-1 text-sm text-ink-500">{submissions.length} responses</p>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-ink-100 pb-4">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <h1 className="truncate font-display text-2xl font-bold text-ink-900">{form.title}</h1>
+          <p className="shrink-0 text-sm text-ink-500">
+            {submissions.length} response{submissions.length === 1 ? "" : "s"}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 sm:ml-auto">
           <label className="flex items-center gap-2 text-sm font-medium text-ink-600">
             <input type="checkbox" checked={active} onChange={toggleActive} />
             {active ? "Live" : "Off"}
@@ -141,8 +143,8 @@ export function FormBuilder({
       </div>
 
       {/* Share link */}
-      <div className="mt-4 flex items-center gap-2 rounded-lg bg-teal-50 p-3">
-        <Icon name="link" className="text-teal-600" />
+      <div className="mt-4 flex items-center gap-2 rounded-lg border border-ink-100 bg-ink-50 p-3">
+        <Icon name="link" className="text-ink-400" />
         <input readOnly value={publicUrl} className="ah-input flex-1 bg-white text-xs" />
         <button
           onClick={() => {
@@ -150,7 +152,7 @@ export function FormBuilder({
             setCopied(true);
             setTimeout(() => setCopied(false), 1500);
           }}
-          className="shrink-0 rounded-lg bg-teal-700 px-3 py-2 text-sm font-medium text-onaccent"
+          className="shrink-0 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-onaccent transition hover:bg-accent-strong"
         >
           {copied ? "Copied" : "Copy link"}
         </button>

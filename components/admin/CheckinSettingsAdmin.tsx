@@ -126,8 +126,8 @@ export function CheckinSettingsAdmin({
   const tz = campuses[0]?.timezone ?? "America/Chicago";
 
   return (
-    <div className="mt-6 space-y-6">
-      {msg && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{msg}</p>}
+    <div className="space-y-6">
+      {msg && <p className="rounded-lg bg-ink-100 px-3 py-2 text-sm text-ink-700">{msg}</p>}
       {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
 
       <section className="rounded-xl border border-ink-100 bg-white p-4">
@@ -187,7 +187,7 @@ export function CheckinSettingsAdmin({
           check-in page — including the back button and a reload. Unlocking asks
           for this PIN.
         </p>
-        <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+        <p className="mt-2 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
           <span className="font-semibold">This locks the app, not the tablet.</span>{" "}
           Someone holding the device can still swipe to the home screen. For a
           tablet left out in the lobby, also turn on{" "}

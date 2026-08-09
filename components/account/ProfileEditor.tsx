@@ -117,72 +117,92 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <h1 className="font-display text-2xl font-bold text-ink-900">My profile</h1>
-      <p className="mt-1 text-ink-500">
-        Keep your details current so the church can reach you.
-      </p>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-ink-100 pb-4">
+        <h1 className="font-display text-2xl font-bold text-ink-900">My profile</h1>
+        <p className="text-sm text-ink-500">
+          keep your details current so the church can reach you
+        </p>
+      </div>
 
       <div className="mt-6 flex items-center gap-4 rounded-xl border border-ink-100 bg-white p-4">
         {photoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={photoSrc} alt="" className="h-16 w-16 rounded-full object-cover" />
+          <img src={photoSrc} alt="" className="h-14 w-14 rounded-full object-cover" />
         ) : (
-          <span className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-100 text-xl font-semibold text-brand-700">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-100 text-lg font-semibold text-brand-700">
             {initials}
           </span>
         )}
-        <div className="min-w-0">
-          <p className="font-medium text-ink-900">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-ink-900">
             {profile.title || profile.role.replace("_", " ")}
-            {profile.campus && ` · ${profile.campus}`}
+            {profile.campus && (
+              <span className="font-normal text-ink-500"> · {profile.campus}</span>
+            )}
           </p>
           {profile.departments.length > 0 && (
-            <p className="truncate text-xs text-ink-500">{profile.departments.join(" · ")}</p>
+            <p className="mt-1 flex flex-wrap gap-1">
+              {profile.departments.map((d) => (
+                <span
+                  key={d}
+                  className="rounded bg-ink-100 px-2 py-0.5 text-[11px] text-ink-600"
+                >
+                  {d}
+                </span>
+              ))}
+            </p>
           )}
-          <label className="mt-1 inline-block cursor-pointer text-sm font-medium text-brand-600 hover:underline">
-            Change photo
-            <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
-          </label>
         </div>
+        <label className="shrink-0 cursor-pointer rounded-lg bg-ink-100 px-3 py-1.5 text-xs font-medium text-ink-700 transition hover:bg-ink-200">
+          Change photo
+          <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} />
+        </label>
       </div>
 
-      <form onSubmit={save} className="mt-4 space-y-4 rounded-xl border border-ink-100 bg-white p-4">
-        <Field label="Full name" required>
-          <input className="ah-input" value={form.full_name} onChange={set("full_name")} autoComplete="name" />
-        </Field>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Email" required>
-            <input className="ah-input" type="email" value={form.email} onChange={set("email")} autoComplete="email" />
+      <form
+        onSubmit={save}
+        className="mt-4 divide-y divide-ink-100 rounded-xl border border-ink-100 bg-white"
+      >
+        <section className="space-y-4 p-4">
+          <h2 className="font-display text-base font-semibold text-ink-900">Contact details</h2>
+          <Field label="Full name" required>
+            <input className="ah-input" value={form.full_name} onChange={set("full_name")} autoComplete="name" />
           </Field>
-          <Field label="Phone" required>
-            <input className="ah-input" type="tel" value={form.phone} onChange={set("phone")} autoComplete="tel" />
-          </Field>
-        </div>
 
-        <Field label="About me" hint="Shown on your profile in the church directory.">
-          <textarea
-            className="ah-input min-h-24"
-            value={form.bio}
-            onChange={set("bio")}
-            placeholder="A sentence or two — how long you've been at Arise, what you serve in, anything you'd like people to know."
-            maxLength={600}
-          />
-        </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Email" required>
+              <input className="ah-input" type="email" value={form.email} onChange={set("email")} autoComplete="email" />
+            </Field>
+            <Field label="Phone" required>
+              <input className="ah-input" type="tel" value={form.phone} onChange={set("phone")} autoComplete="tel" />
+            </Field>
+          </div>
+        </section>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Birthday">
-            <input className="ah-input" type="date" value={form.birthday} onChange={set("birthday")} />
+        <section className="space-y-4 p-4">
+          <h2 className="font-display text-base font-semibold text-ink-900">About you</h2>
+          <Field label="About me" hint="Shown on your profile in the church directory.">
+            <textarea
+              className="ah-input min-h-24"
+              value={form.bio}
+              onChange={set("bio")}
+              placeholder="A sentence or two — how long you've been at Arise, what you serve in, anything you'd like people to know."
+              maxLength={600}
+            />
           </Field>
-          <Field label="Address">
-            <input className="ah-input" value={form.address} onChange={set("address")} autoComplete="street-address" />
-          </Field>
-        </div>
 
-        <fieldset className="rounded-lg bg-ink-50 p-3">
-          <legend className="px-1 text-xs font-medium uppercase tracking-wide text-ink-500">
-            Emergency contact
-          </legend>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Birthday">
+              <input className="ah-input" type="date" value={form.birthday} onChange={set("birthday")} />
+            </Field>
+            <Field label="Address">
+              <input className="ah-input" value={form.address} onChange={set("address")} autoComplete="street-address" />
+            </Field>
+          </div>
+        </section>
+
+        <section className="space-y-4 p-4">
+          <h2 className="font-display text-base font-semibold text-ink-900">Emergency contact</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Name">
               <input className="ah-input" value={form.emergency_contact} onChange={set("emergency_contact")} />
@@ -191,28 +211,34 @@ export function ProfileEditor({ profile }: { profile: MyProfile }) {
               <input className="ah-input" type="tel" value={form.emergency_phone} onChange={set("emergency_phone")} />
             </Field>
           </div>
-        </fieldset>
+        </section>
 
-        <p className="flex items-start gap-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-500">
-          <Icon name="lock" size={14} />
-          <span>
-            Your contact details, birthday, address and emergency contact are
-            visible only to leadership — pastors, admins, staff and your
-            department leads. Other members see your name, photo and bio.
-          </span>
-        </p>
+        <div className="space-y-3 p-4">
+          <p className="flex items-start gap-2 rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-500">
+            <Icon name="lock" size={14} />
+            <span>
+              Your contact details, birthday, address and emergency contact are
+              visible only to leadership — pastors, admins, staff and your
+              department leads. Other members see your name, photo and bio.
+            </span>
+          </p>
 
-        {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
+          {error && <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{error}</p>}
 
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-accent px-4 py-2 font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
-          >
-            {busy ? "Saving…" : "Save profile"}
-          </button>
-          {saved && <span className="text-sm font-medium text-green-600">Saved</span>}
+          <div className="flex items-center gap-3">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong disabled:opacity-60"
+            >
+              {busy ? "Saving…" : "Save profile"}
+            </button>
+            {saved && (
+              <span className="flex items-center gap-1.5 text-sm font-medium text-ink-600">
+                <Icon name="check" size={16} /> Saved
+              </span>
+            )}
+          </div>
         </div>
       </form>
     </div>

@@ -97,17 +97,18 @@ export function SongLibrary({
         ← Services
       </Link>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex-1">
+      {/* Header: title + count, the add action on the same row. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-ink-100 pb-4">
+        <div className="flex items-baseline gap-3">
           <h1 className="font-display text-2xl font-bold text-ink-900">Songs</h1>
-          <p className="mt-1 text-sm text-ink-500">
+          <p className="text-sm text-ink-500">
             {songs.length} song{songs.length === 1 ? "" : "s"} · used when building service plans
           </p>
         </div>
         {canManage && (
           <button
             onClick={() => setAdding((a) => !a)}
-            className="flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+            className="ml-auto flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
           >
             <Icon name="music" size={18} /> Add song
           </button>
@@ -145,42 +146,90 @@ export function SongLibrary({
       />
 
       <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
-        {filtered.map((s) => (
-          <div key={s.id} className="flex flex-wrap items-center gap-3 border-b border-ink-100 px-4 py-3 last:border-0">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pink-50 text-pink-600">
-              <Icon name="music" size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium text-ink-900">{s.title}</p>
-              <p className="truncate text-xs text-ink-400">
-                {[s.artist, s.default_key && `Key of ${s.default_key}`, s.bpm && `${s.bpm} BPM`, s.ccli_number && `CCLI ${s.ccli_number}`]
-                  .filter(Boolean)
-                  .join(" · ") || "No details yet"}
-              </p>
-            </div>
-            {s.elvanto_id && (
-              <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-500">
-                Elvanto
-              </span>
-            )}
-            {s.chart_url && (
-              <a href={s.chart_url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-brand-600 underline">
-                Chart
-              </a>
-            )}
-            {canManage && (
-              <button onClick={() => archive(s)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
-                <Icon name="trash" size={16} />
-              </button>
-            )}
-          </div>
-        ))}
-        {filtered.length === 0 && (
+        {filtered.length === 0 ? (
           <p className="px-4 py-10 text-center text-sm text-ink-400">
             {songs.length === 0
               ? "No songs yet — add one, or sync from Elvanto once it's connected."
               : "No songs match that search."}
           </p>
+        ) : (
+          <table className="w-full table-fixed text-left text-sm">
+            <thead>
+              <tr className="border-b border-ink-100">
+                <th className="px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Song
+                </th>
+                <th className="w-14 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
+                  Key
+                </th>
+                <th className="hidden w-16 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400 md:table-cell">
+                  BPM
+                </th>
+                <th className="hidden w-24 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-400 md:table-cell">
+                  CCLI
+                </th>
+                <th className={`px-3 py-2 ${canManage ? "w-32" : "w-24"}`}>
+                  <span className="sr-only">Links & actions</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-100">
+              {filtered.map((s) => (
+                <tr key={s.id}>
+                  <td className="px-3 py-2">
+                    <p className="truncate font-medium text-ink-900">{s.title}</p>
+                    {s.artist && <p className="truncate text-xs text-ink-400">{s.artist}</p>}
+                    {(s.bpm || s.ccli_number) && (
+                      <p className="truncate text-xs text-ink-400 md:hidden">
+                        {[s.bpm && `${s.bpm} BPM`, s.ccli_number && `CCLI ${s.ccli_number}`]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    {s.default_key ? (
+                      <span className="inline-block rounded bg-ink-100 px-1.5 py-0.5 text-[11px] font-semibold text-ink-600">
+                        {s.default_key}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-400">—</span>
+                    )}
+                  </td>
+                  <td className="hidden px-3 py-2 align-top text-[13px] text-ink-500 md:table-cell">
+                    {s.bpm ?? <span className="text-ink-400">—</span>}
+                  </td>
+                  <td className="hidden truncate px-3 py-2 align-top text-[13px] text-ink-500 md:table-cell">
+                    {s.ccli_number ?? <span className="text-ink-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="flex items-center justify-end gap-2.5">
+                      {s.elvanto_id && (
+                        <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-600">
+                          Elvanto
+                        </span>
+                      )}
+                      {s.chart_url && (
+                        <a
+                          href={s.chart_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[13px] font-medium text-brand-600 underline"
+                        >
+                          Chart
+                        </a>
+                      )}
+                      {canManage && (
+                        <button onClick={() => archive(s)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
+                          <Icon name="trash" size={16} />
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

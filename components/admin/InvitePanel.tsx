@@ -247,16 +247,21 @@ export function InvitePanel({
             </button>
           </form>
 
-          <div className="mt-4 space-y-2">
+          {links.length === 0 ? (
+            <p className="mt-4 rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-400">
+              No invite links yet — create one above and share it.
+            </p>
+          ) : (
+          <div className="mt-4 divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100">
             {links.map((l) => (
-              <div key={l.id} className="rounded-xl border border-ink-100 p-3">
+              <div key={l.id} className="px-3 py-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-ink-900">{l.label}</span>
-                  <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-500">
+                  <span className="text-sm font-semibold text-ink-900">{l.label}</span>
+                  <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600">
                     {l.role.replace("_", " ")}
                   </span>
                   {!l.active && (
-                    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-400">
+                    <span className="rounded bg-ink-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600">
                       off
                     </span>
                   )}
@@ -291,12 +296,8 @@ export function InvitePanel({
                 </p>
               </div>
             ))}
-            {links.length === 0 && (
-              <p className="rounded-xl border border-dashed border-ink-200 px-4 py-6 text-center text-sm text-ink-400">
-                No invite links yet — create one above and share it.
-              </p>
-            )}
           </div>
+          )}
         </div>
       )}
     </div>
