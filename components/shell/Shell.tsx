@@ -10,7 +10,6 @@ import { Logo } from "@/components/Logo";
 import { Icon } from "./Icon";
 import { GetITHelp } from "./GetITHelp";
 import { RegisterServiceWorker } from "@/components/pwa/RegisterServiceWorker";
-import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { GlobalSearch } from "./GlobalSearch";
 import { ITPortalLink } from "./ITPortalLink";

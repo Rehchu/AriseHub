@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
@@ -42,7 +42,8 @@ export function NotificationSettings({
   devices: { id: string; user_agent: string | null; created_at: string }[];
   canTest?: boolean;
 }) {
-  const supabase = createClient();
+  // Memoised so check() can depend on it without re-running every render.
+  const supabase = useMemo(() => createClient(), []);
   const [d, setD] = useState<Diagnostics | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -61,7 +62,21 @@ export function NotificationSettings({
       try {
         const reg = await navigator.serviceWorker.getRegistration();
         swRegistered = !!reg;
-        if (reg) subscribed = !!(await reg.pushManager?.getSubscription());
+        const sub = reg ? await reg.pushManager?.getSubscription() : null;
+        if (sub) {
+          // A browser subscription on its own is not enough to say we are
+          // registered. Both send paths delete the row on 404/410, so this can
+          // outlive the row behind it — and trusting the browser alone is what
+          // let a device sit here insisting notifications were on while it
+          // received nothing. If the row is gone, show the enable button again;
+          // pressing it re-upserts the same subscription.
+          const { data } = await supabase
+            .from("push_subscriptions")
+            .select("id")
+            .eq("endpoint", sub.endpoint)
+            .maybeSingle();
+          subscribed = !!data;
+        }
       } catch {
         // leave as false
       }
@@ -79,7 +94,7 @@ export function NotificationSettings({
       subscribed,
       vapidConfigured: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
     });
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     void check();
@@ -90,14 +105,10 @@ export function NotificationSettings({
     setError(null);
     setNote(null);
     try {
-      // Make sure the service worker is actually registered and active first —
-      // subscribing against a missing registration is a common silent failure.
-      let reg = await navigator.serviceWorker.getRegistration();
-      if (!reg) {
-        reg = await navigator.serviceWorker.register("/sw.js");
-      }
-      await navigator.serviceWorker.ready;
-
+      // Permission FIRST. The prompt needs transient user activation, and
+      // awaiting the service-worker promises can consume it on iOS and Safari —
+      // precisely the platform where this is hardest to get working, and where
+      // the failure looks like the button doing nothing at all.
       const perm = await Notification.requestPermission();
       if (perm !== "granted") {
         setError(
@@ -109,6 +120,28 @@ export function NotificationSettings({
         await check();
         return;
       }
+
+      // Subscribing against a missing or inactive registration is a common
+      // silent failure, so make sure the worker is really running.
+      let reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        reg = await navigator.serviceWorker.register("/sw.js");
+      }
+      // serviceWorker.ready never rejects and never times out. A worker that
+      // registers but never activates would hang here forever, leaving the
+      // button on "Enabling…" with nothing to explain it.
+      await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error("The service worker didn't finish starting up. Reload the page and try again."),
+              ),
+            10_000,
+          ),
+        ),
+      ]);
 
       const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!key) {

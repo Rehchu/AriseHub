@@ -1,5 +1,5 @@
 // AriseHub service worker — installability + Web Push.
-const CACHE = "arisehub-v2";
+const CACHE = "arisehub-v3";
 const SHELL = ["/dashboard", "/manifest.webmanifest", "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
@@ -48,6 +48,61 @@ self.addEventListener("push", (event) => {
       badge: "/icon-192.png",
       data: { url: payload.url || "/dashboard" },
       tag: payload.tag,
+    }),
+  );
+});
+
+function urlB64ToUint8Array(b64) {
+  const padded = (b64 + "=".repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(padded);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+// The browser rotates push endpoints whenever it feels like it. Without this
+// the old endpoint 410s on the next send, the server prunes the row, and the
+// device silently stops receiving forever — while the settings page still says
+// notifications are on, because that state is read from the browser rather than
+// the database. Exactly the failure that hid the Apple outage for days.
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      const old = event.oldSubscription || (await self.registration.pushManager.getSubscription());
+
+      let key = old && old.options && old.options.applicationServerKey;
+      if (!key) {
+        // Safari does not populate oldSubscription. The VAPID public key is
+        // public by definition — it is shipped to every client already.
+        const res = await fetch("/api/push/public-key");
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!body.key) return;
+        key = urlB64ToUint8Array(body.key);
+      }
+
+      const fresh =
+        event.newSubscription ||
+        (await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: key,
+        }));
+
+      const json = fresh.toJSON();
+      await fetch("/api/push/rotate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          oldEndpoint: old ? old.endpoint : null,
+          endpoint: fresh.endpoint,
+          p256dh: json.keys && json.keys.p256dh,
+          auth: json.keys && json.keys.auth,
+        }),
+      });
+    })().catch(() => {
+      // Nothing useful to do here — the next enable() from the settings page
+      // repairs it, and throwing would only surface in the SW console.
     }),
   );
 });
