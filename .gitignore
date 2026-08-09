@@ -33,3 +33,6 @@ public/__probe.*
 # names and faces, and the .pptx embeds them. Regenerate with tools/build-deck.mjs.
 /AriseHub-Overview.pptx
 /tools/deck-shots/
+
+# Print agent TLS material — a private key, generated per machine.
+/tools/print-agent/certs/

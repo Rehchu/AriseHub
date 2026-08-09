@@ -117,6 +117,10 @@ export function CheckinStation({
   // makes one decision at a time; the staffed desk keeps both panels side by
   // side because a volunteer is doing this fifty times in ten minutes.
   const [kioskView, setKioskView] = useState<"home" | "in" | "out">("home");
+  // Church-wide (0066), not per device: two stations disagreeing about how many
+  // labels a check-in prints is the kind of thing nobody notices until a roll
+  // runs out mid-service. Defaults off until the setting loads.
+  const [printGuardianTag, setPrintGuardianTag] = useState(false);
   // Pickup authorisation for the child whose code was just entered.
   const [guardians, setGuardians] = useState<
     { id: string; name: string; canPickup: boolean; notes: string | null }[]
@@ -246,11 +250,17 @@ export function CheckinStation({
   useEffect(() => {
     supabase
       .from("checkin_settings")
-      .select("require_pickup_verification")
+      .select("require_pickup_verification, print_guardian_tag")
       .maybeSingle()
       .then(({ data }) => {
-        const row = data as { require_pickup_verification: boolean } | null;
-        if (row) setRequirePickup(row.require_pickup_verification);
+        const row = data as {
+          require_pickup_verification: boolean;
+          print_guardian_tag: boolean;
+        } | null;
+        if (row) {
+          setRequirePickup(row.require_pickup_verification);
+          setPrintGuardianTag(row.print_guardian_tag);
+        }
       });
   }, [supabase]);
 
@@ -258,6 +268,9 @@ export function CheckinStation({
   // DYMO Connect on this machine → the shared desktop print agent (for iPads)
   // → the browser print dialog. First one that works wins.
   async function print(d: NameTagData) {
+    // The church-wide setting wins over whatever this device happens to have in
+    // localStorage, so every station prints the same number of labels.
+    const opts = { ...tagOpts, showGuardianTag: printGuardianTag };
     const forKind = (kind: "child" | "guardian") =>
       templates.find((t) => t.kind === kind && t.is_default) ??
       templates.find((t) => t.kind === kind);
@@ -265,7 +278,7 @@ export function CheckinStation({
     const toPrint: TagTemplate[] = [];
     const child = forKind("child");
     if (child) toPrint.push(child);
-    if (tagOpts.showGuardianTag) {
+    if (printGuardianTag) {
       // No guardian template? Print the child design again marked as a guardian
       // tag rather than silently skipping it. A child checked in without a
       // matching claim tag is the failure this whole code system exists to stop.
@@ -279,7 +292,7 @@ export function CheckinStation({
           name: d.name,
           room: d.room,
           code: d.code,
-          church: tagOpts.churchName,
+          church: opts.churchName,
           hasAllergy: d.hasAllergy,
           campus: d.campus,
           guardian: d.guardian,
@@ -313,16 +326,16 @@ export function CheckinStation({
 
     // No designed template yet — fall back to the built-in layout.
     const attempts: PrintResult[] = [];
-    const direct = await printViaDymo(d, tagOpts, printer || undefined);
+    const direct = await printViaDymo(d, opts, printer || undefined);
     attempts.push(direct);
     if (direct.ok) return setPrintLog(attempts);
     const server = localStorage.getItem("ah-print-server");
     if (server) {
-      const viaAgent = await printViaServer(d, tagOpts, server);
+      const viaAgent = await printViaServer(d, opts, server);
       attempts.push(viaAgent);
       if (viaAgent.ok) return setPrintLog(attempts);
     }
-    printNameTag(d, tagOpts);
+    printNameTag(d, opts);
     attempts.push({ ok: true, via: "browser" });
     setPrintLog(attempts);
   }
@@ -819,7 +832,8 @@ export function CheckinStation({
                 ["showCode", "Show pickup code"],
                 ["showDate", "Show date"],
                 ["showAllergy", "Show allergy flag"],
-                ["showGuardianTag", "Also print guardian pickup tag"],
+                // Guardian tag is church-wide now (Admin -> Check-in), not per
+                // device — two sources of truth meant nobody knew which won.
               ] as const
             ).map(([k, label]) => (
               <label key={k} className="flex items-center gap-2 text-sm text-ink-700">

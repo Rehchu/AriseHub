@@ -17,12 +17,18 @@
  * prints on startup (e.g. http://192.168.1.50:41952).
  */
 
-import { createServer } from "node:http";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { networkInterfaces } from "node:os";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const portArg = args.indexOf("--port");
 const PORT = portArg !== -1 ? Number(args[portArg + 1]) : 41952;
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 // DYMO Connect's local web service. It is HTTPS with a self-signed cert, so we
 // must not verify it — this is a loopback connection to software on this
@@ -56,6 +62,61 @@ async function getPrinters() {
   return [...xml.matchAll(/<Name>([^<]+)<\/Name>/g)].map((m) => m[1]);
 }
 
+/**
+ * TLS, because without it this agent cannot be used at all.
+ *
+ * AriseHub is served over https. A page on https may not fetch a plain http
+ * URL — the browser blocks it as mixed content before a request is even made.
+ * So the agent listening on http could never be reached from the real site:
+ * http:// is blocked, and https:// had nothing listening. It fell through to
+ * the browser print dialog every time, which is why an iPad only ever offered
+ * AirPrint printers.
+ *
+ * A self-signed certificate is correct here — this is a box on the church LAN,
+ * not a public host, and there is no CA that will issue for 192.168.x.x. The
+ * tablet has to trust it once (see the startup instructions).
+ */
+const CERT_DIR = join(HERE, "certs");
+const CERT_FILE = join(CERT_DIR, "agent.crt");
+const KEY_FILE = join(CERT_DIR, "agent.key");
+
+function argValue(flag) {
+  const i = args.indexOf(flag);
+  return i !== -1 ? args[i + 1] : null;
+}
+
+function ensureCert() {
+  const certArg = argValue("--cert");
+  const keyArg = argValue("--key");
+  if (certArg && keyArg) return { cert: readFileSync(certArg), key: readFileSync(keyArg) };
+
+  if (existsSync(CERT_FILE) && existsSync(KEY_FILE)) {
+    return { cert: readFileSync(CERT_FILE), key: readFileSync(KEY_FILE) };
+  }
+
+  // The cert must name the IPs the tablet will actually dial, or iOS rejects it
+  // even after the warning is accepted.
+  const san = ["IP:127.0.0.1", "DNS:localhost", ...lanAddresses().map((a) => `IP:${a}`)].join(",");
+  try {
+    mkdirSync(CERT_DIR, { recursive: true });
+    execFileSync(
+      "openssl",
+      [
+        "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+        "-keyout", KEY_FILE, "-out", CERT_FILE,
+        "-days", "3650",
+        "-subj", "/CN=AriseHub Print Agent",
+        "-addext", `subjectAltName=${san}`,
+      ],
+      { stdio: "ignore" },
+    );
+    console.log("  Generated a self-signed certificate in ./certs\n");
+    return { cert: readFileSync(CERT_FILE), key: readFileSync(KEY_FILE) };
+  } catch {
+    return null;
+  }
+}
+
 function json(res, status, obj) {
   const body = JSON.stringify(obj);
   res.writeHead(status, {
@@ -68,7 +129,10 @@ function json(res, status, obj) {
   res.end(body);
 }
 
-const server = createServer(async (req, res) => {
+const tls = args.includes("--http") ? null : ensureCert();
+const scheme = tls ? "https" : "http";
+
+const handler = async (req, res) => {
   if (req.method === "OPTIONS") return json(res, 204, {});
 
   try {
@@ -113,7 +177,9 @@ const server = createServer(async (req, res) => {
     console.error("error:", e.message);
     json(res, 500, { error: e.message });
   }
-});
+};
+
+const server = tls ? createHttpsServer(tls, handler) : createHttpServer(handler);
 
 server.listen(PORT, "0.0.0.0", async () => {
   const addrs = lanAddresses();
@@ -129,7 +195,28 @@ server.listen(PORT, "0.0.0.0", async () => {
   } catch {
     console.log("  DYMO Connect not detected. Install it and make sure it's running.");
   }
-  console.log("\n  Enter ONE of these in AriseHub → Check-In → Name tags → Print server:");
-  for (const a of addrs) console.log(`    http://${a}:${PORT}`);
+  if (!tls) {
+    console.log("\n  ⚠ Running WITHOUT TLS.");
+    console.log("    AriseHub is served over https, and a browser refuses to let an https page");
+    console.log("    reach a plain http address (mixed content). Tablets will silently fall back");
+    console.log("    to the AirPrint dialog instead of using this printer.");
+    console.log("    Install openssl (Git for Windows includes it) and restart, or pass");
+    console.log("    --cert and --key.\n");
+  }
+
+  console.log(`\n  Enter ONE of these in AriseHub → Check-In → Name tags → Print server:`);
+  for (const a of addrs) console.log(`    ${scheme}://${a}:${PORT}`);
+
+  if (tls) {
+    console.log("\n  FIRST TIME ON EACH TABLET — do this once, or printing will fail silently:");
+    console.log("    1. Open the SAME address you entered above, with /status on the end,");
+    console.log("       in Safari on the tablet. For example:");
+    console.log(`         ${scheme}://${addrs[0] ?? "192.168.1.50"}:${PORT}/status`);
+    console.log("    2. Tap through the certificate warning (Show Details → visit this website)");
+    console.log("    3. You should see {\"ok\":true,...}. Now check-in can print here.");
+    console.log("\n  The certificate is self-signed because no authority issues certs for a");
+    console.log("  192.168.x.x address. It lives in ./certs and lasts 10 years.");
+  }
+
   console.log("\n  Leave this window open while check-in is running. Ctrl+C to stop.\n");
 });

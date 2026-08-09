@@ -25,11 +25,13 @@ function pretty(t: string): string {
 export function CheckinSettingsAdmin({
   requirePickup: initialRequirePickup,
   autoCheckoutEnabled: initialAuto,
+  printGuardianTag: initialPrintGuardian,
   rules: initialRules,
   campuses,
 }: {
   requirePickup: boolean;
   autoCheckoutEnabled: boolean;
+  printGuardianTag: boolean;
   rules: AutoCheckoutRule[];
   campuses: { name: string; timezone: string | null }[];
 }) {
@@ -37,6 +39,7 @@ export function CheckinSettingsAdmin({
 
   const [requirePickup, setRequirePickup] = useState(initialRequirePickup);
   const [autoCheckout, setAutoCheckout] = useState(initialAuto);
+  const [printGuardian, setPrintGuardian] = useState(initialPrintGuardian);
   const [rules, setRules] = useState(initialRules);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +51,7 @@ export function CheckinSettingsAdmin({
   async function saveSettings(patch: {
     require_pickup_verification?: boolean;
     auto_checkout_enabled?: boolean;
+    print_guardian_tag?: boolean;
   }) {
     setError(null);
     const { error } = await supabase.from("checkin_settings").update(patch).eq("id", true);
@@ -146,6 +150,27 @@ export function CheckinSettingsAdmin({
               released to somebody else. Off: entering the code checks the child
               out in one tap, for services where children simply leave with
               their parents.
+            </span>
+          </span>
+        </label>
+
+        <label className="mt-4 flex items-start gap-3 text-sm text-ink-800">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={printGuardian}
+            onChange={(e) => {
+              setPrintGuardian(e.target.checked);
+              saveSettings({ print_guardian_tag: e.target.checked });
+            }}
+          />
+          <span>
+            Also print a guardian pickup tag
+            <span className="mt-0.5 block text-xs text-ink-500">
+              Off: one label per child. On: a second label for the guardian to
+              keep. The child&apos;s pickup code is printed on their own tag
+              either way, so this is a convenience — and it doubles how fast a
+              roll runs out. Applies to every station.
             </span>
           </span>
         </label>

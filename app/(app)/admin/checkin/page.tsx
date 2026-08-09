@@ -24,7 +24,7 @@ export default async function CheckinSettingsPage() {
   const [{ data: settings }, { data: rules }, { data: campuses }] = await Promise.all([
     supabase
       .from("checkin_settings")
-      .select("require_pickup_verification, auto_checkout_enabled")
+      .select("require_pickup_verification, auto_checkout_enabled, print_guardian_tag")
       .maybeSingle(),
     supabase
       .from("checkin_auto_checkout_rules")
@@ -42,6 +42,9 @@ export default async function CheckinSettingsPage() {
       }
       autoCheckoutEnabled={
         (settings as { auto_checkout_enabled?: boolean } | null)?.auto_checkout_enabled ?? true
+      }
+      printGuardianTag={
+        (settings as { print_guardian_tag?: boolean } | null)?.print_guardian_tag ?? false
       }
       rules={(rules ?? []) as AutoCheckoutRule[]}
       campuses={(campuses ?? []) as { name: string; timezone: string | null }[]}
