@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, emailLayout, buttonHtml } from "@/lib/email";
-import { sendPush } from "@/lib/webpush";
+import { sendPush, relayFromEnv } from "@/lib/webpush";
 
 const APP = "https://arisehub.myfaithtech.com";
 
@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
           { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
           payload,
           vapid,
+          { relay: relayFromEnv() },
         );
         if (r.expired) dead.push(s.id);
       }),

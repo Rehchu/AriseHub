@@ -21,6 +21,14 @@ function bytesToB64url(b: Uint8Array | ArrayBuffer): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/** Standard base64 — what the relay expects, distinct from the URL-safe form
+ *  the Web Push specs use for keys. */
+function bytesToB64(b: Uint8Array): string {
+  let bin = "";
+  for (const x of b) bin += String.fromCharCode(x);
+  return btoa(bin);
+}
+
 function concat(...arrs: Uint8Array[]): Uint8Array {
   const len = arrs.reduce((n, a) => n + a.length, 0);
   const out = new Uint8Array(len);
@@ -160,28 +168,110 @@ export interface SendResult {
   detail?: string;
   /** True when a retry was needed and worked. */
   retried?: boolean;
+  /** Went via the Supabase relay rather than straight out of the Worker. */
+  relayed?: boolean;
+}
+
+/** Where to relay pushes Cloudflare cannot deliver itself. */
+export interface RelayConfig {
+  /** Supabase project URL, e.g. https://xxxx.supabase.co */
+  url: string;
+  /** Service role key — the relay runs behind Supabase's own JWT check. */
+  key: string;
+}
+
+/**
+ * Relay settings from the environment, or undefined when it isn't configured.
+ *
+ * Uses SUPABASE_SECRET_KEY rather than a legacy service_role JWT: the original
+ * keys leaked during the build and were revoked, so only the new secret key
+ * works on this project (see lib/supabase/admin.ts).
+ */
+export function relayFromEnv(): RelayConfig | undefined {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SECRET_KEY;
+  return url && key ? { url, key } : undefined;
+}
+
+/** Apple's push network, which Cloudflare Workers cannot reach. */
+export function needsRelay(endpoint: string): boolean {
+  try {
+    return /(^|\.)push\.apple\.com$/.test(new URL(endpoint).hostname);
+  } catch {
+    return false;
+  }
 }
 
 /**
  * Send one Web Push message. Never throws — returns a status the caller can act on.
  *
- * Retries once on 5xx. A 525 is Cloudflare's "TLS handshake to the upstream
- * failed", which is a hop between our Worker and Apple rather than anything
- * wrong with the subscription — one iPad saw it while an iPhone on the same
- * push service and the same code path was fine. That class of failure is
- * transient and a single retry is the correct response to it. 4xx is not
- * retried: those are our fault or the subscription's, and repeating them just
- * doubles the load.
+ * Apple goes via the relay when one is configured. Cloudflare's egress cannot
+ * complete a TLS handshake with Apple's push network at all: a bare GET to
+ * web.push.apple.com, a POST to the same, and a GET to api.push.apple.com every
+ * one return 525 in ~110ms, while Google and Mozilla answer normally from the
+ * same Worker on the same request. Apple is fine — 0.7s handshake and a valid
+ * certificate from an ordinary client. So this is not retryable and not ours to
+ * fix in the request; it needs a different network path, which is what
+ * supabase/functions/push-relay is. Without a relay configured we still try
+ * directly, so the only cost of the relay being unavailable is the old bug.
+ *
+ * Retries once on 5xx. 4xx is not retried: those are our fault or the
+ * subscription's, and repeating them just doubles the load.
  */
 export async function sendPush(
   sub: PushSubscriptionRecord,
   payload: string,
   vapid: { publicKey: string; privateKey: string; subject: string },
-  ttl = 60 * 60 * 24,
+  opts: { ttl?: number; relay?: RelayConfig } = {},
 ): Promise<SendResult> {
+  const ttl = opts.ttl ?? 60 * 60 * 24;
+  const relay = opts.relay;
+
   const attempt = async (): Promise<SendResult> => {
     const body = await encryptPayload(payload, sub.p256dh, sub.auth);
     const auth = await vapidHeader(sub.endpoint, vapid.publicKey, vapid.privateKey, vapid.subject);
+
+    if (relay && needsRelay(sub.endpoint)) {
+      const res = await fetch(`${relay.url.replace(/\/+$/, "")}/functions/v1/push-relay`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${relay.key}`,
+          apikey: relay.key,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          endpoint: sub.endpoint,
+          authorization: auth,
+          ttl,
+          body_b64: bytesToB64(body),
+        }),
+      });
+
+      // A relay that is itself broken must not look like Apple refusing the
+      // subscription, or the caller would prune a device that is perfectly fine.
+      if (!res.ok) {
+        const why = (await res.text().catch(() => "")).trim().slice(0, 200);
+        return {
+          ok: false,
+          status: 502,
+          expired: false,
+          detail: `push relay ${res.status}${why ? `: ${why}` : ""}`,
+          relayed: true,
+        };
+      }
+
+      const out = (await res.json().catch(() => null)) as
+        | { status?: number; detail?: string | null }
+        | null;
+      const status = out?.status ?? 0;
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        expired: status === 404 || status === 410,
+        detail: out?.detail ?? undefined,
+        relayed: true,
+      };
+    }
 
     const res = await fetch(sub.endpoint, {
       method: "POST",

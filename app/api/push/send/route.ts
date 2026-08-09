@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendPush } from "@/lib/webpush";
+import { sendPush, relayFromEnv } from "@/lib/webpush";
 
 // POST { profileId, title, body, url } — sends a Web Push to every device that
 // `profileId` has subscribed. Caller must be authenticated. Dead subscriptions
@@ -115,8 +115,10 @@ export async function POST(req: NextRequest) {
     url: safeUrl,
   });
 
+  const relay = relayFromEnv();
   let sent = 0;
   let retried = 0;
+  let relayed = 0;
   const dead: string[] = [];
   /** Status AND the push service's own explanation, plus which service it was. */
   const failures: { status: number; service: string; detail?: string }[] = [];
@@ -127,8 +129,10 @@ export async function POST(req: NextRequest) {
         { endpoint: s.endpoint, p256dh: s.p256dh, auth: s.auth },
         payload,
         { publicKey, privateKey, subject },
+        { relay },
       );
       if (r.retried) retried++;
+      if (r.relayed) relayed++;
       if (r.ok) sent++;
       else if (r.expired) dead.push(s.id);
       else {
@@ -150,6 +154,7 @@ export async function POST(req: NextRequest) {
     pruned: dead.length,
     failed: failures.length,
     ...(retried ? { retried } : {}),
+    ...(relayed ? { relayed } : {}),
     // Reported so a failure can be diagnosed from the device that saw it. A
     // bare status number told us nothing: 525 is Cloudflare's, not Apple's, and
     // without the service host and the body there was no way to tell whether
