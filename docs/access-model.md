@@ -4,10 +4,12 @@ The access model Arise Church actually works to, agreed 2026-08-08. Written down
 because it lives across a role enum, RLS policies on a dozen tables, and the
 check-in guards — and none of those explain the intent on their own.
 
-**Status: specified, partly built.** `departments.can_check_in` exists (0058) and
-is settable in Admin → Departments. Nothing enforces the model yet;
-`is_checkin_role()` and the channel policies are unchanged. Read "Today" vs
-"Agreed" below before assuming a rule is live.
+**Status: built.** 0058–0065. Every rule below is live and covered by tests in
+`tests/rls/access-control.test.mjs`.
+
+One thing is NOT done, and it is the one that makes half of this visible:
+**nobody has been given the `Admin` role yet.** Until the Apostle and Pastor are
+set to it in Admin → People, their full chat access is deployed and inert.
 
 ## The hierarchy
 
@@ -72,16 +74,34 @@ member whose role is only Member).
 there are already 17 departments and the set that runs check-in changes. It is
 set per department in Admin → Departments.
 
-## Still to build
+## What was built, and where
 
-1. The `Admin` and `Department Head` rungs, and `Praise Team Member` as an alias
-   of Volunteer.
-2. Channel membership policies: Admin sees all, Super Admin does not.
-3. Department scoping across People, Groups and Services.
-4. Rewire check-in access to `elevated role OR member of a can_check_in
-   department`, replacing the church-wide role list.
-5. Notification routing to match — no push for chats you are not in.
+| Rule | Migration | Notes |
+| --- | --- | --- |
+| The `Admin` rung | 0059 | One new enum value. Department Head was already `department_members.role = 'lead'`; Praise Team Member is a label, not a rung. |
+| Admin sees every department chat; Super Admin does not | 0060 | The one place the two rungs differ. DMs stay private to their participants for everyone. |
+| `departments.can_check_in` | 0058 | Additive; enforced nothing on purpose so the flag could be set and checked first. |
+| Check-in = elevated role OR a check-in department | 0064 | One function, fifteen policies. Modelled against every real account first: nobody gained or lost. |
+| Services scoped to the department | 0065 | Plus: a department lead can build their own schedule without being made Staff. |
+| Notifying follows channel membership | — | `app/api/push/send`. |
 
-Order matters. 4 changes who can reach children's records, so it wants its own
-migration, its own role-impersonated tests, and a careful look at who is holding
-a tablet on a Sunday morning before it ships.
+### Two things deliberately NOT scoped
+
+**The people directory.** Scoping it by department would mean not being able to
+look up someone in your own church, which is the opposite of what a directory is
+for. Contact details are already redacted unless you are staff or a department
+lead (0030), and that is the right boundary — the *sensitive* fields are gated,
+the names are not.
+
+**Groups.** A small group is not a department. Discovering one you are not in yet
+is the entire point of the page.
+
+If either should change, they are one policy each — but neither follows from
+"Praise team only sees praise team stuff", which was about *work*: rotas, chats,
+and who runs check-in.
+
+## Still to do
+
+1. **Give the Apostle and Pastor the `Admin` role.** Nothing else here needs
+   doing, and until this happens their chat access does nothing.
+2. Nothing else. The model above is complete.
