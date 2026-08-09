@@ -1056,3 +1056,100 @@ describe("check-in follows the department", () => {
     assert.ok(res.ok, `a check-in department member could not record an allergy: ${res.error}`);
   });
 });
+
+describe("services follow the department", () => {
+  // 0065. "Praise team only sees praise team stuff." Before this,
+  // is_services_role() was Super_Admin-or-Staff church-wide, so a Staff member
+  // in the Children's Department saw the Praise Team's rota — and a Praise Team
+  // member who was not Staff could not see their own team's schedule at all.
+  async function planFor(slug) {
+    const res = await db.query(
+      `insert into public.service_plans (title, service_date, department_id)
+       select 'ZZ ' || d.name || ' plan', current_date, d.id
+         from public.departments d where d.slug = $1
+       returning id`,
+      [slug],
+    );
+    return res.rows[0].id;
+  }
+  const canSee = async (userId, planId) => {
+    const r = await asUser(db, userId, `select count(*)::int n from public.service_plans where id = $1`, [planId]);
+    return r.ok ? r.rows[0].n === 1 : null;
+  };
+
+  test("a Praise Team member sees their own team's plan", async (t) => {
+    if (!requireDb(t)) return;
+    // fx.Lead is a lead of praise-team; fx.Member is not in it.
+    const plan = await planFor("praise-team");
+    assert.equal(await canSee(fx.ids.Lead, plan), true, "a praise team member cannot see their own rota");
+  });
+
+  test("someone outside the department does not", async (t) => {
+    if (!requireDb(t)) return;
+    const plan = await planFor("praise-team");
+    assert.equal(await canSee(fx.ids.Member, plan), false, "a plan leaked outside its department");
+  });
+
+  test("Staff outside the department no longer sees it", async (t) => {
+    if (!requireDb(t)) return;
+    // The heart of the change: Staff used to see every plan in the church.
+    await db.query(
+      `delete from public.department_members dm using public.profiles p
+        where dm.profile_id = p.id and p.user_id = $1`,
+      [fx.ids.Staff],
+    );
+    const plan = await planFor("praise-team");
+    assert.equal(await canSee(fx.ids.Staff, plan), false, "Staff still sees a department they are not in");
+  });
+
+  test("Super_Admin still sees everything", async (t) => {
+    if (!requireDb(t)) return;
+    const plan = await planFor("praise-team");
+    assert.equal(await canSee(fx.ids.Super_Admin, plan), true, "a super admin lost sight of a plan");
+  });
+
+  test("being assigned to a plan is enough on its own", async (t) => {
+    if (!requireDb(t)) return;
+    // How somebody gets asked to serve in a department they are not part of.
+    const plan = await planFor("praise-team");
+    await db.query(
+      `insert into public.plan_assignments (plan_id, profile_id, position, status)
+       select $1, p.id, 'Guest', 'invited' from public.profiles p where p.user_id = $2`,
+      [plan, fx.ids.Member],
+    );
+    assert.equal(await canSee(fx.ids.Member, plan), true, "an invited volunteer cannot see the plan they are on");
+  });
+
+  test("a department lead can build their own schedule without being Staff", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Lead,
+      `insert into public.service_plans (title, service_date, department_id)
+       select 'ZZ lead-made plan', current_date, d.id from public.departments d where d.slug = 'praise-team'`,
+    );
+    assert.ok(res.ok, `a department lead could not create a plan for their own team: ${res.error}`);
+  });
+
+  test("a plain member cannot create a plan for a department they are not in", async (t) => {
+    if (!requireDb(t)) return;
+    const res = await asUser(
+      db,
+      fx.ids.Member,
+      `insert into public.service_plans (title, service_date, department_id)
+       select 'ZZ sneaky plan', current_date, d.id from public.departments d where d.slug = 'praise-team'`,
+    );
+    assert.ok(!res.ok, "anyone could schedule the praise team");
+  });
+
+  test("plan items are never more visible than their plan", async (t) => {
+    if (!requireDb(t)) return;
+    const plan = await planFor("praise-team");
+    await db.query(
+      `insert into public.plan_items (plan_id, title, sort_order) values ($1, 'ZZ opener', 1)`,
+      [plan],
+    );
+    const res = await asUser(db, fx.ids.Member, `select count(*)::int n from public.plan_items where plan_id = $1`, [plan]);
+    assert.equal(res.ok ? res.rows[0].n : -1, 0, "a plan's running order leaked past the plan itself");
+  });
+});

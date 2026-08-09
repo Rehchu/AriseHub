@@ -45,15 +45,45 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ error: "no profile" }, { status: 403 });
 
   if (me.id !== profileId) {
-    const privileged = ["Super_Admin", "IT_Admin", "Staff"].includes(me.role);
+    const privileged = ["Super_Admin", "Admin", "IT_Admin", "Staff"].includes(me.role);
     let allowed = privileged;
     if (!allowed) {
       const { data: lead } = await supabase.rpc("is_any_department_lead");
       allowed = lead === true;
     }
     if (!allowed) {
+      // You may notify someone you share a conversation with.
+      //
+      // Without this a Volunteer posting in their own department chat notified
+      // NOBODY — every recipient came back 403 and the message simply sat there
+      // until somebody happened to open the app. Which is most of the people
+      // actually using the chats.
+      //
+      // Deliberately scoped to a shared channel rather than "any signed-in
+      // user": a push lands on a lock screen with whatever title we are handed,
+      // so an open endpoint is an impersonation channel. This read runs under
+      // the SENDER's RLS, so it can only confirm a channel they are genuinely
+      // in — and since Super_Admin lost blanket channel visibility (0060), it
+      // cannot be widened by role either.
+      const { data: shared } = await supabase
+        .from("channel_members")
+        .select("channel_id")
+        .eq("profile_id", profileId)
+        .limit(50);
+      const theirChannels = ((shared ?? []) as { channel_id: string }[]).map((r) => r.channel_id);
+      if (theirChannels.length) {
+        const { data: mine } = await supabase
+          .from("channel_members")
+          .select("channel_id")
+          .eq("profile_id", me.id)
+          .in("channel_id", theirChannels)
+          .limit(1);
+        allowed = (mine ?? []).length > 0;
+      }
+    }
+    if (!allowed) {
       return NextResponse.json(
-        { error: "You can only send notifications to yourself." },
+        { error: "You can only notify people you share a conversation with." },
         { status: 403 },
       );
     }
