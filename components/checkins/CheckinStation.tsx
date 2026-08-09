@@ -409,7 +409,10 @@ export function CheckinStation({
         room: previewRoom,
         code: "AH-041",
         church: tagOpts.churchName,
-        hasAllergy: false,
+        // The sample child HAS an allergy, so the preview demonstrates the
+        // whole badge — banner, details and all — not the quiet case.
+        hasAllergy: tagOpts.showAllergy,
+        allergyNotes: "peanuts",
       },
       150, // small on-screen preview; real labels keep PRINT_DPI
     ).then((png) => {
@@ -1385,6 +1388,24 @@ export function CheckinStation({
                       ? `${previewTemplate.name} · ${previewTemplate.width_in}″ × ${previewTemplate.height_in}″`
                       : "Built-in layout"}
                   </p>
+                  {/* Prints exactly what the preview shows, so the panel is
+                      useful BEFORE the first check-in — checking the printer
+                      is loaded and aligned is a before-service job. */}
+                  <button
+                    onClick={() =>
+                      void print({
+                        name: "Noah R.",
+                        room: previewRoom,
+                        code: "AH-041",
+                        hasAllergy: true,
+                        allergyNotes: "peanuts",
+                      })
+                    }
+                    title="Print this sample tag to check the printer"
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-onaccent hover:bg-accent-strong"
+                  >
+                    Print test
+                  </button>
                   <button
                     disabled={labelsPrinted === 0}
                     onClick={() => {
