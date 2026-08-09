@@ -28,3 +28,8 @@ public/__probe.*
 
 # Subagent scratch directories.
 .scratch*/
+
+# Approval deck: the screenshots are of the live site, so they carry real member
+# names and faces, and the .pptx embeds them. Regenerate with tools/build-deck.mjs.
+/AriseHub-Overview.pptx
+/tools/deck-shots/
