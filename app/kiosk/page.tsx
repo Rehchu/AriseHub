@@ -90,7 +90,9 @@ export default async function KioskPage() {
         <Logo size={26} />
         <span className="font-display font-bold text-ink-900">
           Arise<span className="text-brand-500">Hub</span>
-          <span className="ml-2 rounded bg-cyan-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-700">
+          {/* Brand tint, not cyan — the audit found this was the only cyan
+              badge in the rendered shell; every other badge uses the idiom. */}
+          <span className="ml-2 rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700">
             Check-in station
           </span>
         </span>

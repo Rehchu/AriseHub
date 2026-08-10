@@ -1013,16 +1013,19 @@ export function CheckinStation({
       )}
 
       {/* Stat strip (handoff screen 7) — the desk's at-a-glance numbers, one
-          bordered container with internal dividers. Not rendered in kiosk mode:
-          a parent doesn't need occupancy figures or a print counter. */}
+          bordered container. Not rendered in kiosk mode: a parent doesn't need
+          occupancy figures or a print counter. Per-position borders rather
+          than divide-x: on phones this is a 2×2, and divide-x can only draw
+          columns — the 2×2 rendered with no internal hairlines at all. */}
       {!kiosk && (
-        <div className="mb-5 grid grid-cols-2 rounded-xl border border-ink-100 bg-white sm:grid-cols-4 sm:divide-x sm:divide-ink-100">
+        <div className="mb-5 grid grid-cols-2 rounded-xl border border-ink-100 bg-white sm:grid-cols-4">
           <StatCell
             kicker="Checked in now"
             value={String(present.length)}
             status={present.length === 0 ? "nobody here yet" : "in the building"}
           />
           <StatCell
+            className="border-l border-ink-100"
             kicker="Fullest room"
             value={
               fullest
@@ -1040,8 +1043,14 @@ export function CheckinStation({
             }
             attention={nearCapacity}
           />
-          <StatCell kicker="Labels printed" value={String(labelsPrinted)} status="this session" />
           <StatCell
+            className="border-t border-ink-100 sm:border-l sm:border-t-0"
+            kicker="Labels printed"
+            value={String(labelsPrinted)}
+            status="this session"
+          />
+          <StatCell
+            className="border-l border-t border-ink-100 sm:border-t-0"
             kicker="Rooms active"
             value={String(activeRooms.length)}
             status={rooms.length === 0 ? "add rooms in Admin" : `of ${rooms.length} configured`}
@@ -1529,15 +1538,18 @@ function StatCell({
   value,
   status,
   attention = false,
+  className = "",
 }: {
   kicker: string;
   value: string;
   status: string;
   /** Renders the status line in brand-700 — "look at this now". */
   attention?: boolean;
+  /** Per-position borders — the 2×2 phone layout needs them, divide-x can't. */
+  className?: string;
 }) {
   return (
-    <div className="px-4 py-3">
+    <div className={`px-4 py-3 ${className}`}>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">{kicker}</p>
       <p className="font-display text-[26px] font-bold leading-tight text-ink-900">{value}</p>
       <p className={`truncate text-xs ${attention ? "text-brand-700" : "text-ink-500"}`}>
