@@ -53,6 +53,8 @@ export function FormBuilder({
   const [newType, setNewType] = useState<Field["field_type"]>("text");
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [fieldBusy, setFieldBusy] = useState(false);
+  const [fieldError, setFieldError] = useState<string | null>(null);
 
   async function deleteForm() {
     const n = submissions.length;
@@ -86,8 +88,10 @@ export function FormBuilder({
   async function addField(e: React.FormEvent) {
     e.preventDefault();
     if (!newLabel.trim()) return;
+    setFieldBusy(true);
+    setFieldError(null);
     const sort_order = fields.length;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("form_fields")
       .insert({
         form_id: form.id,
@@ -98,7 +102,9 @@ export function FormBuilder({
       })
       .select("*")
       .single();
-    if (data) setFields((fs) => [...fs, data as Field]);
+    setFieldBusy(false);
+    if (error) return setFieldError(error.message);
+    setFields((fs) => [...fs, data as Field]);
     setNewLabel("");
     setNewType("text");
   }
@@ -211,9 +217,16 @@ export function FormBuilder({
                 </option>
               ))}
             </select>
-            <button type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong">
-              Add field
+            <button
+              type="submit"
+              disabled={fieldBusy}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
+            >
+              {fieldBusy ? "Adding…" : "Add field"}
             </button>
+            {fieldError && (
+              <p className="w-full rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{fieldError}</p>
+            )}
           </form>
         </div>
       ) : (

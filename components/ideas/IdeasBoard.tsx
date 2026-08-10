@@ -116,19 +116,34 @@ export function IdeasBoard({
 
   async function toggleVote(i: Idea) {
     const voting = !i.voted;
+    const prevVoted = i.voted;
+    const prevVotes = i.votes;
+    setWriteError(null);
     setIdeas((list) =>
       list.map((x) =>
         x.id === i.id ? { ...x, voted: voting, votes: x.votes + (voting ? 1 : -1) } : x,
       ),
     );
-    if (voting) {
-      await supabase.from("feature_votes").insert({ request_id: i.id, profile_id: currentProfileId });
-    } else {
-      await supabase
-        .from("feature_votes")
-        .delete()
-        .eq("request_id", i.id)
-        .eq("profile_id", currentProfileId);
+    // Authoritative like the writes below — a vote the RLS policy refuses comes
+    // back as zero rows and a null error, so an unchecked insert/delete would
+    // leave a highlighted button and a count that never really moved. Roll the
+    // count and the voted state back on any failure.
+    const { data, error } = voting
+      ? await supabase
+          .from("feature_votes")
+          .insert({ request_id: i.id, profile_id: currentProfileId })
+          .select("id")
+      : await supabase
+          .from("feature_votes")
+          .delete()
+          .eq("request_id", i.id)
+          .eq("profile_id", currentProfileId)
+          .select("id");
+    if (error || !data?.length) {
+      setIdeas((list) =>
+        list.map((x) => (x.id === i.id ? { ...x, voted: prevVoted, votes: prevVotes } : x)),
+      );
+      setWriteError("Couldn't save your vote — try again");
     }
   }
 

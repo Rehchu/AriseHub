@@ -56,16 +56,39 @@ export function AvailabilityEditor({
   }
 
   async function removeBlockout(id: string) {
+    // Verified delete: an RLS refusal returns zero rows and a null error, which
+    // an unchecked delete reads as success. Roll back and say so on any failure.
+    const previous = blockouts;
+    setError(null);
     setBlockouts((b) => b.filter((x) => x.id !== id));
-    await supabase.from("blockout_dates").delete().eq("id", id);
+    const { data, error } = await supabase
+      .from("blockout_dates")
+      .delete()
+      .eq("id", id)
+      .select("id");
+    if (error || !data?.length) {
+      setBlockouts(previous);
+      setError("Couldn't remove — try again");
+    }
   }
 
   // Toggling a weekday on/off, and which weeks of the month within it.
   async function toggleDay(weekday: number) {
     const existing = patterns.find((p) => p.weekday === weekday);
     if (existing) {
+      // Verified delete — restore the day if the write doesn't take.
+      const previous = patterns;
+      setError(null);
       setPatterns((p) => p.filter((x) => x.weekday !== weekday));
-      await supabase.from("serving_patterns").delete().eq("id", existing.id);
+      const { data, error } = await supabase
+        .from("serving_patterns")
+        .delete()
+        .eq("id", existing.id)
+        .select("id");
+      if (error || !data?.length) {
+        setPatterns(previous);
+        setError("Couldn't save — try again");
+      }
     } else {
       const { data } = await supabase
         .from("serving_patterns")
@@ -82,8 +105,19 @@ export function AvailabilityEditor({
     const weeks = pat.weeks.includes(week)
       ? pat.weeks.filter((w) => w !== week)
       : [...pat.weeks, week].sort();
+    // Verified update — restore the prior weeks if the write doesn't take.
+    const previous = patterns;
+    setError(null);
     setPatterns((p) => p.map((x) => (x.id === pat.id ? { ...x, weeks } : x)));
-    await supabase.from("serving_patterns").update({ weeks }).eq("id", pat.id);
+    const { data, error } = await supabase
+      .from("serving_patterns")
+      .update({ weeks })
+      .eq("id", pat.id)
+      .select("id");
+    if (error || !data?.length) {
+      setPatterns(previous);
+      setError("Couldn't save — try again");
+    }
   }
 
   const fmt = (d: string) =>

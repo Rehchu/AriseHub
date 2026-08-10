@@ -173,10 +173,10 @@ export function ChannelList({
           <h2 className="font-display font-bold text-ink-900">Messages</h2>
           <button
             onClick={() => setShowNew(true)}
-            className="rounded-lg p-1.5 text-brand-500 transition hover:bg-brand-50"
-            aria-label="New direct message"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-medium text-brand-600 transition hover:bg-brand-50"
+            aria-label="New message"
           >
-            <Icon name="send" size={18} />
+            <Icon name="chat" size={18} /> New
           </button>
         </div>
 

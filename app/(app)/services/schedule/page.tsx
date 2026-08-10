@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { ScheduleMatrix, type SchedulePlan } from "@/components/services/ScheduleMatrix";
+import { ScheduleViews } from "@/components/services/ScheduleViews";
+import type { SchedulePlan } from "@/components/services/ScheduleMatrix";
 import type { Blockout, ServingPattern } from "@/lib/availability";
 
 export default async function SchedulePage() {
@@ -96,7 +97,7 @@ export default async function SchedulePage() {
   }>).map((p) => ({ ...p, assignments: byPlan[p.id] ?? [] }));
 
   return (
-    <ScheduleMatrix
+    <ScheduleViews
       plans={rows}
       departments={(departments ?? []) as { id: string; name: string }[]}
       myDepartmentIds={((myDepts ?? []) as { department_id: string }[]).map((d) => d.department_id)}

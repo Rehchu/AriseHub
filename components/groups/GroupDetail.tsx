@@ -45,6 +45,10 @@ export function GroupDetail({
   const [adding, setAdding] = useState(false);
   const [people, setPeople] = useState<{ id: string; full_name: string }[]>([]);
   const [attendMeeting, setAttendMeeting] = useState<Meeting | null>(null);
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const [addingMeeting, setAddingMeeting] = useState(false);
+  const [meetDate, setMeetDate] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [meetTitle, setMeetTitle] = useState("");
 
   async function loadPeople() {
     if (people.length) return;
@@ -73,22 +77,58 @@ export function GroupDetail({
 
   async function removeMember(m: Member) {
     if (!window.confirm(`Remove ${m.full_name} from this group?`)) return;
+    const previous = members;
+    setRosterError(null);
     setMembers((ms) => ms.filter((x) => x.id !== m.id));
-    await supabase.from("group_members").delete().eq("id", m.id);
+    // `.select` makes the delete authoritative — an RLS refusal returns zero
+    // rows and a null error, which an unchecked delete reads as success.
+    const { data, error } = await supabase
+      .from("group_members")
+      .delete()
+      .eq("id", m.id)
+      .select("id");
+    if (error || !data?.length) {
+      setMembers(previous);
+      setRosterError("Couldn't save — try again");
+    }
   }
 
   async function setRole(m: Member, role: Member["role"]) {
+    const previous = m.role;
+    setRosterError(null);
     setMembers((ms) => ms.map((x) => (x.id === m.id ? { ...x, role } : x)));
-    await supabase.from("group_members").update({ role }).eq("id", m.id);
+    const { data, error } = await supabase
+      .from("group_members")
+      .update({ role })
+      .eq("id", m.id)
+      .select("id");
+    if (error || !data?.length) {
+      setMembers((ms) => ms.map((x) => (x.id === m.id ? { ...x, role: previous } : x)));
+      setRosterError("Couldn't save — try again");
+    }
   }
 
-  async function addMeeting() {
+  async function addMeeting(e: React.FormEvent) {
+    e.preventDefault();
     const { data } = await supabase
       .from("group_meetings")
-      .insert({ group_id: group.id, title: "Meeting", meets_at: new Date().toISOString() })
+      .insert({
+        group_id: group.id,
+        title: meetTitle.trim() || null,
+        meets_at: new Date(meetDate + "T12:00:00").toISOString(),
+      })
       .select("id, title, meets_at, notes")
       .single();
-    if (data) setMtgs((ms) => [data as Meeting, ...ms]);
+    if (data) {
+      // A leader may record a past meeting, so keep the list newest-first — the
+      // "last on" stat and the row order both read mtgs[0] as the latest.
+      setMtgs((ms) =>
+        [data as Meeting, ...ms].sort((a, b) => b.meets_at.localeCompare(a.meets_at)),
+      );
+      setMeetTitle("");
+      setMeetDate(new Date().toLocaleDateString("en-CA"));
+      setAddingMeeting(false);
+    }
   }
 
   return (
@@ -159,6 +199,10 @@ export function GroupDetail({
             )}
           </div>
 
+          {rosterError && (
+            <p className="mb-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{rosterError}</p>
+          )}
+
           {adding && canManage && (
             <select
               className="ah-input mb-2"
@@ -228,11 +272,41 @@ export function GroupDetail({
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">Meetings</h2>
             {canManage && (
-              <button onClick={addMeeting} className="text-sm font-medium text-brand-600 hover:underline">
+              <button
+                onClick={() => setAddingMeeting((a) => !a)}
+                className="text-sm font-medium text-brand-600 hover:underline"
+              >
                 + New meeting
               </button>
             )}
           </div>
+          {addingMeeting && canManage && (
+            <form
+              onSubmit={addMeeting}
+              className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-ink-100 bg-white p-2"
+            >
+              <input
+                type="date"
+                className="ah-input w-auto"
+                value={meetDate}
+                onChange={(e) => setMeetDate(e.target.value)}
+                aria-label="Meeting date"
+                required
+              />
+              <input
+                className="ah-input min-w-0 flex-1"
+                placeholder="Title (optional)"
+                value={meetTitle}
+                onChange={(e) => setMeetTitle(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+              >
+                Add
+              </button>
+            </form>
+          )}
           {mtgs.length > 0 ? (
             <div className="divide-y divide-ink-100 overflow-hidden rounded-xl border border-ink-100 bg-white">
               {mtgs.map((mt) => (
@@ -241,12 +315,17 @@ export function GroupDetail({
                   onClick={() => canManage && setAttendMeeting(mt)}
                   className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left ${canManage ? "transition hover:bg-ink-50" : "cursor-default"}`}
                 >
-                  <span className="text-sm font-medium text-ink-800">
-                    {new Date(mt.meets_at).toLocaleDateString(undefined, {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-ink-800">
+                      {new Date(mt.meets_at).toLocaleDateString(undefined, {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                    {mt.title && (
+                      <span className="block truncate text-xs text-ink-500">{mt.title}</span>
+                    )}
                   </span>
                   {canManage && <span className="shrink-0 text-xs text-brand-600">Take attendance →</span>}
                 </button>
@@ -304,6 +383,7 @@ function Attendance({
   const supabase = createClient();
   const [present, setPresent] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -322,18 +402,28 @@ function Attendance({
 
   async function toggle(profileId: string) {
     const isPresent = !present.has(profileId);
+    const previous = present;
+    setSaveError(null);
     setPresent((s) => {
       const n = new Set(s);
       isPresent ? n.add(profileId) : n.delete(profileId);
       return n;
     });
-    // Upsert the attendance row for this meeting+person.
-    await supabase
+    // Upsert the attendance row for this meeting+person. `.select()` makes the
+    // write authoritative — an RLS refusal returns zero rows and a null error,
+    // which an unchecked upsert reads as success. On flaky wifi a failed save
+    // must not leave a tick that isn't really recorded, so roll back and say so.
+    const { data, error } = await supabase
       .from("group_attendance")
       .upsert(
         { meeting_id: meeting.id, profile_id: profileId, present: isPresent },
         { onConflict: "meeting_id,profile_id" },
-      );
+      )
+      .select();
+    if (error || !data?.length) {
+      setPresent(previous);
+      setSaveError("Couldn't save — try again");
+    }
   }
 
   return (
@@ -350,6 +440,9 @@ function Attendance({
             <Icon name="x" />
           </button>
         </div>
+        {saveError && (
+          <p className="mx-2 mt-2 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700">{saveError}</p>
+        )}
         <div className="max-h-96 overflow-y-auto p-2">
           {!loaded && <p className="px-3 py-2 text-sm text-ink-400">Loading…</p>}
           {loaded &&

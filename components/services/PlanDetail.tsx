@@ -97,6 +97,12 @@ export function PlanDetail({
   const [dupPeople, setDupPeople] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [respondError, setRespondError] = useState<string | null>(null);
+  const [addingItem, setAddingItem] = useState(false);
+  const [itemError, setItemError] = useState<string | null>(null);
+  const [removeItemError, setRemoveItemError] = useState<string | null>(null);
+  const [addingPos, setAddingPos] = useState(false);
+  const [posError, setPosError] = useState<string | null>(null);
+  const [removePositionError, setRemovePositionError] = useState<string | null>(null);
 
   const planDate = new Date(plan.service_date + "T00:00:00");
 
@@ -136,8 +142,10 @@ export function PlanDetail({
   async function addItem(e: React.FormEvent) {
     e.preventDefault();
     if (!itTitle.trim()) return;
+    setAddingItem(true);
+    setItemError(null);
     const chosenSong = itType === "song" && itSong ? songs.find((s) => s.id === itSong) : undefined;
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("plan_items")
       .insert({
         plan_id: plan.id,
@@ -150,21 +158,35 @@ export function PlanDetail({
       })
       .select("*")
       .single();
-    if (data) setItems((it) => [...it, data as Item]);
+    setAddingItem(false);
+    if (error) return setItemError(error.message);
+    if (!data) return setItemError("Couldn't add — try again");
+    setItems((it) => [...it, data as Item]);
     setItTitle("");
     setItDur("");
     setItSong("");
   }
 
   async function removeItem(id: string) {
+    // Mirror IdeasBoard.remove: an RLS refusal returns zero rows and a null
+    // error, which an unchecked delete cannot tell from success. Optimistically
+    // drop the row, verify with .select, and put it back on any failure.
+    const previous = items;
+    setRemoveItemError(null);
     setItems((it) => it.filter((x) => x.id !== id));
-    await supabase.from("plan_items").delete().eq("id", id);
+    const { data, error } = await supabase.from("plan_items").delete().eq("id", id).select("id");
+    if (error || !data?.length) {
+      setItems(previous);
+      setRemoveItemError("Couldn't remove — try again");
+    }
   }
 
   async function addPosition(e: React.FormEvent) {
     e.preventDefault();
     if (!posName.trim()) return;
-    const { data } = await supabase
+    setAddingPos(true);
+    setPosError(null);
+    const { data, error } = await supabase
       .from("plan_assignments")
       .insert({
         plan_id: plan.id,
@@ -174,22 +196,23 @@ export function PlanDetail({
       })
       .select("id, position, profile_id, status")
       .single();
-    if (data) {
-      const assignee = posPerson
-        ? { full_name: people.find((p) => p.id === posPerson)?.full_name ?? "" }
-        : null;
-      setAssignments((a) => [...a, { ...(data as Assignment), assignee }]);
-      // Tell them they've been scheduled — a scheduler nobody hears from
-      // gets ignored.
-      if (posPerson && posPerson !== currentProfileId) {
-        notify(
-          posPerson,
-          "You've been scheduled",
-          plan.title + " — " + posName.trim() + " on " +
-            planDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }),
-          "/services/" + plan.id,
-        );
-      }
+    setAddingPos(false);
+    if (error) return setPosError(error.message);
+    if (!data) return setPosError("Couldn't add — try again");
+    const assignee = posPerson
+      ? { full_name: people.find((p) => p.id === posPerson)?.full_name ?? "" }
+      : null;
+    setAssignments((a) => [...a, { ...(data as Assignment), assignee }]);
+    // Tell them they've been scheduled — a scheduler nobody hears from
+    // gets ignored.
+    if (posPerson && posPerson !== currentProfileId) {
+      notify(
+        posPerson,
+        "You've been scheduled",
+        plan.title + " — " + posName.trim() + " on " +
+          planDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }),
+        "/services/" + plan.id,
+      );
     }
     setPosName("");
     setPosPerson("");
@@ -222,8 +245,20 @@ export function PlanDetail({
   }
 
   async function removePosition(id: string) {
+    // Same verified-delete as removeItem: an RLS refusal returns zero rows and a
+    // null error, so verify with .select and restore the row on any failure.
+    const previous = assignments;
+    setRemovePositionError(null);
     setAssignments((a) => a.filter((x) => x.id !== id));
-    await supabase.from("plan_assignments").delete().eq("id", id);
+    const { data, error } = await supabase
+      .from("plan_assignments")
+      .delete()
+      .eq("id", id)
+      .select("id");
+    if (error || !data?.length) {
+      setAssignments(previous);
+      setRemovePositionError("Couldn't remove — try again");
+    }
   }
 
   /**
@@ -489,6 +524,9 @@ export function PlanDetail({
                 <p className="px-3 py-6 text-center text-sm text-ink-400">No items yet.</p>
               )}
             </div>
+            {removeItemError && (
+              <p className="mt-2 text-xs font-medium text-brand-700">{removeItemError}</p>
+            )}
           </section>
 
           {canManage && (
@@ -546,11 +584,15 @@ export function PlanDetail({
                   />
                   <button
                     type="submit"
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                    disabled={addingItem}
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
                   >
-                    Add
+                    {addingItem ? "Adding…" : "Add"}
                   </button>
                 </div>
+                {itemError && (
+                  <p className="text-xs font-medium text-brand-700">{itemError}</p>
+                )}
               </form>
             </aside>
           )}
@@ -680,6 +722,9 @@ export function PlanDetail({
                 <p className="px-3 py-6 text-center text-sm text-ink-400">No positions yet.</p>
               )}
             </div>
+            {removePositionError && (
+              <p className="mt-2 text-xs font-medium text-brand-700">{removePositionError}</p>
+            )}
           </section>
 
           {canManage && (
@@ -709,11 +754,15 @@ export function PlanDetail({
                   </select>
                   <button
                     type="submit"
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                    disabled={addingPos}
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
                   >
-                    Add
+                    {addingPos ? "Adding…" : "Add"}
                   </button>
                 </div>
+                {posError && (
+                  <p className="text-xs font-medium text-brand-700">{posError}</p>
+                )}
               </form>
             </aside>
           )}

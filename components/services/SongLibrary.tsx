@@ -45,6 +45,7 @@ export function SongLibrary({
   const [chartUrl, setChartUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const t = q.trim().toLowerCase();
@@ -87,8 +88,21 @@ export function SongLibrary({
 
   async function archive(s: Song) {
     if (!window.confirm(`Remove "${s.title}" from the library?`)) return;
+    // Verified write: an RLS refusal returns zero rows and a null error, which
+    // an unchecked update reads as success — the song vanishes here but returns
+    // on reload. Optimistically drop it, then restore on any failure.
+    const previous = songs;
+    setArchiveError(null);
     setSongs((list) => list.filter((x) => x.id !== s.id));
-    await supabase.from("songs").update({ archived: true }).eq("id", s.id);
+    const { data, error } = await supabase
+      .from("songs")
+      .update({ archived: true })
+      .eq("id", s.id)
+      .select("id");
+    if (error || !data?.length) {
+      setSongs(previous);
+      setArchiveError("Couldn't remove — try again");
+    }
   }
 
   return (
@@ -144,6 +158,10 @@ export function SongLibrary({
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />
+
+      {archiveError && (
+        <p className="mb-3 text-sm font-medium text-brand-700">{archiveError}</p>
+      )}
 
       <div className="overflow-hidden rounded-xl border border-ink-100 bg-white">
         {filtered.length === 0 ? (

@@ -144,7 +144,15 @@ export function Modal({
         if (downOnBackdrop.current && e.target === e.currentTarget) close();
         downOnBackdrop.current = false;
       }}
-      className={`fixed inset-0 z-50 flex outline-none ${dim} ${alignment} ${justification} ${className}`}
+      // overflow-y-auto on the backdrop, not just the page: the panel is a flex
+      // child, and a form taller than the viewport (Request event, Get IT Help,
+      // New task — worst with the on-screen keyboard up) otherwise overflows off
+      // the top or bottom edge while the body behind is scroll-locked, so Submit
+      // is simply unreachable. With the backdrop scrollable the whole panel
+      // scrolls as a unit and every field is reachable at any height. py-4 keeps
+      // a scrolled panel off the very edge; overscroll-contain stops the scroll
+      // chaining to the locked body underneath.
+      className={`fixed inset-0 z-50 flex overflow-y-auto overscroll-contain py-4 outline-none ${dim} ${alignment} ${justification} ${className}`}
     >
       {children}
     </div>
