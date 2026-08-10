@@ -522,7 +522,7 @@ function NewEvent({
               <button type="button" onClick={addType} className="shrink-0 rounded-lg bg-accent px-3 text-sm font-semibold text-onaccent">
                 Save
               </button>
-              <button type="button" onClick={() => setAddingType(false)} className="shrink-0 text-ink-400">
+              <button type="button" aria-label="Cancel" onClick={() => setAddingType(false)} className="shrink-0 text-ink-400">
                 <Icon name="x" />
               </button>
             </div>

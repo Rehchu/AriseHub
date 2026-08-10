@@ -33,6 +33,25 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ key: string
 
   const { key: parts } = await ctx.params;
   const baseKey = parts.map(decodeURIComponent).join("/");
+
+  // Message attachments are channel-scoped, so a session check alone is not
+  // enough: it let a removed member keep fetching a file by a key they'd
+  // memorised, which is exactly the "access ends the moment someone is removed"
+  // guarantee this route claims. Gate them on being able to SEE the message the
+  // file is attached to — messages RLS already hides other channels, so this
+  // revokes in lockstep with membership. Photos (profiles/…) stay church-wide
+  // readable, which is deliberate (0049); only messages/… is gated.
+  if (baseKey.startsWith("messages/")) {
+    const { data: owning } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("attachment_url", `r2:${baseKey}`)
+      .limit(1);
+    if (!owning || owning.length === 0) {
+      return new NextResponse("forbidden", { status: 403 });
+    }
+  }
+
   // ?thumb=1 asks for the small version; fall back to the original if this
   // object predates thumbnails.
   const wantThumb = req.nextUrl.searchParams.get("thumb") === "1";
