@@ -281,13 +281,13 @@ export function CalendarView({
                     <div className="mt-2 flex gap-2">
                       <button
                         onClick={() => setStatus(e, "approved")}
-                        className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-onaccent transition hover:bg-accent-strong"
+                        className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => setStatus(e, "declined")}
-                        className="rounded-lg bg-ink-100 px-3 py-1 text-xs font-semibold text-ink-600 transition hover:bg-ink-200"
+                        className="rounded-lg bg-ink-100 px-4 py-2 text-sm font-semibold text-ink-600 transition hover:bg-ink-200"
                       >
                         Decline
                       </button>

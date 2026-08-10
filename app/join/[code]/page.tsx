@@ -53,7 +53,7 @@ export default async function JoinPage({
         {valid ? (
           <JoinForm code={code} label={l!.label} campusName={campus?.name ?? null} />
         ) : (
-          <div className="rounded-2xl bg-white p-6 text-center shadow-xl">
+          <div className="rounded-xl border border-ink-100 bg-white p-6 text-center">
             <h2 className="font-display text-lg font-bold text-ink-900">
               This invite link isn&apos;t active
             </h2>

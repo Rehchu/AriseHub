@@ -34,7 +34,7 @@ export function SetPassword() {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-ink-100 bg-white p-4 text-sm font-medium text-ink-700">
         <Icon name="check" size={18} />
-        Password saved. Taking you to your dashboard…
+        Password saved. Taking you Home…
       </div>
     );
   }

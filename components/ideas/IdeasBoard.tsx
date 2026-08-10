@@ -319,7 +319,11 @@ export function IdeasBoard({
                         </option>
                       ))}
                     </select>
-                    <button onClick={() => remove(i)} className="text-ink-400 hover:text-brand-600" aria-label="Delete">
+                    <button
+                      onClick={() => remove(i)}
+                      className="-my-3.5 -ml-2 -mr-3.5 shrink-0 p-3.5 text-ink-400 hover:text-brand-600"
+                      aria-label="Delete"
+                    >
                       <Icon name="trash" size={15} />
                     </button>
                   </div>

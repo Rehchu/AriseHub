@@ -203,14 +203,18 @@ function TaskItem({
     <div className="flex items-start gap-3 px-3 py-2">
       <button
         onClick={() => onStatus(t.id, done ? "open" : "done")}
-        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-          done
-            ? "border-accent bg-accent text-onaccent"
-            : "border-ink-400 text-transparent hover:border-brand-400"
-        }`}
+        className="-m-3 -mt-2.5 shrink-0 p-3"
         aria-label={done ? "Mark not done" : "Mark done"}
       >
-        <Icon name="check" size={14} />
+        <span
+          className={`flex h-5 w-5 items-center justify-center rounded border ${
+            done
+              ? "border-accent bg-accent text-onaccent"
+              : "border-ink-400 text-transparent hover:border-brand-400"
+          }`}
+        >
+          <Icon name="check" size={14} />
+        </span>
       </button>
       <div className="min-w-0 flex-1">
         <p

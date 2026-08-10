@@ -13,6 +13,7 @@ export default async function MessagesIndex() {
   const { data: latest } = await supabase
     .from("messages")
     .select("channel_id")
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

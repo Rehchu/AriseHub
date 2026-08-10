@@ -27,14 +27,30 @@ function tokensIn(re) {
 const base = tokensIn(/@theme\s*\{([\s\S]*?)\n\}/);
 const darkOverride = tokensIn(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/);
 
-// Stock Tailwind shades used directly in markup. These never invert.
+// Stock Tailwind shades used directly in markup — their LIGHT values. The
+// dark block in globals.css redefines the whole amber/emerald/cyan/green
+// families (tints go deep, text steps go pale), and since darkOverride is
+// parsed from that block and merged over these, the DARK map below always
+// tells the truth about them. Do not assume any of these hold still.
 const STOCK = {
+  "emerald-50": "#ecfdf5",
+  "emerald-100": "#d1fae5",
+  "emerald-600": "#059669",
   "emerald-700": "#047857",
   "emerald-800": "#065f46",
+  "emerald-900": "#064e3b",
+  "amber-50": "#fffbeb",
+  "amber-100": "#fef3c7",
+  "amber-200": "#fde68a",
+  "amber-300": "#fcd34d",
   "amber-700": "#b45309",
   "amber-800": "#92400e",
+  "amber-900": "#78350f",
   "teal-700": "#0f766e",
+  "cyan-50": "#ecfeff",
+  "cyan-100": "#cffafe",
   "cyan-700": "#0e7490",
+  "green-50": "#f0fdf4",
   "green-700": "#15803d",
 };
 
@@ -78,6 +94,15 @@ const TEXT_PAIRS = [
   // as separate, non-inverting tokens.
   ["primary button", "onaccent", "accent"],
   ["primary button on hover", "onaccent", "accent-strong"],
+  // The pastel panels the audit found unreadable — every pairing of an
+  // inverting tint with its family's text steps, asserted in BOTH themes.
+  ["offline banner", "amber-800", "amber-50"],
+  ["install steps", "amber-900", "amber-50"],
+  ["queued pill", "amber-900", "amber-200"],
+  ["success panel", "emerald-800", "emerald-50"],
+  ["success disc", "emerald-700", "emerald-100"],
+  ["station badge", "cyan-700", "cyan-50"],
+  ["presence note", "green-700", "green-50"],
   ["success button", "onaccent", "emerald-700"],
   ["success button on hover", "onaccent", "emerald-800"],
   ["warning button", "onaccent", "amber-700"],
@@ -278,13 +303,23 @@ describe("token discipline", () => {
     // child to with no readable indication of which child.
     //
     // Families:
-    //   inverting     — ink-*, white, brand-50/100/200/600/700/800/900
-    //   never-inverts — chrome-*, accent*, onaccent, and every stock Tailwind
-    //                   hue (emerald, amber, cyan, teal, rose, …)
-    const INVERTING_BG = /\bbg-(ink-\d{2,3}|white)\b/;
-    const FIXED_BG = /\bbg-(chrome-\d{2,3}|accent|accent-strong|(?:emerald|amber|cyan|teal|rose|green|sky|violet|indigo|orange|lime|red|blue|purple|pink|fuchsia|slate|gray|zinc|neutral|stone|yellow)-\d{2,3})\b/;
-    const INVERTING_FG = /\btext-(ink-\d{2,3}|white)\b/;
-    const FIXED_FG = /\btext-(chrome-\d{2,3}|onaccent|(?:emerald|amber|cyan|teal|rose|green|sky|violet|indigo|orange|lime|red|blue|purple|pink|fuchsia|slate|gray|zinc|neutral|stone|yellow)-\d{2,3})\b/;
+    //   inverting     — ink-*, white, brand-50/100/200/600/700/800/900, and
+    //                   the amber/emerald/cyan/green families (globals.css
+    //                   inverts them whole in dark: tints deep, text pale)
+    //   never-inverts — chrome-*, and the REMAINING stock hues
+    //   theme-varying together — accent/onaccent (both flip, as a pair)
+    //
+    // amber/emerald/cyan/green moved OUT of the fixed families when the dark
+    // block took them over: treating them as fixed is how seven unreadable
+    // pastel panels sailed through this test.
+    const INVERTING_BG = /\bbg-(ink-\d{2,3}|white|(?:amber|emerald|cyan|green)-\d{2,3})\b/;
+    const FIXED_BG = /\bbg-(chrome-\d{2,3}|accent|accent-strong|(?:teal|rose|sky|violet|indigo|orange|lime|red|blue|purple|pink|fuchsia|slate|gray|zinc|neutral|stone|yellow)-\d{2,3})\b/;
+    const INVERTING_FG = /\btext-(ink-\d{2,3}|white|(?:amber|emerald|cyan|green)-\d{2,3})\b/;
+    // onaccent is NOT in FIXED_FG: it flips in lockstep with the filled-control
+    // fills (accent, and the redefined emerald/amber/teal/cyan/green 700s), so
+    // `bg-emerald-700 text-onaccent` is the correct pattern in both themes.
+    // Its ratios are asserted by the pair checks above instead.
+    const FIXED_FG = /\btext-(chrome-\d{2,3}|(?:teal|rose|sky|violet|indigo|orange|lime|red|blue|purple|pink|fuchsia|slate|gray|zinc|neutral|stone|yellow)-\d{2,3})\b/;
 
     const offenders = [];
     for (const [p, src] of sources()) {

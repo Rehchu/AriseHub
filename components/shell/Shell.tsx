@@ -59,7 +59,16 @@ export function Shell({
   const onSecondary = secondary.some(
     (m) => pathname === m.href || pathname.startsWith(m.href + "/"),
   );
-  const [moreOpen, setMoreOpen] = useState(false);
+  // Seeded from, then SYNCED to, the current page — but only on navigation.
+  // The old render condition (moreOpen || onSecondary) pinned the section open
+  // on secondary pages, which left the toggle visibly dead: it flipped state
+  // that no longer decided anything.
+  const [moreOpen, setMoreOpen] = useState(onSecondary);
+  useEffect(() => {
+    if (onSecondary) setMoreOpen(true);
+    // Navigating AWAY from a secondary page deliberately leaves it open —
+    // collapsing a menu the user just used is its own kind of rude.
+  }, [onSecondary]);
 
   const renderItem = (m: (typeof modules)[number]) => {
     const active = pathname === m.href || pathname.startsWith(m.href + "/");
@@ -109,10 +118,10 @@ export function Shell({
               <Icon name="menu" size={18} />
               <span className="flex-1 text-left">More</span>
               <span aria-hidden className="text-xs">
-                {moreOpen || onSecondary ? "−" : "+"}
+                {moreOpen ? "−" : "+"}
               </span>
             </button>
-            {(moreOpen || onSecondary) && <div className="mt-1 space-y-1">{more.map(renderItem)}</div>}
+            {moreOpen && <div className="mt-1 space-y-1">{more.map(renderItem)}</div>}
           </>
         )}
       </nav>

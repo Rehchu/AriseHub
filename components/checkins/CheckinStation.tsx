@@ -421,7 +421,7 @@ export function CheckinStation({
     return () => {
       live = false;
     };
-  }, [kiosk, previewTemplate, previewRoom, tagOpts.churchName]);
+  }, [kiosk, previewTemplate, previewRoom, tagOpts.churchName, tagOpts.showAllergy]);
 
   const matches = q.trim()
     ? people.filter((p) => p.full_name.toLowerCase().includes(q.toLowerCase())).slice(0, 12)
@@ -757,7 +757,7 @@ export function CheckinStation({
           Not rendered rather than hidden: on a kiosk, display:none still leaves
           them reachable by tab key, and the roster is every child's name. */}
       {!kiosk && (
-      <div className="mb-5 flex items-center gap-1 border-b border-ink-100">
+      <div className="mb-5 flex items-center gap-1 overflow-x-auto border-b border-ink-100">
         <TabBtn active={tab === "checkin"} onClick={() => setTab("checkin")}>Check in / out</TabBtn>
         <TabBtn active={tab === "roster"} onClick={() => setTab("roster")}>Roster ({present.length})</TabBtn>
         <div className="flex-1" />
@@ -767,14 +767,14 @@ export function CheckinStation({
         {!kiosk && (
           <a
             href="/kiosk"
-            className="mb-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+            className="mb-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
           >
             <Icon name="badge" size={16} /> Kiosk mode
           </a>
         )}
         <button
           onClick={() => setShowTagSettings((s) => !s)}
-          className="mb-1 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
+          className="mb-1 flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-50"
         >
           <Icon name="form" size={16} /> Name tags
         </button>
@@ -1559,7 +1559,7 @@ function TabBtn({
   return (
     <button
       onClick={onClick}
-      className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+      className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition ${
         active ? "border-brand-500 text-brand-600" : "border-transparent text-ink-500 hover:text-ink-700"
       }`}
     >

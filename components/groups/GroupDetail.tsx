@@ -72,6 +72,7 @@ export function GroupDetail({
   }
 
   async function removeMember(m: Member) {
+    if (!window.confirm(`Remove ${m.full_name} from this group?`)) return;
     setMembers((ms) => ms.filter((x) => x.id !== m.id));
     await supabase.from("group_members").delete().eq("id", m.id);
   }
@@ -208,7 +209,11 @@ export function GroupDetail({
                   </span>
                 )}
                 {canManage && (
-                  <button onClick={() => removeMember(m)} className="text-ink-400 hover:text-brand-600" aria-label="Remove">
+                  <button
+                    onClick={() => removeMember(m)}
+                    className="-m-3.5 shrink-0 p-3.5 text-ink-400 hover:text-brand-600"
+                    aria-label="Remove"
+                  >
                     <Icon name="x" size={14} />
                   </button>
                 )}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/shell/Icon";
 import { GetITHelp } from "@/components/shell/GetITHelp";
+import { MyTickets } from "@/components/it/MyTickets";
 import type { Profile } from "@/lib/database.types";
 
 // Self-service IT help for everyone outside the IT department: fix the common
@@ -106,6 +107,13 @@ export function SelfHelp({
             </span>
           </span>
         </a>
+      </div>
+
+      {/* Fetches its own data and renders nothing when the caller has no
+          tickets — the dashboard's "My IT tickets" stat links here, so the
+          number needs somewhere to land. */}
+      <div className="mt-6">
+        <MyTickets />
       </div>
 
       <h2 className="mt-8 text-[10px] font-semibold uppercase tracking-wide text-ink-400">

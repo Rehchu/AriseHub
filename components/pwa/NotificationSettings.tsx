@@ -439,7 +439,7 @@ export function NotificationSettings({
 
       <p className="mt-6 text-sm text-ink-400">
         <Link href="/dashboard" className="text-brand-600 underline">
-          Back to dashboard
+          Back to Home
         </Link>
       </p>
     </div>

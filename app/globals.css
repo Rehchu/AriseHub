@@ -123,13 +123,32 @@
     /* onaccent turned dark with the blurple, so every OTHER filled control
        (success/warning/etc pair their fill with text-onaccent too) must
        brighten to carry dark text — same light-fill/dark-text logic as the
-       accent. Ratios 7.2:1–11:1 against #161826. */
+       accent. Ratios 7.2:1–11:1 against #161826.
+
+       AND the whole family has to invert together. Redefining only the
+       700/800 steps turned every `bg-amber-50 text-amber-800` panel into
+       light-on-light (measured 1.6:1) — the audit found seven of them,
+       including the offline banner and the Turnstile failure notice. So the
+       tint (50–300) and deep-text (900) steps invert too: tints go deep,
+       900 goes pale, and every stock pairing keeps its meaning in dark. */
+    --color-emerald-50: #0a2b1e;
+    --color-emerald-100: #12402c;
+    --color-emerald-600: #34d399;
     --color-emerald-700: #10b981;
     --color-emerald-800: #34d399;
+    --color-emerald-900: #a7f3d0;
+    --color-amber-50: #2e2308;
+    --color-amber-100: #413310;
+    --color-amber-200: #5a4614;
+    --color-amber-300: #6b5518;
     --color-amber-700: #f59e0b;
     --color-amber-800: #fbbf24;
+    --color-amber-900: #fde68a;
     --color-teal-700: #14b8a6;
+    --color-cyan-50: #082b33;
+    --color-cyan-100: #0e3d47;
     --color-cyan-700: #06b6d4;
+    --color-green-50: #0c2b13;
     --color-green-700: #22c55e;
 
     /* Sidebar sits one step LIGHTER than the page in Nocturne. */
@@ -173,12 +192,24 @@
   --color-accent-strong: #b5abfc;
   --color-onaccent: #161826;
 
+  --color-emerald-50: #0a2b1e;
+  --color-emerald-100: #12402c;
+  --color-emerald-600: #34d399;
   --color-emerald-700: #10b981;
   --color-emerald-800: #34d399;
+  --color-emerald-900: #a7f3d0;
+  --color-amber-50: #2e2308;
+  --color-amber-100: #413310;
+  --color-amber-200: #5a4614;
+  --color-amber-300: #6b5518;
   --color-amber-700: #f59e0b;
   --color-amber-800: #fbbf24;
+  --color-amber-900: #fde68a;
   --color-teal-700: #14b8a6;
+  --color-cyan-50: #082b33;
+  --color-cyan-100: #0e3d47;
   --color-cyan-700: #06b6d4;
+  --color-green-50: #0c2b13;
   --color-green-700: #22c55e;
 
   --color-chrome-50: #f3f5fe;

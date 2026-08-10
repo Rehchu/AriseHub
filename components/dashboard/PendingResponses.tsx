@@ -117,7 +117,7 @@ export function PendingResponses({
                     <button
                       onClick={() => nudge(r)}
                       disabled={s.state === "sending"}
-                      className="shrink-0 rounded-lg bg-accent px-2.5 py-1 text-xs font-semibold text-onaccent transition hover:bg-accent-strong disabled:opacity-60"
+                      className="shrink-0 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-onaccent transition hover:bg-accent-strong disabled:opacity-60"
                     >
                       {s.state === "sending" ? "Sending…" : "Nudge"}
                     </button>

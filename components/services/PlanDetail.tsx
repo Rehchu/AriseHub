@@ -341,7 +341,7 @@ export function PlanDetail({
       </div>
 
       {/* Stat strip */}
-      <div className="mt-6 grid grid-cols-3 divide-x divide-ink-100 rounded-xl border border-ink-100 bg-white">
+      <div className="mt-6 grid divide-y divide-ink-100 rounded-xl border border-ink-100 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatCell
           kicker="Run time"
           number={totalMin + "m"}
@@ -447,7 +447,7 @@ export function PlanDetail({
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={() => removeItem(i.id)}
-                            className="text-ink-400 hover:text-brand-600"
+                            className="-m-3.5 p-3.5 text-ink-400 hover:text-brand-600"
                             aria-label="Remove item"
                           >
                             <Icon name="trash" size={15} />
@@ -581,7 +581,7 @@ export function PlanDetail({
                         {canManage && (
                           <button
                             onClick={() => removePosition(a.id)}
-                            className="text-ink-400 hover:text-brand-600"
+                            className="-m-3.5 shrink-0 p-3.5 text-ink-400 hover:text-brand-600"
                             aria-label="Remove"
                           >
                             <Icon name="x" size={14} />

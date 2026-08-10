@@ -266,7 +266,7 @@ export function Thread({
         {/* Back to the channel list — only needed in the single-pane mobile view */}
         <a
           href="/messages"
-          className="-ml-1 shrink-0 rounded-lg p-1 text-ink-500 hover:bg-ink-50 lg:hidden"
+          className="-my-2.5 -ml-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-50 lg:hidden"
           aria-label="Back to conversations"
         >
           ←
@@ -368,7 +368,7 @@ export function Thread({
                 // present, faded until hover/focus.
                 <button
                   onClick={() => softDelete(m.id)}
-                  className="ah-tight flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 opacity-50 transition hover:bg-ink-100 hover:text-ink-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+                  className="ah-tight -m-2.5 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-400 opacity-50 transition hover:bg-ink-100 hover:text-ink-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
                   aria-label="Delete message"
                 >
                   <Icon name="x" size={13} />

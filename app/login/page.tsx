@@ -71,7 +71,7 @@ export default function LoginPage() {
 
         <form
           onSubmit={submit}
-          className="space-y-4 rounded-2xl bg-white p-6 shadow-xl"
+          className="space-y-4 rounded-xl border border-ink-100 bg-white p-6"
         >
           {ALLOW_SIGNUP && (
           <div className="flex rounded-lg bg-ink-100 p-1 text-sm font-medium">

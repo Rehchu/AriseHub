@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { visibleModules } from "@/lib/modules";
+import type { UserRole } from "@/lib/database.types";
 import { SundayHeading } from "@/components/dashboard/SundayHeading";
 import { StatStrip, StatCell } from "@/components/dashboard/StatStrip";
 import { CheckedInToday } from "@/components/dashboard/CheckedInToday";
@@ -14,17 +16,9 @@ import {
 } from "@/components/dashboard/RecentMessages";
 
 // Every module stays one click away, as a text strip rather than a wall of
-// tiles duplicating the sidebar.
-const MODULES: [string, string][] = [
-  ["Messages", "/messages"],
-  ["People", "/people"],
-  ["Groups", "/groups"],
-  ["Calendar", "/calendar"],
-  ["Services", "/services"],
-  ["Check-Ins", "/checkins"],
-  ["Forms", "/forms"],
-  ["Reports", "/reports"],
-];
+// tiles duplicating the sidebar. Built from visibleModules, not a hardcoded
+// list: the old list offered Reports to people whose click bounced straight
+// back to this page, and omitted Tasks, IT and Ideas entirely.
 
 /** "2026-08-16" → "Sunday, Aug 16". Date-only, so UTC keeps it exact. */
 function planDateLabel(iso: string, style: "long" | "short" = "long") {
@@ -44,10 +38,12 @@ export default async function DashboardPage() {
 
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, role")
     .eq("user_id", user!.id)
     .single();
-  const myProfileId = (profileRow as { id: string } | null)?.id ?? "";
+  const me = profileRow as { id: string; role?: UserRole } | null;
+  const myProfileId = me?.id ?? "";
+  const moduleLinks = visibleModules(me?.role).filter((m) => m.key !== "dashboard");
 
   // --- The next service plan this user is allowed to see -------------------
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -81,7 +77,10 @@ export default async function DashboardPage() {
     }[]) {
       total++;
       if (a.status === "accepted") accepted++;
-      if (a.status === "invited") pending++;
+      // A pending RESPONSE needs somebody to respond: unfilled positions are
+      // also status "invited" but counting them here made the stat say 5 while
+      // the card below listed 3 — and "everyone has replied" unreachable.
+      if (a.status === "invited" && a.profile_id) pending++;
       if (!a.profile_id) {
         unfilled++;
       } else if (a.status === "invited" && a.profiles) {
@@ -201,7 +200,7 @@ export default async function DashboardPage() {
             value={plan ? `${accepted} / ${total}` : "—"}
             status={
               !plan
-                ? "No plan scheduled"
+                ? "nothing scheduled for you"
                 : unfilled > 0
                   ? `${unfilled} unfilled position${unfilled === 1 ? "" : "s"}`
                   : total === 0
@@ -217,7 +216,7 @@ export default async function DashboardPage() {
             href={planHref}
             kicker="Open responses"
             value={plan ? String(pending) : "—"}
-            status={!plan ? "No plan scheduled" : pending > 0 ? `for ${shortDate}` : "everyone has replied"}
+            status={!plan ? "nothing scheduled for you" : pending > 0 ? `for ${shortDate}` : "everyone has replied"}
             attention={!!plan && pending > 0}
           />
           <CheckedInToday className={cell[2]} />
@@ -235,11 +234,14 @@ export default async function DashboardPage() {
           />
         ) : (
           <section className="rounded-xl border border-ink-100 bg-white px-6 py-10 text-center">
+            {/* Viewer-relative, matching PlansList: RLS scopes plans by
+                department (0065), so "no service scheduled" would be a false
+                church-wide claim to a member outside every department. */}
             <p className="font-display font-semibold text-ink-900">
-              No service scheduled yet
+              Nothing you&apos;re scheduled on yet
             </p>
             <p className="mt-1 text-sm text-ink-500">
-              Plans and volunteer rosters are created in Services.
+              Plans and volunteer rosters live in Services.
             </p>
             <Link
               href="/services"
@@ -260,13 +262,13 @@ export default async function DashboardPage() {
         <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
           Modules
         </span>
-        {MODULES.map(([label, href]) => (
+        {moduleLinks.map((m) => (
           <Link
-            key={href}
-            href={href}
+            key={m.key}
+            href={m.href}
             className="text-sm font-medium text-ink-700 hover:text-ink-900 hover:underline"
           >
-            {label}
+            {m.label}
           </Link>
         ))}
       </nav>

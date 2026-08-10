@@ -56,7 +56,12 @@ export const MODULES: ModuleDef[] = [
   // everyone else lands on a self-service help page.
   { key: "it", label: "IT Support", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
   { key: "ideas", label: "Ideas", href: "/ideas", icon: "chart", accent: "#7c3aed", ready: true },
-  { key: "admin", label: "Admin", href: "/admin/departments", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin"] },
+  // /admin, not /admin/departments: the index routes each role to its own
+  // entry page, and prefix-matching on /admin keeps the nav item lit on every
+  // admin tab. IT_Admin and Staff belong in the gate — the layout already
+  // admits them (Elvanto and Rooms respectively); a page someone can only
+  // reach by typing the URL is not "in the app".
+  { key: "admin", label: "Admin", href: "/admin", icon: "wrench", accent: "#d2303b", ready: true, roles: ["Super_Admin", "IT_Admin", "Staff"] },
 ];
 
 export function visibleModules(role: UserRole | undefined): ModuleDef[] {
