@@ -28,6 +28,10 @@ export function JoinForm({
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Set when the server recognises them as an existing member: the account is
+  // created but held unconfirmed until they click the emailed link, so there's
+  // no instant sign-in for this branch.
+  const [checkEmail, setCheckEmail] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,11 +59,22 @@ export function JoinForm({
       setError("Couldn't reach AriseHub — check your connection and try again.");
       return;
     }
-    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    const j = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      pendingVerification?: boolean;
+    };
 
     if (!res.ok) {
       setBusy(false);
       setError(j.error ?? "Could not create your account.");
+      return;
+    }
+
+    // Existing member: they must confirm by email before the account activates
+    // and their records connect. No sign-in attempt — it would fail unconfirmed.
+    if (j.pendingVerification) {
+      setBusy(false);
+      setCheckEmail(true);
       return;
     }
 
@@ -77,8 +92,24 @@ export function JoinForm({
     router.refresh();
   }
 
+  if (checkEmail) {
+    return (
+      <div className="space-y-3 rounded-xl border border-ink-100 bg-white p-6 text-center">
+        <h2 className="font-display text-lg font-bold text-ink-900">Check your email</h2>
+        <p className="text-sm text-ink-600">
+          You&apos;re already on file with the church, so we sent a confirmation link to{" "}
+          <span className="font-medium text-ink-900">{email.trim().toLowerCase()}</span>. Open it
+          to activate your account and connect your existing records.
+        </p>
+        <p className="text-xs text-ink-400">
+          Didn&apos;t get it? Check spam, or ask your leader to finish setting you up.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white p-6 shadow-xl">
+    <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink-100 bg-white p-6">
       <div>
         <h2 className="font-display text-lg font-bold text-ink-900">Create your account</h2>
         <p className="mt-1 text-sm text-ink-500">

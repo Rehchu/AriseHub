@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Shell } from "@/components/shell/Shell";
 import { KioskGuard } from "@/components/checkins/KioskGuard";
+import { completePendingMerge } from "@/lib/pending-merge";
 import type { Profile } from "@/lib/database.types";
 
 // Server layout for the authenticated app: resolves the signed-in user's
@@ -18,6 +19,12 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
+
+  // Backstop for a deferred join-merge: normally the confirm route completes it
+  // the instant the email is verified, but if that redirect was interrupted
+  // this finishes it on the next authenticated load. Cheap — returns
+  // immediately unless this user actually has a pending merge flagged.
+  await completePendingMerge(user);
 
   const { data: profile } = await supabase
     .from("profiles")

@@ -1,6 +1,7 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { completePendingMerge } from "@/lib/pending-merge";
 
 // Handles email links (password recovery, invites, email confirmation).
 // Verifies the one-time token, establishes the session, then sends the user on.
@@ -13,7 +14,15 @@ export async function GET(request: NextRequest) {
   if (token_hash && type) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      // This is the exact moment email ownership was proven, so it's where a
+      // deferred join-merge completes. No-op for every other kind of link.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) await completePendingMerge(user);
+      return NextResponse.redirect(`${origin}${next}`);
+    }
   }
   return NextResponse.redirect(`${origin}/login?error=link_expired`);
 }
