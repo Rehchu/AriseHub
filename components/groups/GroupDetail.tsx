@@ -346,7 +346,7 @@ function Attendance({
               {new Date(meeting.meets_at).toLocaleDateString()} · {present.size} present
             </p>
           </div>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
+          <button onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>
         </div>

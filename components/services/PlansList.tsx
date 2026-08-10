@@ -64,11 +64,13 @@ export function PlansList({
   const [deptId, setDeptId] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
     setBusy(true);
+    setCreateError(null);
     const { data, error } = await supabase
       .from("service_plans")
       .insert({
@@ -83,6 +85,7 @@ export function PlansList({
       router.push(`/services/${(data as { id: string }).id}`);
       return;
     }
+    setCreateError(error?.message ?? "Couldn't create the plan — try again.");
     setBusy(false);
   }
 
@@ -149,6 +152,11 @@ export function PlansList({
           <button type="submit" disabled={busy} className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60">
             Create
           </button>
+          {createError && (
+            <p className="w-full rounded-lg bg-brand-50 px-3 py-2 text-sm font-medium text-brand-700">
+              {createError}
+            </p>
+          )}
         </form>
       )}
 

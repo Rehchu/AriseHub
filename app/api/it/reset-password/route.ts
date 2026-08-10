@@ -32,6 +32,27 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
   const origin = new URL(req.url).origin;
 
+  // A help-desk unlock must not be a route to the top. Without this an IT_Admin
+  // could mint a recovery link for a Super_Admin/Admin/IT_Admin account — and
+  // when Resend isn't configured the link comes straight back in the response
+  // (see below), so the target never even gets an email. That is a full account
+  // takeover. Only a Super_Admin may reset a privileged account; this mirrors
+  // the guard in admin/reset-password, which a sibling route already carries.
+  if (role !== "Super_Admin") {
+    const { data: t } = await admin
+      .from("profiles")
+      .select("role")
+      .ilike("email", target)
+      .maybeSingle();
+    const targetRole = (t as { role?: string } | null)?.role;
+    if (targetRole === "Super_Admin" || targetRole === "Admin" || targetRole === "IT_Admin") {
+      return NextResponse.json(
+        { error: "Only a Super_Admin can reset a privileged account." },
+        { status: 403 },
+      );
+    }
+  }
+
   const { data: linkData, error } = await admin.auth.admin.generateLink({
     type: "recovery",
     email: target,

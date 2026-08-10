@@ -368,7 +368,7 @@ export function Thread({
                 // present, faded until hover/focus.
                 <button
                   onClick={() => softDelete(m.id)}
-                  className="ah-tight -m-2.5 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-400 opacity-50 transition hover:bg-ink-100 hover:text-ink-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
+                  className="-m-2.5 flex shrink-0 items-center justify-center rounded-md p-2.5 text-ink-400 opacity-50 transition hover:bg-ink-100 hover:text-ink-700 hover:opacity-100 focus-visible:opacity-100 group-hover:opacity-100"
                   aria-label="Delete message"
                 >
                   <Icon name="x" size={13} />
@@ -399,7 +399,7 @@ export function Thread({
                   setFile(null);
                   setFilePreview(null);
                 }}
-                className="ah-tight flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100 hover:text-ink-700"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-ink-400 hover:bg-ink-100 hover:text-ink-700"
                 aria-label="Remove attachment"
               >
                 <Icon name="x" size={14} />
@@ -407,7 +407,7 @@ export function Thread({
             </div>
           )}
           <div className="flex items-end gap-1 px-1.5 py-1.5">
-            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-50 hover:text-ink-700">
+            <label role="button" className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-ink-500 transition hover:bg-ink-50 hover:text-ink-700">
               <Icon name="link" size={17} />
               <input
                 type="file"
@@ -428,6 +428,7 @@ export function Thread({
             <textarea
               className="max-h-32 min-h-0 w-full flex-1 resize-none bg-transparent px-1.5 py-2 text-sm text-ink-900 outline-none placeholder:text-ink-400"
               rows={1}
+              aria-label="Message"
               placeholder={`Message ${title}`}
               value={body}
               onChange={(e) => setBody(e.target.value)}

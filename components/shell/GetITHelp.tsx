@@ -82,7 +82,7 @@ export function GetITHelp({
           <h2 className="flex items-center gap-2 font-display text-lg font-bold">
             <Icon name="help" /> Get IT Help
           </h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
+          <button onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>
         </div>

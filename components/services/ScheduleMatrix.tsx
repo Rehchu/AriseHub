@@ -416,7 +416,7 @@ function DayPanel({
           <h2 className="font-display text-lg font-bold">
             {dateObj.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
           </h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
+          <button onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>
         </div>

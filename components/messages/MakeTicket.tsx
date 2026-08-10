@@ -135,7 +135,7 @@ export function MakeTicket({
           <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink-900">
             <Icon name="help" /> Make this a ticket
           </h2>
-          <button type="button" onClick={onClose} className="text-ink-400 hover:text-ink-700">
+          <button type="button" onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>
         </div>

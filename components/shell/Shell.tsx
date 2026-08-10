@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -69,6 +69,56 @@ export function Shell({
     // Navigating AWAY from a secondary page deliberately leaves it open —
     // collapsing a menu the user just used is its own kind of rude.
   }, [onSecondary]);
+
+  // Phone nav drawer a11y. The panel is hand-rolled rather than a Modal (to keep
+  // its sidebar styling intact), so it owes a keyboard user the three things an
+  // overlay normally provides: move focus in on open, keep Tab inside it, and
+  // hand focus back to the hamburger on close. Escape lives in <Dismissible> and
+  // backdrop-click on the scrim below — both untouched.
+  const drawerRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+    const focusable = () =>
+      Array.from(
+        drawer.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((el) => el.offsetParent !== null);
+
+    const first = focusable()[0];
+    if (first) first.focus();
+    else drawer.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const top = items[0];
+      const end = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === top || !drawer.contains(active)) {
+          e.preventDefault();
+          end.focus();
+        }
+      } else if (active === end || !drawer.contains(active)) {
+        e.preventDefault();
+        top.focus();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      // Focus goes back to whatever opened the drawer.
+      menuButtonRef.current?.focus();
+    };
+  }, [drawerOpen]);
 
   const renderItem = (m: (typeof modules)[number]) => {
     const active = pathname === m.href || pathname.startsWith(m.href + "/");
@@ -154,13 +204,13 @@ export function Shell({
             onClick={() => setDrawerOpen(false)}
           />
           <Dismissible onDismiss={() => setDrawerOpen(false)} />
-          <aside className="absolute left-0 top-0 flex h-full w-64 flex-col overflow-y-auto bg-chrome-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))]">
+          <aside ref={drawerRef} tabIndex={-1} className="absolute left-0 top-0 flex h-full w-64 flex-col overflow-y-auto bg-chrome-900 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] outline-none">
             <div className="mb-6 flex items-center justify-between px-5 text-chrome-50">
               <span className="flex items-center gap-2.5">
                 <Logo size={28} />
                 <span className="font-display font-bold">AriseHub</span>
               </span>
-              <button onClick={() => setDrawerOpen(false)} className="text-chrome-300">
+              <button onClick={() => setDrawerOpen(false)} aria-label="Close" className="text-chrome-300">
                 <Icon name="x" />
               </button>
             </div>
@@ -171,12 +221,13 @@ export function Shell({
       )}
 
       {/* Main column */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col" inert={drawerOpen}>
         <header
           className="flex min-h-18 shrink-0 items-center gap-2 border-b border-ink-100 bg-white px-3 pt-safe safe-x lg:min-h-14 lg:gap-3 lg:px-4"
           style={{ "--safe-pad-x": "0.75rem" } as React.CSSProperties}
         >
           <button
+            ref={menuButtonRef}
             onClick={() => setDrawerOpen(true)}
             className="-ml-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-ink-700 active:bg-ink-100 lg:hidden"
             aria-label="Open menu"

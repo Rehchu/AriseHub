@@ -111,7 +111,7 @@ export function InstallPrompt() {
           <div className="w-full max-w-sm rounded-t-2xl bg-white p-5 sm:rounded-2xl">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="font-display text-lg font-bold">Add to Home Screen</h2>
-              <button onClick={() => setOpen(false)} className="text-ink-400"><Icon name="x" /></button>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="text-ink-400"><Icon name="x" /></button>
             </div>
             <ol className="space-y-3 text-sm text-ink-700">
               <li className="flex gap-3">

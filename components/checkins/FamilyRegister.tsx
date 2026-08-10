@@ -214,6 +214,14 @@ export function FamilyRegister({
             ✓
           </div>
           <p className="font-medium text-ink-900">{done}</p>
+          {/* A non-fatal warning (e.g. the allergy note failed to save) rides
+              along with the success message — otherwise the desk sees plain
+              success and never learns what didn't reach the record. */}
+          {error && (
+            <p className="mt-3 rounded-lg bg-brand-50 px-3 py-2 text-left text-sm text-brand-700">
+              {error}
+            </p>
+          )}
           <button
             onClick={onClose}
             className="mt-5 w-full rounded-lg bg-accent py-2.5 font-semibold text-onaccent hover:bg-accent-strong"
@@ -342,6 +350,7 @@ export function FamilyRegister({
                   <input
                     className="ah-input"
                     placeholder={`Child ${i + 1} name`}
+                    aria-label={`Child ${i + 1} name`}
                     value={c.name}
                     onChange={(e) => updateChild(c.key, { name: e.target.value })}
                   />

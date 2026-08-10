@@ -140,6 +140,10 @@ export function CheckinStation({
   const [lastBadge, setLastBadge] = useState<
     { name: string; code: string; room: string; hasAllergy: boolean } | null
   >(null);
+  // Brief confirmation after a pickup release. checkOut only surfaces failures;
+  // on the kiosk a successful release otherwise just blanks the screen, leaving
+  // the volunteer unsure the child was actually let go. Mirrors lastBadge.
+  const [released, setReleased] = useState<string | null>(null);
   const [tagOpts, setTagOpts] = useState<NameTagOptions>(DEFAULT_TAG_OPTIONS);
   const [showTagSettings, setShowTagSettings] = useState(false);
 
@@ -152,6 +156,14 @@ export function CheckinStation({
       } catch {}
     }
   }, []);
+  // The release confirmation is a fleeting acknowledgement, not a record — the
+  // roster is the record. Clear it after a few seconds so the next pickup
+  // starts on a clean screen.
+  useEffect(() => {
+    if (!released) return;
+    const t = setTimeout(() => setReleased(null), 4000);
+    return () => clearTimeout(t);
+  }, [released]);
   function updateTagOpts(patch: Partial<NameTagOptions>) {
     setTagOpts((o) => {
       const next = { ...o, ...patch };
@@ -569,7 +581,7 @@ export function CheckinStation({
    * why — that note is the only record it happened, so it is required rather
    * than optional.
    */
-  async function checkOut(c: CheckinRow, releasedTo?: string | null, note?: string | null) {
+  async function checkOut(c: CheckinRow, releasedTo?: string | null, note?: string | null): Promise<boolean> {
     setError(null);
     const previous = { status: c.status, checked_out_at: c.checked_out_at };
     setCheckins((cs) =>
@@ -602,7 +614,9 @@ export function CheckinStation({
         error?.message ??
           "That check-out didn't save — the child is still shown as present. Try again.",
       );
+      return false;
     }
+    return true;
   }
 
   // Pickup: match the guardian's claim tag to a present child.
@@ -1012,6 +1026,23 @@ export function CheckinStation({
         </div>
       )}
 
+      {/* Confirmation shown right after a pickup release — the moment the
+          volunteer needs to see the child was let go, especially on the kiosk
+          where the screen otherwise just blanks. Mirrors the check-in badge. */}
+      {released && (
+        <div className="mb-5 rounded-xl border-2 border-brand-500 bg-white p-5 text-center">
+          <p className="font-display text-xl font-bold text-ink-900">
+            ✓ Released — {released}
+          </p>
+          <button
+            onClick={() => setReleased(null)}
+            className="mt-3 rounded-lg bg-ink-100 px-3 py-1.5 text-sm font-medium text-ink-700"
+          >
+            Done
+          </button>
+        </div>
+      )}
+
       {/* Stat strip (handoff screen 7) — the desk's at-a-glance numbers, one
           bordered container. Not rendered in kiosk mode: a parent doesn't need
           occupancy figures or a print counter. Per-position borders rather
@@ -1113,6 +1144,7 @@ export function CheckinStation({
             <input
               className="ah-input"
               placeholder="Type a name…"
+              aria-label="Find a child or person"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -1132,6 +1164,7 @@ export function CheckinStation({
                         <span
                           className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase text-onaccent"
                           title="Has an allergy on file — ask a check-in lead for details"
+                          aria-label="Has an allergy on file — ask a check-in lead for details"
                         >
                           Allergy
                         </span>
@@ -1233,6 +1266,7 @@ export function CheckinStation({
             <input
               className="ah-input ah-input-code text-center font-mono tracking-[0.3em] uppercase"
               placeholder="ABCDEF"
+              aria-label="Guardian pickup code"
               maxLength={CODE_LENGTH}
               value={claim}
               onChange={(e) => setClaim(e.target.value.toUpperCase())}
@@ -1336,7 +1370,12 @@ export function CheckinStation({
                     <button
                       disabled={!canRelease}
                       onClick={() => {
-                        checkOut(claimMatch, releaseTo || null, releaseNote || null);
+                        const name = claimMatch.child?.full_name ?? "the child";
+                        checkOut(claimMatch, releaseTo || null, releaseNote || null).then(
+                          (ok) => {
+                            if (ok) setReleased(name);
+                          },
+                        );
                         setClaim("");
                         setReleaseTo("");
                         setReleaseNote("");

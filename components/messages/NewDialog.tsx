@@ -31,6 +31,7 @@ export function NewDialog({
   const [deptId, setDeptId] = useState<string>("");
   const [deptMembers, setDeptMembers] = useState<Person[]>([]);
   const [busy, setBusy] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase
@@ -67,11 +68,15 @@ export function NewDialog({
 
   async function startDm(otherId: string) {
     setBusy(true);
+    setDmError(null);
     const { data, error } = await supabase.rpc("get_or_create_dm", {
       other_profile: otherId,
     });
     setBusy(false);
-    if (error || !data) return;
+    if (error || !data) {
+      setDmError(error?.message ?? "Couldn't open that conversation — try again.");
+      return;
+    }
     onClose();
     router.push(`/messages/${data}`);
     router.refresh();
@@ -87,7 +92,7 @@ export function NewDialog({
       <div className="w-full max-w-sm overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
           <h2 className="font-display font-bold">New message</h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
+          <button onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>
         </div>
@@ -138,6 +143,12 @@ export function NewDialog({
               </p>
             )}
           </>
+        )}
+
+        {dmError && (
+          <p className="mx-3 mb-3 rounded-lg bg-brand-50 px-3 py-2 text-xs text-brand-700">
+            {dmError}
+          </p>
         )}
       </div>
     </Modal>

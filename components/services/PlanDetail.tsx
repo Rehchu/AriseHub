@@ -96,6 +96,7 @@ export function PlanDetail({
   const [dupDate, setDupDate] = useState("");
   const [dupPeople, setDupPeople] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [respondError, setRespondError] = useState<string | null>(null);
 
   const planDate = new Date(plan.service_date + "T00:00:00");
 
@@ -255,8 +256,13 @@ export function PlanDetail({
     }
     const newId = (newPlan as { id: string }).id;
 
+    // The order and the positions are the substance of the copy. If either
+    // secondary insert fails we still have a plan to land on, but it is only
+    // half a copy — say so rather than silently dropping the volunteer onto it.
+    let partial = false;
+
     if (items.length) {
-      await supabase.from("plan_items").insert(
+      const { error: itemsError } = await supabase.from("plan_items").insert(
         items.map((i, idx) => ({
           plan_id: newId,
           title: i.title,
@@ -267,10 +273,11 @@ export function PlanDetail({
           sort_order: idx,
         })),
       );
+      if (itemsError) partial = true;
     }
 
     if (assignments.length) {
-      await supabase.from("plan_assignments").insert(
+      const { error: assignError } = await supabase.from("plan_assignments").insert(
         assignments.map((a) => ({
           plan_id: newId,
           position: a.position,
@@ -279,14 +286,34 @@ export function PlanDetail({
           status: "invited",
         })),
       );
+      if (assignError) partial = true;
+    }
+
+    if (partial) {
+      window.alert(
+        "The plan was copied, but some of the order or positions didn't come across. Check the new plan before relying on it.",
+      );
     }
 
     window.location.href = "/services/" + newId;
   }
 
   async function respond(a: Assignment, status: "accepted" | "declined") {
+    const previous = a.status;
+    setRespondError(null);
     setAssignments((as) => as.map((x) => (x.id === a.id ? { ...x, status } : x)));
-    await supabase.from("plan_assignments").update({ status }).eq("id", a.id);
+    // Mirror checkOut: `.select` makes the write authoritative — an RLS refusal
+    // returns zero rows and a null error, which an unchecked update reads as
+    // success. On any failure, put the invitation back the way it was.
+    const { data, error } = await supabase
+      .from("plan_assignments")
+      .update({ status })
+      .eq("id", a.id)
+      .select("id");
+    if (error || !data?.length) {
+      setAssignments((as) => as.map((x) => (x.id === a.id ? { ...x, status: previous } : x)));
+      setRespondError("Couldn't save your response — try again.");
+    }
   }
 
   const twoCol = "mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_300px]";
@@ -625,19 +652,24 @@ export function PlanDetail({
                         </div>
                       )}
                       {mine && a.status === "invited" && (
-                        <div className="mt-2 flex gap-2">
-                          <button
-                            onClick={() => respond(a, "accepted")}
-                            className="flex-1 rounded-lg bg-accent py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            onClick={() => respond(a, "declined")}
-                            className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200"
-                          >
-                            Decline
-                          </button>
+                        <div className="mt-2">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => respond(a, "accepted")}
+                              className="flex-1 rounded-lg bg-accent py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => respond(a, "declined")}
+                              className="flex-1 rounded-lg bg-ink-100 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-200"
+                            >
+                              Decline
+                            </button>
+                          </div>
+                          {respondError && (
+                            <p className="mt-2 text-xs font-medium text-brand-700">{respondError}</p>
+                          )}
                         </div>
                       )}
                     </li>

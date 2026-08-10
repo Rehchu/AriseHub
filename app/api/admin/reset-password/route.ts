@@ -72,7 +72,9 @@ export async function POST(req: NextRequest) {
       .ilike("email", email.trim())
       .maybeSingle();
     const targetRole = (target as { role?: string } | null)?.role;
-    if (targetRole === "Super_Admin" || targetRole === "IT_Admin") {
+    // Admin (Apostle/Pastor) joined the privileged rungs in 0059, after this
+    // guard was first written — it belongs in the list too.
+    if (targetRole === "Super_Admin" || targetRole === "Admin" || targetRole === "IT_Admin") {
       return NextResponse.json(
         { error: "Only a Super_Admin can reset a privileged account." },
         { status: 403 },

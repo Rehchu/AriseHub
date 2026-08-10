@@ -147,8 +147,10 @@ export function PeopleDirectory({
             {filtered.map((p) => (
               <tr
                 key={p.id}
+                role="button"
                 tabIndex={0}
                 aria-haspopup="dialog"
+                aria-label={`View ${p.full_name}`}
                 onClick={() => setSelected(p)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
@@ -156,7 +158,7 @@ export function PeopleDirectory({
                     setSelected(p);
                   }
                 }}
-                className="cursor-pointer transition hover:bg-white focus-visible:bg-white focus-visible:outline-none"
+                className="cursor-pointer transition hover:bg-white focus-visible:outline focus-visible:outline-2 outline-accent"
               >
                 <td className="px-2 py-2.5">
                   <div className="flex items-center gap-2.5">
@@ -282,7 +284,7 @@ function PersonDrawer({
       >
         <div className="mb-4 flex items-start justify-between">
           <Avatar name={person.full_name} photo={person.photo_url} size={64} />
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
+          <button onClick={onClose} aria-label="Close" className="text-ink-400 hover:text-ink-700">
             <Icon name="x" />
           </button>
         </div>

@@ -44,6 +44,7 @@ export function MySchedule({
   const supabase = createClient();
   const [rows, setRows] = useState(plans);
   const [showPast, setShowPast] = useState(false);
+  const [failedResponseId, setFailedResponseId] = useState<string | null>(null);
 
   const today = new Date().toISOString().slice(0, 10);
   const { upcoming, past } = useMemo(() => {
@@ -58,6 +59,10 @@ export function MySchedule({
   ).length;
 
   async function respond(planId: string, assignmentId: string, status: "accepted" | "declined") {
+    const previous = rows
+      .find((p) => p.id === planId)
+      ?.team.find((t) => t.id === assignmentId)?.status;
+    setFailedResponseId(null);
     setRows((rs) =>
       rs.map((p) =>
         p.id === planId
@@ -65,7 +70,30 @@ export function MySchedule({
           : p,
       ),
     );
-    await supabase.from("plan_assignments").update({ status }).eq("id", assignmentId);
+    // `.select` makes the write authoritative — an RLS refusal returns zero rows
+    // with a null error, which an unchecked update reads as success. On failure,
+    // put the invitation back so the volunteer isn't shown a response that never
+    // saved.
+    const { data, error } = await supabase
+      .from("plan_assignments")
+      .update({ status })
+      .eq("id", assignmentId)
+      .select("id");
+    if (error || !data?.length) {
+      setRows((rs) =>
+        rs.map((p) =>
+          p.id === planId
+            ? {
+                ...p,
+                team: p.team.map((t) =>
+                  t.id === assignmentId && previous ? { ...t, status: previous } : t,
+                ),
+              }
+            : p,
+        ),
+      );
+      setFailedResponseId(assignmentId);
+    }
   }
 
   function PlanCard({ p }: { p: MyPlan }) {
@@ -113,20 +141,27 @@ export function MySchedule({
                     </span>
                   </div>
                   {t.status === "invited" && (
-                    <div className="mt-2 flex gap-2">
-                      <button
-                        onClick={() => respond(p.id, t.id, "accepted")}
-                        className="flex-1 rounded-lg bg-accent py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
-                      >
-                        Accept
-                      </button>
-                      <button
-                        onClick={() => respond(p.id, t.id, "declined")}
-                        className="flex-1 rounded-lg bg-white py-1.5 text-sm font-medium text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
-                      >
-                        Can&apos;t make it
-                      </button>
-                    </div>
+                    <>
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          onClick={() => respond(p.id, t.id, "accepted")}
+                          className="flex-1 rounded-lg bg-accent py-1.5 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => respond(p.id, t.id, "declined")}
+                          className="flex-1 rounded-lg bg-white py-1.5 text-sm font-medium text-ink-600 ring-1 ring-ink-200 hover:bg-ink-50"
+                        >
+                          Can&apos;t make it
+                        </button>
+                      </div>
+                      {failedResponseId === t.id && (
+                        <p className="mt-2 text-xs font-medium text-brand-700">
+                          Couldn&apos;t save your response — try again.
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
