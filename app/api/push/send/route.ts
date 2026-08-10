@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPush, relayFromEnv } from "@/lib/webpush";
+import { canNotifyAnyone } from "@/lib/authz";
 
 // POST { profileId, title, body, url } — sends a Web Push to every device that
 // `profileId` has subscribed. Caller must be authenticated. Dead subscriptions
@@ -45,8 +46,7 @@ export async function POST(req: NextRequest) {
   if (!me) return NextResponse.json({ error: "no profile" }, { status: 403 });
 
   if (me.id !== profileId) {
-    const privileged = ["Super_Admin", "Admin", "IT_Admin", "Staff"].includes(me.role);
-    let allowed = privileged;
+    let allowed = canNotifyAnyone(me.role);
     if (!allowed) {
       const { data: lead } = await supabase.rpc("is_any_department_lead");
       allowed = lead === true;

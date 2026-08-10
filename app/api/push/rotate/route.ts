@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mayClaimPushEndpoint } from "@/lib/authz";
 
 // Re-points a device's push registration after the browser rotated its endpoint.
 //
@@ -60,7 +61,8 @@ export async function POST(req: NextRequest) {
     .select("profile_id")
     .eq("endpoint", endpoint)
     .maybeSingle();
-  if (existing && (existing as { profile_id: string }).profile_id !== me.id) {
+  const currentOwner = (existing as { profile_id: string } | null)?.profile_id ?? null;
+  if (!mayClaimPushEndpoint(currentOwner, me.id)) {
     return NextResponse.json({ error: "endpoint belongs to another account" }, { status: 409 });
   }
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, emailLayout, buttonHtml } from "@/lib/email";
+import { canResetPasswordFor } from "@/lib/authz";
 
 // Password reset performed BY IT on behalf of a member.
 //
@@ -44,8 +45,8 @@ export async function POST(req: NextRequest) {
       .select("role")
       .ilike("email", target)
       .maybeSingle();
-    const targetRole = (t as { role?: string } | null)?.role;
-    if (targetRole === "Super_Admin" || targetRole === "Admin" || targetRole === "IT_Admin") {
+    const targetRole = (t as { role?: string } | null)?.role ?? null;
+    if (!canResetPasswordFor(role, targetRole)) {
       return NextResponse.json(
         { error: "Only a Super_Admin can reset a privileged account." },
         { status: 403 },

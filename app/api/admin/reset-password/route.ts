@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canResetPasswordFor } from "@/lib/authz";
 
 export const runtime = "nodejs";
 
@@ -71,10 +72,8 @@ export async function POST(req: NextRequest) {
       .select("role")
       .ilike("email", email.trim())
       .maybeSingle();
-    const targetRole = (target as { role?: string } | null)?.role;
-    // Admin (Apostle/Pastor) joined the privileged rungs in 0059, after this
-    // guard was first written — it belongs in the list too.
-    if (targetRole === "Super_Admin" || targetRole === "Admin" || targetRole === "IT_Admin") {
+    const targetRole = (target as { role?: string } | null)?.role ?? null;
+    if (!canResetPasswordFor(meRow.role, targetRole)) {
       return NextResponse.json(
         { error: "Only a Super_Admin can reset a privileged account." },
         { status: 403 },

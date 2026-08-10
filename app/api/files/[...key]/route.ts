@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createClient } from "@/lib/supabase/server";
 import type { MediaBucket } from "@/lib/r2-types";
+import { isChannelScopedFileKey } from "@/lib/authz";
 
 /** Fire-and-forget on the Worker's execution context when one is available. */
 function ctxWaitUntil(p: Promise<unknown>) {
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ key: string
   // file is attached to — messages RLS already hides other channels, so this
   // revokes in lockstep with membership. Photos (profiles/…) stay church-wide
   // readable, which is deliberate (0049); only messages/… is gated.
-  if (baseKey.startsWith("messages/")) {
+  if (isChannelScopedFileKey(baseKey)) {
     const { data: owning } = await supabase
       .from("messages")
       .select("id")
