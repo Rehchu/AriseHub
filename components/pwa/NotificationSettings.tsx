@@ -233,6 +233,38 @@ export function NotificationSettings({
     }
   }
 
+  // Broadcast test — ping every registered device across everyone, and report
+  // who came back. This is the "is it working for the whole team?" check, so it
+  // doesn't test a device that isn't this one's; it tests all of them at once.
+  async function testEveryone() {
+    setNote("Sending to everyone…");
+    setError(null);
+    const res = await fetch("/api/push/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: "/dashboard" }),
+    });
+    const j = (await res.json().catch(() => ({}))) as {
+      people?: number;
+      peopleReached?: number;
+      devices?: number;
+      sent?: number;
+      failed?: number;
+      pruned?: number;
+      detail?: string;
+      error?: string;
+    };
+    if (!res.ok) return setError(j.error ?? `Failed (${res.status})`);
+    if (j.detail) return setNote(j.detail);
+    const parts = [
+      `Sent to ${j.sent} of ${j.devices} device${j.devices === 1 ? "" : "s"}`,
+      `across ${j.peopleReached} of ${j.people} ${j.people === 1 ? "person" : "people"}.`,
+    ];
+    if (j.failed) parts.push(`${j.failed} failed.`);
+    if (j.pruned) parts.push(`${j.pruned} dead registration${j.pruned === 1 ? "" : "s"} cleared.`);
+    setNote(parts.join(" "));
+  }
+
   async function disable() {
     setBusy(true);
     const reg = await navigator.serviceWorker.getRegistration();
@@ -369,6 +401,25 @@ export function NotificationSettings({
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* Team-wide test — for IT / Super Admin, independent of whether THIS
+          device is subscribed, because the point is to reach the others. */}
+      {canTest && (
+        <div className="mt-3 rounded-xl border border-ink-100 bg-white p-4">
+          <p className="font-medium text-ink-900">Test everyone&apos;s devices</p>
+          <p className="mt-1 text-sm text-ink-500">
+            Sends a test notification to every device that has notifications
+            turned on, across everyone — then reports how many came back. Use
+            this to confirm the whole team is receiving.
+          </p>
+          <button
+            onClick={testEveryone}
+            className="mt-3 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+          >
+            Send a test to everyone
+          </button>
         </div>
       )}
 
