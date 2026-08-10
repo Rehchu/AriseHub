@@ -50,6 +50,20 @@ export async function POST(req: NextRequest) {
       .eq("endpoint", oldEndpoint);
   }
 
+  // The upsert runs as service role, which bypasses RLS — so check ownership
+  // FIRST. Without this, posting somebody else's endpoint re-points their row
+  // at the caller: their device starts receiving the caller's notifications
+  // and silently stops receiving their own. An endpoint is a capability URL;
+  // holding it must not transfer it.
+  const { data: existing } = await admin
+    .from("push_subscriptions")
+    .select("profile_id")
+    .eq("endpoint", endpoint)
+    .maybeSingle();
+  if (existing && (existing as { profile_id: string }).profile_id !== me.id) {
+    return NextResponse.json({ error: "endpoint belongs to another account" }, { status: 409 });
+  }
+
   const { error } = await admin.from("push_subscriptions").upsert(
     {
       profile_id: me.id,
