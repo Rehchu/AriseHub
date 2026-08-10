@@ -14,9 +14,14 @@ export default async function ChannelPage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // NOT email: 0049 revoked SELECT on profiles.email for authenticated, so
+  // asking for it here made the WHOLE row come back null — which turned
+  // currentProfileId into "" and every message send (DM and department alike)
+  // failed with `invalid input syntax for type uuid: ""`. The requester email
+  // lives on the auth user anyway (below).
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, email")
+    .select("id, full_name")
     .eq("user_id", user!.id)
     .single();
 
@@ -49,7 +54,7 @@ export default async function ChannelPage({
       title={title}
       kind={channel.type}
       requesterName={(profile as { full_name?: string } | null)?.full_name ?? ""}
-      requesterEmail={(profile as { email?: string } | null)?.email ?? user!.email ?? ""}
+      requesterEmail={user!.email ?? ""}
     />
   );
 }

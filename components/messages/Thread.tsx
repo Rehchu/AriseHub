@@ -149,6 +149,14 @@ export function Thread({
     e.preventDefault();
     const text = body.trim();
     if (!text && !file) return;
+    // Never post with an empty sender. If the profile lookup upstream ever
+    // returns null again, this fails loudly with a fixable message instead of
+    // firing an insert that Postgres rejects as an invalid uuid — the exact
+    // outage this guards against.
+    if (!currentProfileId) {
+      setUploadError("Couldn't confirm your account — reload the page and try again.");
+      return;
+    }
     // `sending` is set below, but React batches state and this function is also
     // reachable from Enter in the textarea — which stays focused and accepts a
     // second Enter while the attachment is still uploading. Two presses sent
