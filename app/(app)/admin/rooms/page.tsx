@@ -10,10 +10,11 @@ export default async function RoomsAdminPage() {
   } = await supabase.auth.getUser();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, campus_id")
     .eq("user_id", user!.id)
     .single();
-  const role = (profile as { role?: string } | null)?.role;
+  const p = profile as { role?: string; campus_id?: string | null } | null;
+  const role = p?.role;
   // Rooms are campus infrastructure — Super_Admin and Staff manage them.
   if (role !== "Super_Admin" && role !== "Staff") redirect("/dashboard");
 
@@ -29,6 +30,8 @@ export default async function RoomsAdminPage() {
     <RoomsAdmin
       initial={(rooms ?? []) as RoomRow[]}
       campuses={(campuses ?? []) as Pick<Campus, "id" | "name">[]}
+      viewerRole={role ?? ""}
+      viewerCampusId={p?.campus_id ?? null}
     />
   );
 }

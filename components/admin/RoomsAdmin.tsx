@@ -26,14 +26,37 @@ export interface RoomRow {
 export function RoomsAdmin({
   initial,
   campuses,
+  viewerRole = "Super_Admin",
+  viewerCampusId = null,
 }: {
   initial: RoomRow[];
   campuses: Pick<Campus, "id" | "name">[];
+  /** Staff may only manage rooms for their OWN campus (RLS, 0001) — so the
+   *  picker offers them only that one, and errors are phrased for it. */
+  viewerRole?: string;
+  viewerCampusId?: string | null;
 }) {
+  // Postgres errors are for logs, not people. Translate the two a room manager
+  // can actually trigger into something they can act on.
+  const friendly = (msg: string) => {
+    if (/row-level security/i.test(msg))
+      return "You can only add or change rooms for your own campus. Ask a Super Admin to set up another campus's rooms.";
+    if (/foreign key/i.test(msg))
+      return "That room is still linked to other records and can't be removed right now.";
+    return msg;
+  };
+
   const supabase = createClient();
+  // A Super_Admin manages every campus; a Staff member only their own, which is
+  // exactly what the rooms_write policy enforces — so don't offer campuses the
+  // insert would just reject.
+  const manageableCampuses =
+    viewerRole === "Super_Admin"
+      ? campuses
+      : campuses.filter((c) => c.id === viewerCampusId);
   const [rooms, setRooms] = useState<RoomRow[]>(initial);
   const [name, setName] = useState("");
-  const [campusId, setCampusId] = useState(campuses[0]?.id ?? "");
+  const [campusId, setCampusId] = useState(manageableCampuses[0]?.id ?? "");
   const [minAge, setMinAge] = useState("");
   const [maxAge, setMaxAge] = useState("");
   const [capacity, setCapacity] = useState("");
@@ -62,7 +85,7 @@ export function RoomsAdmin({
       .select("id, name, campus_id, capacity, min_age, max_age, active")
       .single();
     setBusy(false);
-    if (error) return setError(error.message);
+    if (error) return setError(friendly(error.message));
     setRooms((r) => [...r, data as RoomRow].sort((a, b) => a.name.localeCompare(b.name)));
     setName("");
     setMinAge("");
@@ -74,7 +97,11 @@ export function RoomsAdmin({
     setError(null);
     setRooms((rs) => rs.map((r) => (r.id === id ? { ...r, ...fields } : r)));
     const { error } = await supabase.from("rooms").update(fields).eq("id", id);
-    if (error) setError(error.message);
+    if (error) {
+      setError(friendly(error.message));
+      // Roll the optimistic edit back so the screen matches the server.
+      setRooms((rs) => rs.map((r) => (r.id === id ? initial.find((i) => i.id === id) ?? r : r)));
+    }
   }
 
   async function remove(r: RoomRow) {
@@ -87,7 +114,7 @@ export function RoomsAdmin({
     setRooms((rs) => rs.filter((x) => x.id !== r.id));
     const { error } = await supabase.from("rooms").delete().eq("id", r.id);
     if (error) {
-      setError(error.message);
+      setError(friendly(error.message));
       setRooms((rs) => [...rs, r].sort((a, b) => a.name.localeCompare(b.name)));
     }
   }
@@ -123,8 +150,13 @@ export function RoomsAdmin({
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-ink-600">Campus</span>
-            <select className="ah-input" value={campusId} onChange={(e) => setCampusId(e.target.value)}>
-              {campuses.map((c) => (
+            <select
+              className="ah-input"
+              value={campusId}
+              onChange={(e) => setCampusId(e.target.value)}
+              disabled={manageableCampuses.length <= 1}
+            >
+              {manageableCampuses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
@@ -150,7 +182,7 @@ export function RoomsAdmin({
         </div>
         <button
           type="submit"
-          disabled={busy || campuses.length === 0}
+          disabled={busy || manageableCampuses.length === 0}
           className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong disabled:opacity-60"
         >
           {busy ? "Adding…" : "Add room"}
