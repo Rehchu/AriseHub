@@ -29,9 +29,10 @@ public/__probe.*
 # Subagent scratch directories.
 .scratch*/
 
-# Approval deck: the screenshots are of the live site, so they carry real member
-# names and faces, and the .pptx embeds them. Regenerate with tools/build-deck.mjs.
-/AriseHub-Overview.pptx
+# Approval / leadership decks: the screenshots are of the live site, so they carry
+# real member names and faces, and the .pptx embeds them. Regenerate the decks with
+# tools/build-deck.mjs and tools/build-leadership-deck.mjs.
+/*.pptx
 /tools/deck-shots/
 
 # Print agent TLS material — a private key, generated per machine.
