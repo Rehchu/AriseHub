@@ -289,6 +289,11 @@ export function CheckinStation({
   // DYMO Connect on this machine → the shared desktop print agent (for iPads)
   // → the browser print dialog. First one that works wins.
   async function print(d: NameTagData) {
+    // Check-in-only device (a tablet not wired to a printer): record nothing to
+    // print and, crucially, don't fall through to the browser print dialog,
+    // which on a tablet is a dead end. The printer station prints from its
+    // roster instead.
+    if (!tagOpts.printHere) return;
     // Purely observational — the print chain below is untouched. Remember what
     // went out (for "Reprint last") and that it went out (for the stat strip).
     lastPrintedRef.current = d;
@@ -799,9 +804,30 @@ export function CheckinStation({
         <div className="mb-5 rounded-xl border border-ink-100 bg-white p-4">
           <h2 className="mb-1 font-display font-semibold text-ink-900">Name tag layout</h2>
           <p className="mb-3 text-xs text-ink-500">
-            Prints to a <strong>DYMO LabelWriter</strong> on <strong>30252 Address
-            labels</strong> (3.5&quot; × 1.125&quot;). Settings are saved per device.
+            Settings are saved per device.
           </p>
+
+          {/* The single most important per-device choice: does THIS device
+              print? On for the one computer wired to the DYMO; off for check-in
+              tablets, which check kids in while the printer station prints the
+              badges from its roster. */}
+          <label className="mb-3 flex items-start gap-3 rounded-lg border border-ink-100 bg-ink-50 px-3 py-2.5 text-sm text-ink-800">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={tagOpts.printHere}
+              onChange={(e) => updateTagOpts({ printHere: e.target.checked })}
+            />
+            <span>
+              This device prints name tags
+              <span className="mt-0.5 block text-xs text-ink-500">
+                Turn ON for the one computer connected to the DYMO printer. Turn
+                OFF on check-in tablets (iPad or Android) — they&apos;ll check
+                children in, and the printer computer prints each badge from its
+                Roster tab.
+              </span>
+            </span>
+          </label>
 
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
             <Icon name="form" size={16} className="text-brand-600" />
@@ -1494,22 +1520,26 @@ export function CheckinStation({
               <span className="font-mono text-sm font-bold tracking-widest text-ink-500">
                 {c.security_code}
               </span>
-              <button
-                onClick={() =>
-                  print({
-                    name: c.child?.full_name ?? "",
-                    room: rooms.find((r) => r.id === c.room_id)?.name ?? "",
-                    code: c.security_code ?? "",
-                    hasAllergy: !!c.child?.has_allergy,
-                    // Reprint carries the ORIGINAL check-in time, not now.
-                    checkedInAt: c.checked_in_at,
-                  })
-                }
-                className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-ink-500 hover:bg-ink-100"
-                title="Reprint name tag"
-              >
-                ⎙
-              </button>
+              {/* Only on the printer station. A check-in-only tablet can't
+                  print, so a print button there is a dead end. */}
+              {tagOpts.printHere && (
+                <button
+                  onClick={() =>
+                    print({
+                      name: c.child?.full_name ?? "",
+                      room: rooms.find((r) => r.id === c.room_id)?.name ?? "",
+                      code: c.security_code ?? "",
+                      hasAllergy: !!c.child?.has_allergy,
+                      // Reprint carries the ORIGINAL check-in time, not now.
+                      checkedInAt: c.checked_in_at,
+                    })
+                  }
+                  className="shrink-0 rounded-lg px-2 py-1.5 text-sm text-ink-500 hover:bg-ink-100"
+                  title="Print name tag"
+                >
+                  ⎙
+                </button>
+              )}
               {/* The roster's own Check out bypasses the pickup flow entirely:
                   no code, no guardian named, no reason recorded. It exists for
                   the case where a child leaves and nobody scanned — so it stays

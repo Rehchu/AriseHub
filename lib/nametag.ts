@@ -17,6 +17,13 @@ export interface NameTagOptions {
   showAllergy: boolean;
   showGuardianTag: boolean; // second label for the guardian's claim tag
   fontScale: number; // 0.8 – 1.4
+  /**
+   * Whether THIS device prints. On for the one computer wired to the DYMO; off
+   * for check-in tablets (iPad or Android) that only check kids in — they'd
+   * otherwise pop a useless print dialog. Per device (localStorage), so the
+   * printer station and the tablets each remember their own answer.
+   */
+  printHere: boolean;
 }
 
 export const DEFAULT_TAG_OPTIONS: NameTagOptions = {
@@ -28,6 +35,7 @@ export const DEFAULT_TAG_OPTIONS: NameTagOptions = {
   showAllergy: true,
   showGuardianTag: true,
   fontScale: 1,
+  printHere: true,
 };
 
 export interface NameTagData {
