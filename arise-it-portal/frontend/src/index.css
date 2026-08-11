@@ -1,6 +1,27 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Keep the existing brand/ink/gold theme and font families defined in the JS
+   config instead of re-declaring them as CSS @theme tokens. */
+@config "../tailwind.config.js";
+
+/* Class-based dark mode. Tailwind v4 defaults `dark:` to prefers-color-scheme;
+   this app toggles a `.dark` class on <html> (see lib/theme-context.tsx), so the
+   variant must be redefined to follow that class or the theme switcher silently
+   stops working. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Tailwind v3 defaulted the border color to gray-200; v4 defaults it to
+   currentColor. Restore v3 so existing bare `border` utilities keep their light
+   line instead of inheriting the text color. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+}
 
 body {
   @apply bg-gray-50 text-gray-900 font-sans;
