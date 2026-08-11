@@ -22,7 +22,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { networkInterfaces } from "node:os";
 import { execFileSync } from "node:child_process";
 import { X509Certificate } from "node:crypto";
-import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -123,14 +123,25 @@ function ensureCert() {
   const san = ["IP:127.0.0.1", "DNS:localhost", ...lanAddresses().map((a) => `IP:${a}`)].join(",");
   try {
     mkdirSync(CERT_DIR, { recursive: true });
+    // SAN goes through a config file, NOT `-addext`. macOS ships LibreSSL and
+    // older LibreSSL builds don't accept `-addext`, which would throw here,
+    // drop the agent to plain http, and silently break tablet printing (the
+    // https app can't reach an http agent). `-config` + `-extensions` is
+    // understood by both OpenSSL and LibreSSL.
+    const cfgPath = join(CERT_DIR, "openssl.cnf");
+    writeFileSync(
+      cfgPath,
+      `[req]\ndistinguished_name = dn\nx509_extensions = v3\nprompt = no\n` +
+        `[dn]\nCN = AriseHub Print Agent\n` +
+        `[v3]\nsubjectAltName = ${san}\n`,
+    );
     execFileSync(
       "openssl",
       [
         "req", "-x509", "-newkey", "rsa:2048", "-nodes",
         "-keyout", KEY_FILE, "-out", CERT_FILE,
         "-days", "3650",
-        "-subj", "/CN=AriseHub Print Agent",
-        "-addext", `subjectAltName=${san}`,
+        "-config", cfgPath,
       ],
       { stdio: "ignore" },
     );
