@@ -212,6 +212,9 @@ export function CheckinStation({
   const lastPrintedRef = useRef<NameTagData | null>(null);
   const [labelsPrinted, setLabelsPrinted] = useState(0);
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
+  // Auto-print: check-in ids currently being printed by the poll, so a slow
+  // print can't be started twice by the next tick before it marks the row.
+  const autoPrintingRef = useRef<Set<string>>(new Set());
 
   // Check-in must survive flaky WiFi: queue locally, sync when we're back.
   useEffect(() => {
@@ -237,6 +240,11 @@ export function CheckinStation({
           local_id: row.localId,
           // Offline rows used to arrive with nobody attributed to them.
           checked_in_by: row.checked_in_by,
+          // Carry the printed state across the flush: a badge that already came
+          // out offline must not reprint at an auto-print station; one that
+          // didn't (a check-in-only tablet) lands unprinted for the station to
+          // pick up.
+          label_printed_at: row.printed ? row.checked_in_at : null,
         });
         return { error };
       });
@@ -263,6 +271,87 @@ export function CheckinStation({
       .then(({ data }) => setTemplates((data ?? []) as TagTemplate[]));
   }, [supabase]);
 
+  // Auto-print: the printer station polls for check-ins that have no badge yet
+  // — the ones self-service tablets recorded without printing — and prints each
+  // one once. `label_printed_at` is the source of truth (0070): print() sets it
+  // on a real print, so nothing is printed twice even across a restart or two
+  // stations. Only runs where it's wanted: the DYMO station with the toggle on.
+  useEffect(() => {
+    if (kiosk || !tagOpts.printHere || !tagOpts.autoPrint) return;
+    let alive = true;
+
+    const tick = async () => {
+      if (!alive || isOffline()) return;
+      const midnight = new Date();
+      midnight.setHours(0, 0, 0, 0);
+      const { data: pending } = await supabase
+        .from("checkins")
+        .select("id, profile_id, room_id, security_code, checked_in_at")
+        .eq("status", "checked_in")
+        .is("label_printed_at", null)
+        .gte("checked_in_at", midnight.toISOString())
+        .order("checked_in_at")
+        .limit(20);
+      const rows = (pending ?? []) as {
+        id: string;
+        profile_id: string;
+        room_id: string | null;
+        security_code: string | null;
+        checked_in_at: string;
+      }[];
+      const fresh = rows.filter((r) => !autoPrintingRef.current.has(r.id));
+      if (fresh.length === 0) return;
+
+      // One read for the children's names/allergy, gated by is_checkin_role.
+      const { data: kidRows } = await supabase
+        .from("checkin_people")
+        .select("id, full_name, has_allergy, allergy_notes")
+        .in("id", [...new Set(fresh.map((r) => r.profile_id))]);
+      const kidById: Record<string, { full_name: string; has_allergy: boolean; allergy_notes: string | null }> = {};
+      for (const k of (kidRows ?? []) as {
+        id: string;
+        full_name: string;
+        has_allergy: boolean;
+        allergy_notes: string | null;
+      }[]) {
+        kidById[k.id] = k;
+      }
+
+      for (const r of fresh) {
+        if (!alive) break;
+        const kid = kidById[r.profile_id];
+        if (!kid) continue; // name not readable — skip rather than print a blank
+        autoPrintingRef.current.add(r.id);
+        try {
+          // skipBrowser: a print station whose DYMO is momentarily down must not
+          // pop a browser dialog every few seconds — leave it unprinted to
+          // retry. print() marks label_printed_at itself on a real print.
+          await print(
+            {
+              name: kid.full_name,
+              room: rooms.find((rm) => rm.id === r.room_id)?.name ?? "",
+              code: r.security_code ?? "",
+              hasAllergy: kid.has_allergy,
+              allergyNotes: kid.allergy_notes ?? undefined,
+              checkedInAt: r.checked_in_at,
+            },
+            { checkinId: r.id, skipBrowser: true },
+          );
+        } finally {
+          autoPrintingRef.current.delete(r.id);
+        }
+      }
+    };
+
+    const iv = setInterval(tick, 6000);
+    void tick();
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kiosk, tagOpts.printHere, tagOpts.autoPrint, supabase, rooms, templates, printer, printGuardianTag]);
+
   const today = new Date().toISOString().slice(0, 10);
 
   // Kids' ministry on a Sunday wants pickup verified. A midweek service where
@@ -288,14 +377,25 @@ export function CheckinStation({
   // Print chain: designed template (rendered to an image) if one exists, then
   // DYMO Connect on this machine → the shared desktop print agent (for iPads)
   // → the browser print dialog. First one that works wins.
-  async function print(d: NameTagData) {
+  /**
+   * Print a badge. Returns true only if the CHILD tag reached a REAL printer
+   * (DYMO Connect or the LAN agent) — not the browser fallback and not a
+   * check-in-only device — so callers can record "printed" with confidence.
+   *
+   * opts.checkinId: mark that check-in printed on success, so the auto-print
+   * poll never prints it again. opts.skipBrowser: don't fall through to the
+   * browser dialog (the poll sets this — a dialog popping every few seconds
+   * when the DYMO is momentarily down would be its own disaster).
+   */
+  async function print(
+    d: NameTagData,
+    opts_: { checkinId?: string; skipBrowser?: boolean } = {},
+  ): Promise<boolean> {
     // Check-in-only device (a tablet not wired to a printer): record nothing to
     // print and, crucially, don't fall through to the browser print dialog,
-    // which on a tablet is a dead end. The printer station prints from its
-    // roster instead.
-    if (!tagOpts.printHere) return;
-    // Purely observational — the print chain below is untouched. Remember what
-    // went out (for "Reprint last") and that it went out (for the stat strip).
+    // which on a tablet is a dead end. The printer station prints instead.
+    if (!tagOpts.printHere) return false;
+    const { checkinId, skipBrowser = false } = opts_;
     lastPrintedRef.current = d;
     setLabelsPrinted((n) => n + 1);
     // The church-wide setting wins over whatever this device happens to have in
@@ -316,8 +416,12 @@ export function CheckinStation({
       if (g) toPrint.push(g);
     }
 
+    // Was the CHILD tag (the first one) sent to a real printer?
+    let childRealPrint = false;
+
     if (toPrint.length > 0) {
-      for (const tpl of toPrint) {
+      for (let i = 0; i < toPrint.length; i++) {
+        const tpl = toPrint[i];
         const png = await renderTagToPng(tpl, {
           name: d.name,
           room: d.room,
@@ -335,42 +439,56 @@ export function CheckinStation({
         });
         // DYMO Connect here → shared print agent (iPads) → browser dialog.
         const attempts: PrintResult[] = [];
+        let real = false;
         const direct = await printImageViaDymo(png, tpl.width_in, tpl.height_in, printer || undefined);
         attempts.push(direct);
-        if (direct.ok) {
-          setPrintLog(attempts);
-          continue;
-        }
-        const agent = localStorage.getItem("ah-print-server");
-        if (agent) {
-          const viaAgent = await printImageViaServer(png, tpl.width_in, tpl.height_in, agent, printer || undefined);
-          attempts.push(viaAgent);
-          if (viaAgent.ok) {
-            setPrintLog(attempts);
-            continue;
+        if (direct.ok) real = true;
+        if (!real) {
+          const agent = localStorage.getItem("ah-print-server");
+          if (agent) {
+            const viaAgent = await printImageViaServer(png, tpl.width_in, tpl.height_in, agent, printer || undefined);
+            attempts.push(viaAgent);
+            if (viaAgent.ok) real = true;
           }
         }
-        printImageViaBrowser(png, tpl.width_in, tpl.height_in);
-        attempts.push({ ok: true, via: "browser" });
+        if (!real && !skipBrowser) {
+          printImageViaBrowser(png, tpl.width_in, tpl.height_in);
+          attempts.push({ ok: true, via: "browser" });
+        }
         setPrintLog(attempts);
+        if (i === 0 && real) childRealPrint = true;
       }
-      return;
+    } else {
+      // No designed template yet — fall back to the built-in layout.
+      const attempts: PrintResult[] = [];
+      const direct = await printViaDymo(d, opts, printer || undefined);
+      attempts.push(direct);
+      if (direct.ok) childRealPrint = true;
+      if (!childRealPrint) {
+        const server = localStorage.getItem("ah-print-server");
+        if (server) {
+          const viaAgent = await printViaServer(d, opts, server);
+          attempts.push(viaAgent);
+          if (viaAgent.ok) childRealPrint = true;
+        }
+      }
+      if (!childRealPrint && !skipBrowser) {
+        printNameTag(d, opts);
+        attempts.push({ ok: true, via: "browser" });
+      }
+      setPrintLog(attempts);
     }
 
-    // No designed template yet — fall back to the built-in layout.
-    const attempts: PrintResult[] = [];
-    const direct = await printViaDymo(d, opts, printer || undefined);
-    attempts.push(direct);
-    if (direct.ok) return setPrintLog(attempts);
-    const server = localStorage.getItem("ah-print-server");
-    if (server) {
-      const viaAgent = await printViaServer(d, opts, server);
-      attempts.push(viaAgent);
-      if (viaAgent.ok) return setPrintLog(attempts);
+    // Mark printed only when a real printer took it — a browser-dialog fallback
+    // or a failure must leave it unprinted so the poll tries again.
+    if (childRealPrint && checkinId) {
+      await supabase
+        .from("checkins")
+        .update({ label_printed_at: new Date().toISOString() })
+        .eq("id", checkinId)
+        .is("label_printed_at", null);
     }
-    printNameTag(d, opts);
-    attempts.push({ ok: true, via: "browser" });
-    setPrintLog(attempts);
+    return childRealPrint;
   }
 
   const activeRooms = rooms.filter((r) => r.active);
@@ -516,6 +634,9 @@ export function CheckinStation({
         childName: person.full_name,
         hasAllergy: person.has_allergy,
         roomName,
+        // If this device prints, the badge is coming out now (below), so the
+        // row lands already-printed and no auto-print station reprints it.
+        printed: tagOpts.printHere,
       });
       // localStorage failing used to be swallowed while the UI said "saved" —
       // and the badge has already printed, so the child is physically checked
@@ -574,8 +695,9 @@ export function CheckinStation({
     };
     setLastBadge(badge);
     setQ("");
-    // Print immediately — this is the moment the volunteer needs the tag.
-    print(badge);
+    // Print immediately — this is the moment the volunteer needs the tag. Mark
+    // the row printed on success so an auto-print station doesn't reprint it.
+    print(badge, { checkinId: (data as { id: string }).id });
   }
 
   /**
@@ -828,6 +950,26 @@ export function CheckinStation({
               </span>
             </span>
           </label>
+
+          {tagOpts.printHere && (
+            <label className="mb-3 flex items-start gap-3 rounded-lg border border-ink-100 bg-ink-50 px-3 py-2.5 text-sm text-ink-800">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={tagOpts.autoPrint}
+                onChange={(e) => updateTagOpts({ autoPrint: e.target.checked })}
+              />
+              <span>
+                Automatically print new check-ins
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  Leave this computer on the check-in page and it will print a
+                  badge within a few seconds of any child being checked in on a
+                  tablet — each one once. Turn on at the DYMO station so nobody
+                  has to tap print.
+                </span>
+              </span>
+            </label>
+          )}
 
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-2">
             <Icon name="form" size={16} className="text-brand-600" />

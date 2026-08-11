@@ -24,6 +24,13 @@ export interface NameTagOptions {
    * printer station and the tablets each remember their own answer.
    */
   printHere: boolean;
+  /**
+   * When on, this device polls every few seconds for check-ins that have no
+   * badge yet (from self-service tablets) and prints them — once each. Only
+   * meaningful on the printer station (printHere). Off by default; you turn it
+   * on at the one computer by the DYMO.
+   */
+  autoPrint: boolean;
 }
 
 export const DEFAULT_TAG_OPTIONS: NameTagOptions = {
@@ -36,6 +43,7 @@ export const DEFAULT_TAG_OPTIONS: NameTagOptions = {
   showGuardianTag: true,
   fontScale: 1,
   printHere: true,
+  autoPrint: false,
 };
 
 export interface NameTagData {

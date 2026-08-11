@@ -28,6 +28,10 @@ export interface QueuedCheckin {
   childName: string;
   hasAllergy: boolean;
   roomName: string;
+  /** Did this device already print the badge (printer stations do; check-in
+   *  tablets don't)? Carried so the row lands with the right printed state and
+   *  a print station's auto-print doesn't reprint what already came out. */
+  printed?: boolean;
   attempts: number;
   /** Set once a row has exhausted MAX_ATTEMPTS. Kept, not dropped. */
   stuck?: boolean;
