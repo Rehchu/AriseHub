@@ -35,6 +35,10 @@
   "r2_buckets": [
     { "binding": "MEDIA", "bucket_name": "arisehub-media" }
   ],
+  // Workers AI — the plain-language "simplify" paraphrase in the Bible module
+  // (F3) runs here rather than a paid LLM. Free-tier Neuron allowance covers a
+  // church's volume, and results are cached.
+  "ai": { "binding": "AI" },
   "vars": {
     // Public values only. Secrets (SUPABASE_SERVICE_ROLE_KEY, VAPID_PRIVATE_KEY)
     // are set with `wrangler secret put` and never live in this file.
