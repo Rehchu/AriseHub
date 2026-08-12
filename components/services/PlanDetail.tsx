@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import { notify } from "@/lib/notify";
+import { printRunSheet } from "@/lib/runsheet";
 import {
   availabilityFor,
   type Blockout,
@@ -370,6 +371,23 @@ export function PlanDetail({
               day: "numeric",
             })}
           </p>
+          {/* Sunday still runs on paper at the desk and on stage — everyone
+              gets the run sheet, not just the people who can edit it. */}
+          <button
+            onClick={() =>
+              printRunSheet({
+                title: plan.title,
+                serviceDate: plan.service_date,
+                notes: plan.notes,
+                items,
+                assignments,
+              })
+            }
+            className="flex items-center gap-1.5 text-sm font-medium text-ink-500 transition hover:text-brand-600"
+          >
+            <Icon name="form" size={16} />
+            Print run sheet
+          </button>
         </div>
         {canManage && (
           <div className="flex flex-wrap items-center gap-2">
