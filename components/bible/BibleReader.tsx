@@ -104,9 +104,15 @@ export function BibleReader() {
     }
   }, []);
 
-  // Show something on first load.
+  // Show something on first load — or the passage that was linked to.
+  // Sermon scripture references point here (/bible?ref=John+3:16), so arriving
+  // from the archive lands on the verse rather than the default.
   useEffect(() => {
-    void lookup("John 3", DEFAULT_TRANSLATION);
+    const linked = new URLSearchParams(window.location.search).get("ref");
+    const start = linked?.trim() || "John 3";
+    setRef(start);
+    refRef.current = start;
+    void lookup(start, DEFAULT_TRANSLATION);
   }, [lookup]);
 
   /** Jump to a whole chapter via the pickers / arrows. */

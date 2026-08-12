@@ -26,6 +26,7 @@ const PATHS: Record<string, string> = {
   chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
   search: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.3-4.3",
   book: "M12 6.5C10.5 5 8 4.5 4 5v13c4-.5 6.5 0 8 1.5 1.5-1.5 4-2 8-1.5V5c-4-.5-6.5 0-8 1.5ZM12 6.5V20",
+  play: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM10 8.5l6 3.5-6 3.5v-7Z",
 };
 
 export function Icon({
