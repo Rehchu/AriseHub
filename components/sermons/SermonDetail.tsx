@@ -354,7 +354,7 @@ export function SermonDetail({
       )}
 
       {canManage && (
-        <div className="mt-4 rounded-xl border border-ink-100 bg-white p-4">
+        <div className="mt-4 rounded-xl border border-ink-100 bg-white p-4 text-ink-700">
           <h2 className="text-sm font-semibold text-ink-900">Transcript</h2>
           <p className="mt-0.5 text-xs text-ink-500">
             Upload the service captions (.vtt is best — it carries the timings, so every line
@@ -369,7 +369,7 @@ export function SermonDetail({
               if (f) void uploadTranscript(f);
               e.target.value = "";
             }}
-            className="mt-2 block w-full text-sm text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-onaccent"
+            className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-onaccent"
           />
           {message && <p className="mt-2 text-xs text-ink-600">{message}</p>}
         </div>

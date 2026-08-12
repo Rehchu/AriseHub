@@ -372,7 +372,7 @@ export function SlidesPanel({
       )}
 
       {canManage && slides.length > 0 && hasVideo && (
-        <div className="mt-3 rounded-xl border border-ink-100 bg-white p-4">
+        <div className="mt-3 rounded-xl border border-ink-100 bg-white p-4 text-ink-700">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-ink-900">Sync slides to the video</h3>
             <button
@@ -434,7 +434,7 @@ export function SlidesPanel({
               if (f) void loadPdf(f);
               e.target.value = "";
             }}
-            className="mt-2 block w-full text-sm text-ink-700 file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-onaccent"
+            className="mt-2 block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-accent file:px-3 file:py-2 file:text-sm file:font-semibold file:text-onaccent"
           />
           {status && <p className="mt-2 text-xs text-ink-600">{status}</p>}
 
