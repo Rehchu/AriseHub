@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getProvider, providerForTranslation } from "@/lib/bible";
+import { annotationsFor, getProvider, providerForTranslation } from "@/lib/bible";
 
 // GET /api/bible/passage?ref=John+3:16&translation=web&provider=bible-api
 //
@@ -27,6 +27,16 @@ export async function GET(req: NextRequest) {
       (translation ? await providerForTranslation(translation) : null) ??
       getProvider(providerId);
     const passage = await provider.getPassage(ref, translation);
+
+    // Study notes should be there whatever Bible was picked. If the selected
+    // one carries none, borrow them and say where they came from.
+    if (!passage.footnotes?.length) {
+      const { footnotes, from } = await annotationsFor(ref);
+      if (footnotes.length) {
+        passage.footnotes = footnotes;
+        passage.footnotesFrom = from;
+      }
+    }
     return NextResponse.json(passage);
   } catch (e) {
     return NextResponse.json(

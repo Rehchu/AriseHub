@@ -13,6 +13,13 @@ export interface BibleVerse {
   text: string;
 }
 
+/** A study note / footnote anchored to a verse. */
+export interface Footnote {
+  verse: number;
+  text: string;
+  caller?: string;
+}
+
 export interface Passage {
   reference: string;
   translation: string; // provider translation id, e.g. "web"
@@ -21,6 +28,14 @@ export interface Passage {
   verses: BibleVerse[];
   text: string; // plain joined text
   providerId: string;
+  /** Study notes for the verses shown, when the source carries them. */
+  footnotes?: Footnote[];
+  /**
+   * Set when the notes were borrowed from another translation because the
+   * selected one has none — the UI says so rather than implying they ship with
+   * the chosen Bible.
+   */
+  footnotesFrom?: string;
 }
 
 export interface Translation {
@@ -221,6 +236,11 @@ const helloao: BibleProvider = {
       translation: { id: string; name: string; englishName?: string; licenseUrl?: string };
       chapter: {
         content: { type?: string; number?: number; content?: unknown[] }[];
+        footnotes?: {
+          caller?: string;
+          text?: string;
+          reference?: { chapter?: number; verse?: number };
+        }[];
       };
     };
     const all: BibleVerse[] = (d.chapter?.content ?? [])
@@ -246,6 +266,16 @@ const helloao: BibleProvider = {
         : all.filter((v) => v.verse >= p.verseFrom! && v.verse <= (p.verseTo ?? p.verseFrom!));
     if (verses.length === 0) throw new Error("No verses found for that reference");
 
+    const shown = new Set(verses.map((v) => v.verse));
+    const footnotes: Footnote[] = (d.chapter?.footnotes ?? [])
+      .filter((f) => f.text && f.reference?.verse && shown.has(f.reference.verse))
+      .map((f) => ({
+        verse: f.reference!.verse!,
+        text: tidy(f.text!),
+        caller: f.caller,
+      }))
+      .sort((a, b) => a.verse - b.verse);
+
     return {
       reference: refLabel(p),
       translation: d.translation?.id ?? translation,
@@ -254,6 +284,7 @@ const helloao: BibleProvider = {
       providerId: "helloao",
       verses,
       text: verses.map((v) => v.text).join(" "),
+      ...(footnotes.length ? { footnotes } : {}),
     };
   },
   async translations() {
@@ -365,7 +396,7 @@ const apiBible: BibleProvider = {
         : `${p.osis}.${p.chapter}.${p.verseFrom}-${p.osis}.${p.chapter}.${p.verseTo ?? p.verseFrom}`;
     const url =
       `${API_BIBLE_BASE}/bibles/${encodeURIComponent(translation)}/passages/${passageId}` +
-      `?content-type=text&include-verse-numbers=true&include-notes=false&include-titles=false&include-chapter-numbers=false`;
+      `?content-type=text&include-verse-numbers=true&include-notes=true&include-titles=false&include-chapter-numbers=false`;
     const res = await fetch(url, { headers: { "api-key": key } });
     if (!res.ok) throw new Error(`API.Bible ${res.status}`);
     const d = (await res.json()) as {
@@ -519,6 +550,27 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
     merged.push(t);
   }
   return merged.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The Bible whose study notes are borrowed when the selected translation has
+ * none. BSB (keyless, modern, well annotated) is a safe default for a reader
+ * who just wants the notes to be there.
+ */
+const NOTES_SOURCE = { translation: "BSB", name: "Berean Standard Bible" };
+
+/**
+ * Study notes for a reference, so annotations can appear whatever Bible is
+ * selected. Returns [] rather than throwing — missing notes must never break a
+ * passage lookup.
+ */
+export async function annotationsFor(ref: string): Promise<{ footnotes: Footnote[]; from: string }> {
+  try {
+    const p = await helloao.getPassage(ref, NOTES_SOURCE.translation);
+    return { footnotes: p.footnotes ?? [], from: NOTES_SOURCE.name };
+  } catch {
+    return { footnotes: [], from: NOTES_SOURCE.name };
+  }
 }
 
 /** Find the provider that serves a given translation id from the merged list. */

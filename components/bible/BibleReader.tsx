@@ -143,6 +143,27 @@ export function BibleReader() {
             ))}
           </div>
 
+          {passage.footnotes && passage.footnotes.length > 0 && (
+            <section className="mt-4 rounded-lg border border-ink-100 bg-ink-50 p-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-500">
+                Study notes
+                {passage.footnotesFrom && (
+                  <span className="ml-1 font-normal normal-case tracking-normal text-ink-400">
+                    — from the {passage.footnotesFrom}
+                  </span>
+                )}
+              </h3>
+              <ul className="space-y-1.5">
+                {passage.footnotes.map((f, i) => (
+                  <li key={`${f.verse}-${i}`} className="text-sm leading-relaxed text-ink-700">
+                    <span className="mr-1.5 font-semibold text-brand-500">v{f.verse}</span>
+                    {f.text}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {passage.copyright && <p className="mt-3 text-xs text-ink-400">{passage.copyright}</p>}
 
           {/* Biblia's Terms of Use require a visible acknowledgement and links
