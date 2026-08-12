@@ -13,6 +13,13 @@ import {
   RecentMessages,
   type RecentMessageRow,
 } from "@/components/dashboard/RecentMessages";
+import {
+  LeaderPanel,
+  CampusRollup,
+  type CampusRollup as CampusRollupRow,
+  type LeaderGroup,
+  type LeaderAssignment,
+} from "@/components/dashboard/LeaderPanel";
 
 // The dashboard used to end with a text strip linking every module. It
 // duplicated navigation that already exists three other ways — the sidebar, the
@@ -175,6 +182,89 @@ export default async function DashboardPage() {
     .sort((a, b) => (a.sortKey < b.sortKey ? 1 : -1))
     .slice(0, 6);
 
+
+  // --- Leader's own slice (F13) and the all-campus rollup (F12) -------------
+  // Both are additive: a member sees neither, so the dashboard they already
+  // know is unchanged.
+  const isSuper = me?.role === 'Super_Admin';
+  const { data: myGroups } = await supabase
+    .from('group_members')
+    .select('group_id, is_leader, groups(id, name)')
+    .eq('profile_id', myProfileId)
+    .eq('is_leader', true);
+  const leaderGroupRows = (myGroups ?? []) as unknown as {
+    group_id: string;
+    groups: { id: string; name: string } | null;
+  }[];
+  const leaderGroups: LeaderGroup[] = [];
+  if (leaderGroupRows.length) {
+    const ids = leaderGroupRows.map((g) => g.group_id);
+    const [{ data: counts }, { data: meetings }] = await Promise.all([
+      supabase.from('group_members').select('group_id').in('group_id', ids),
+      supabase.from('group_meetings').select('group_id, meets_at').in('group_id', ids).order('meets_at', { ascending: false }),
+    ]);
+    const size: Record<string, number> = {};
+    for (const c of (counts ?? []) as { group_id: string }[]) size[c.group_id] = (size[c.group_id] ?? 0) + 1;
+    const last: Record<string, string> = {};
+    for (const m of (meetings ?? []) as { group_id: string; meets_at: string }[]) {
+      if (!last[m.group_id]) last[m.group_id] = m.meets_at;
+    }
+    for (const g of leaderGroupRows) {
+      if (!g.groups) continue;
+      leaderGroups.push({
+        id: g.groups.id,
+        name: g.groups.name,
+        memberCount: size[g.group_id] ?? 0,
+        lastMet: last[g.group_id] ?? null,
+      });
+    }
+  }
+
+  const { data: myAssigns } = await supabase
+    .from('plan_assignments')
+    .select('id, position, status, plan_id, service_plans(title, service_date)')
+    .eq('profile_id', myProfileId)
+    .neq('status', 'declined')
+    .limit(20);
+  const leaderAssignments: LeaderAssignment[] = ((myAssigns ?? []) as unknown as {
+    id: string;
+    position: string;
+    status: 'invited' | 'accepted' | 'declined';
+    plan_id: string;
+    service_plans: { title: string; service_date: string } | null;
+  }[])
+    .filter((a) => a.service_plans && a.service_plans.service_date >= todayIso)
+    .map((a) => ({
+      id: a.id,
+      plan_id: a.plan_id,
+      plan_title: a.service_plans!.title,
+      service_date: a.service_plans!.service_date,
+      position: a.position,
+      status: a.status,
+    }));
+
+  let rollup: CampusRollupRow[] = [];
+  if (isSuper) {
+    const [{ data: campuses }, { data: dir }, { data: todayCheckins }, { data: openCards }] =
+      await Promise.all([
+        supabase.from('campuses').select('id, name').order('name'),
+        supabase.from('people_directory').select('id, campus_id').is('archived_at', null),
+        supabase.from('checkins').select('id, campus_id').gte('checked_in_at', todayIso),
+        supabase.from('pipeline_cards').select('id').is('closed_at', null),
+      ]);
+    const people = (dir ?? []) as { campus_id: string | null }[];
+    const ins = (todayCheckins ?? []) as { campus_id: string | null }[];
+    rollup = ((campuses ?? []) as { id: string; name: string }[]).map((c) => ({
+      campus_id: c.id,
+      campus: c.name,
+      people: people.filter((p) => p.campus_id === c.id).length,
+      checkedInToday: ins.filter((i) => i.campus_id === c.id).length,
+      // Cards aren't campus-scoped yet, so this is church-wide on every row
+      // rather than a number split three ways that doesn't add up.
+      openFollowUps: (openCards ?? []).length,
+    }));
+  }
+
   // --- Stat strip content --------------------------------------------------
   const planHref = plan ? `/services/${plan.id}` : "/services";
   const shortDate = plan ? planDateLabel(plan.service_date, "short") : "";
@@ -251,6 +341,8 @@ export default async function DashboardPage() {
         )}
 
         <RecentMessages rows={messageRows.map(({ sortKey: _, ...r }) => r)} />
+        <LeaderPanel groups={leaderGroups} assignments={leaderAssignments} />
+        <CampusRollup rows={rollup} />
       </div>
 
     </div>

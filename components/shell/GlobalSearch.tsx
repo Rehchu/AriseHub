@@ -64,14 +64,19 @@ export function GlobalSearch({ modules = [] }: { modules?: ModuleDef[] }) {
       const seq = ++searchSeq.current;
       const like = `%${term}%`;
       setBusy(true);
-      const [people, tasks, events, groupsRes, plans, forms] = await Promise.all([
-        supabase.from("people_directory").select("id, full_name, email, role").ilike("full_name", like).is("archived_at", null).limit(6),
-        supabase.from("tasks").select("id, title, status").ilike("title", like).limit(5),
-        supabase.from("events").select("id, title, starts_at").ilike("title", like).limit(5),
-        supabase.from("groups").select("id, name, group_type").ilike("name", like).limit(5),
-        supabase.from("service_plans").select("id, title, service_date").ilike("title", like).limit(5),
-        supabase.from("forms").select("id, title, slug").ilike("title", like).limit(4),
-      ]);
+      const [people, tasks, events, groupsRes, plans, forms, sermons, announcements] =
+        await Promise.all([
+          supabase.from("people_directory").select("id, full_name, email, role").ilike("full_name", like).is("archived_at", null).limit(6),
+          supabase.from("tasks").select("id, title, status").ilike("title", like).limit(5),
+          supabase.from("events").select("id, title, starts_at").ilike("title", like).limit(5),
+          supabase.from("groups").select("id, name, group_type").ilike("name", like).limit(5),
+          supabase.from("service_plans").select("id, title, service_date").ilike("title", like).limit(5),
+          supabase.from("forms").select("id, title, slug").ilike("title", like).limit(4),
+          // The archive is the thing people search by memory — "that message
+          // about Jonah". RLS keeps unpublished drafts out for everyone else.
+          supabase.from("sermons").select("id, title, speaker_name, preached_on").ilike("title", like).limit(5),
+          supabase.from("announcements").select("id, title, status").ilike("title", like).eq("status", "approved").limit(4),
+        ]);
       // A newer search started while these were running — discard.
       if (seq !== searchSeq.current) return;
 
@@ -110,6 +115,35 @@ export function GlobalSearch({ modules = [] }: { modules?: ModuleDef[] }) {
       }
       for (const f of (forms.data ?? []) as { id: string; title: string; slug: string }[]) {
         out.push({ id: f.id, label: f.title, sub: `/f/${f.slug}`, href: `/forms/${f.id}`, kind: "Form", icon: "form", accent: "#0d9488" });
+      }
+      for (const s of (sermons.data ?? []) as {
+        id: string;
+        title: string;
+        speaker_name: string | null;
+        preached_on: string;
+      }[]) {
+        out.push({
+          id: s.id,
+          label: s.title,
+          sub: [s.speaker_name, new Date(`${s.preached_on}T00:00:00Z`).toLocaleDateString()]
+            .filter(Boolean)
+            .join(" · "),
+          href: `/services/archive/${s.id}`,
+          kind: "Sermon",
+          icon: "play",
+          accent: "#0369a1",
+        });
+      }
+      for (const a of (announcements.data ?? []) as { id: string; title: string }[]) {
+        out.push({
+          id: a.id,
+          label: a.title,
+          sub: "Announcement",
+          href: "/announcements",
+          kind: "Notice",
+          icon: "chat",
+          accent: "#ea580c",
+        });
       }
       setHits(out);
       setCursor(0);
