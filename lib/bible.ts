@@ -373,6 +373,113 @@ const wldeh: BibleProvider = {
   },
 };
 
+// ── YouVersion Platform (key: YOUVERSION_APP_KEY) ───────────────────────────
+// The licensed route to modern translations (NIV, ESV, AMP, TPT…): what the
+// catalogue returns is exactly what this app key is approved for.
+//
+// Three documented traps, all handled below:
+//  1. /bibles without language_ranges[] is a 422 — it is mandatory.
+//  2. Passage content is HTML unless format=text is asked for.
+//  3. The default catalogue is key-restricted (which is what we want — listing
+//     all_available would advertise Bibles the church cannot actually read).
+const YV_BASE = "https://api.youversion.com/v1";
+const yvKey = () =>
+  process.env.YOUVERSION_APP_KEY?.trim() || process.env.YV_APP_KEY?.trim() || "";
+
+/** Strip any residual markup, in case a response comes back HTML anyway. */
+const stripHtml = (s: string) => tidy(s.replace(/<[^>]*>/g, " "));
+
+const youversion: BibleProvider = {
+  id: "youversion",
+  label: "YouVersion",
+  keyless: false,
+  configured: () => !!yvKey(),
+  async getPassage(ref, translation) {
+    const key = yvKey();
+    if (!key) throw new Error("YouVersion key not set");
+    if (!translation) throw new Error("YouVersion needs a Bible id");
+    const p = parseReference(ref);
+    if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
+    // USFM reference: JHN.3 for a chapter, JHN.3.16 / JHN.3.16-JHN.3.17 for verses.
+    const usfm =
+      p.verseFrom === undefined
+        ? `${p.osis}.${p.chapter}`
+        : p.verseTo && p.verseTo !== p.verseFrom
+          ? `${p.osis}.${p.chapter}.${p.verseFrom}-${p.osis}.${p.chapter}.${p.verseTo}`
+          : `${p.osis}.${p.chapter}.${p.verseFrom}`;
+    const res = await fetch(
+      `${YV_BASE}/bibles/${encodeURIComponent(translation)}/passages/${usfm}?format=text`,
+      { headers: { "X-YVP-App-Key": key } },
+    );
+    if (!res.ok) throw new Error(`YouVersion ${res.status}`);
+    const d = (await res.json()) as {
+      id?: string;
+      content?: string;
+      reference?: string;
+      copyright?: string;
+    };
+    const content = stripHtml(d.content ?? "");
+    if (!content) throw new Error("No text found for that reference");
+
+    // Some editions carry [n] verse markers; keep them as verses when present,
+    // otherwise return the passage as one block rather than inventing splits.
+    const verses: BibleVerse[] = [];
+    const re = /\[(\d+)\]\s*([^[]*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content))) {
+      const text = tidy(m[2]);
+      if (text) verses.push({ book: p.bookName, chapter: p.chapter, verse: Number(m[1]), text });
+    }
+    if (verses.length === 0) {
+      verses.push({ book: p.bookName, chapter: p.chapter, verse: p.verseFrom ?? 1, text: content });
+    }
+
+    return {
+      reference: d.reference || refLabel(p),
+      translation,
+      translationName: translation,
+      copyright: d.copyright,
+      providerId: "youversion",
+      verses,
+      text: content,
+    };
+  },
+  async translations() {
+    const key = yvKey();
+    if (!key) return [];
+    // language_ranges[] is mandatory; omitting it is a 422.
+    const res = await fetch(`${YV_BASE}/bibles?language_ranges[]=eng&page_size=100`, {
+      headers: { "X-YVP-App-Key": key },
+    });
+    if (!res.ok) throw new Error(`YouVersion ${res.status}`);
+    const d = (await res.json()) as {
+      data?: unknown[];
+      bibles?: unknown[];
+    };
+    const rows = (d.data ?? d.bibles ?? []) as {
+      id?: string | number;
+      abbreviation?: string;
+      local_abbreviation?: string;
+      title?: string;
+      name?: string;
+      local_title?: string;
+    }[];
+    return rows
+      .filter((b) => b.id !== undefined)
+      .map((b) => ({
+        id: String(b.id),
+        name:
+          b.title ||
+          b.name ||
+          b.local_title ||
+          b.abbreviation ||
+          b.local_abbreviation ||
+          String(b.id),
+        language: "English",
+      }));
+  },
+};
+
 // ── API.Bible (key: API_BIBLE_KEY) ──────────────────────────────────────────
 // Bible ids look like de4e12af7f28f599-01; passages use OSIS ids (JHN.3.16).
 // Text comes back with [n] verse markers, which are split back into verses.
@@ -512,7 +619,10 @@ const biblia: BibleProvider = {
 
 // Registered providers, most-preferred first. Keyed ones sit out silently until
 // their key is set, so the list never breaks before the secrets land.
-const PROVIDERS: BibleProvider[] = [helloao, apiBible, biblia, bibleApiCom, wldeh];
+// YouVersion first: when its key is set it is the licensed source for the
+// modern translations, and its catalogue is already scoped to what the church
+// is actually approved to read.
+const PROVIDERS: BibleProvider[] = [youversion, helloao, apiBible, biblia, bibleApiCom, wldeh];
 
 /** A translation in the merged list, remembering which provider serves it. */
 export interface MergedTranslation extends Translation {
