@@ -5,6 +5,11 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { visibleModules } from "@/lib/modules";
+import {
+  onDashboardViewChange,
+  readDashboardView,
+  type DashboardView,
+} from "@/lib/dashboard-view";
 import type { Profile } from "@/lib/database.types";
 import { Logo } from "@/components/Logo";
 import { Icon } from "./Icon";
@@ -40,8 +45,24 @@ export function Shell({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  const modules = visibleModules(profile?.role);
+  const allModules = visibleModules(profile?.role);
   const displayName = profile?.full_name || email;
+
+  /**
+   * The sidebar follows the dashboard choice.
+   *
+   * In the simple (grid) view the dashboard IS the navigation — every module is
+   * a button there — so the sidebar drops back to the few places people move
+   * between constantly and stops competing with it. The detailed view keeps the
+   * full menu.
+   */
+  const [dashView, setDashView] = useState<DashboardView>("advanced");
+  useEffect(() => {
+    setDashView(readDashboardView());
+    return onDashboardViewChange(setDashView);
+  }, []);
+  const modules =
+    dashView === "grid" ? allModules.filter((m) => m.core || m.key === "admin") : allModules;
 
   async function signOut() {
     await supabase.auth.signOut();

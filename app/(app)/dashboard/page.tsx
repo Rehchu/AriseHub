@@ -20,6 +20,8 @@ import {
   type LeaderGroup,
   type LeaderAssignment,
 } from "@/components/dashboard/LeaderPanel";
+import { DashboardSwitch } from "@/components/dashboard/DashboardSwitch";
+import { visibleModules } from "@/lib/modules";
 
 // The dashboard used to end with a text strip linking every module. It
 // duplicated navigation that already exists three other ways — the sidebar, the
@@ -275,9 +277,14 @@ export default async function DashboardPage() {
     "border-l border-t border-ink-100 lg:border-t-0",
   ];
 
+  const moduleTiles = visibleModules(me?.role);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <SundayHeading />
+      <DashboardSwitch
+        modules={moduleTiles}
+        greeting={<SundayHeading />}
+        advanced={<>
 
       <div className="mt-6">
         <StatStrip>
@@ -344,7 +351,8 @@ export default async function DashboardPage() {
         <LeaderPanel groups={leaderGroups} assignments={leaderAssignments} />
         <CampusRollup rows={rollup} />
       </div>
-
+        </>}
+      />
     </div>
   );
 }
