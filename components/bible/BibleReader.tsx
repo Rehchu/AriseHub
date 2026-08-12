@@ -169,7 +169,7 @@ export function BibleReader() {
   const current = books.find((b) => b.osis === book);
 
   return (
-    <div className="mx-auto max-w-3xl p-4 lg:p-6">
+    <div className="mx-auto w-full max-w-3xl overflow-x-hidden p-4 lg:p-6">
       <h1 className="mb-1 font-display text-2xl font-bold text-ink-900">Bible</h1>
       <p className="mb-4 text-sm text-ink-500">
         Pick a book and chapter, or type a reference. Tap Simplify for a plain-language
@@ -182,7 +182,7 @@ export function BibleReader() {
           value={book}
           onChange={(e) => goTo(e.target.value, 1)}
           aria-label="Book"
-          className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
+          className="min-w-0 max-w-[45%] rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
         >
           {books.length === 0 && <option value={DEFAULT_BOOK}>John</option>}
           {books.map((b) => (
@@ -195,7 +195,7 @@ export function BibleReader() {
           value={chapter}
           onChange={(e) => goTo(book, Number(e.target.value))}
           aria-label="Chapter"
-          className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
+          className="min-w-0 max-w-[35%] rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
         >
           {Array.from({ length: current?.chapters || 1 }, (_, i) => i + 1).map((c) => (
             <option key={c} value={c}>
@@ -226,7 +226,10 @@ export function BibleReader() {
             void lookup(ref, e.target.value);
           }}
           aria-label="Translation"
-          className="ml-auto max-w-[15rem] rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
+          // Long Bible names are wide. Without min-w-0 / max-w-full the select
+          // takes its intrinsic width from the longest option and pushes the
+          // page sideways on a phone.
+          className="w-full min-w-0 max-w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 sm:ml-auto sm:w-auto sm:max-w-[15rem]"
         >
           {translations.length === 0 && <option value="BSB">Berean Standard Bible</option>}
           {translations.map((t) => (

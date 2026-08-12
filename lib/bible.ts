@@ -419,8 +419,11 @@ const youversion: BibleProvider = {
         : p.verseTo && p.verseTo !== p.verseFrom
           ? `${p.osis}.${p.chapter}.${p.verseFrom}-${p.osis}.${p.chapter}.${p.verseTo}`
           : `${p.osis}.${p.chapter}.${p.verseFrom}`;
+    // HTML, not text: the plain-text form has no verse boundaries at all, so a
+    // whole chapter arrives as one block. The HTML marks each verse with
+    // class="yv-v" v="N", which is what makes numbered verses possible.
     const res = await fetch(
-      `${YV_BASE}/bibles/${encodeURIComponent(translation)}/passages/${usfm}?format=text`,
+      `${YV_BASE}/bibles/${encodeURIComponent(translation)}/passages/${usfm}?format=html`,
       { headers: { "X-YVP-App-Key": key } },
     );
     if (!res.ok) throw new Error(`YouVersion ${res.status}`);
@@ -451,14 +454,32 @@ const youversion: BibleProvider = {
       }
     }
 
-    // Some editions carry [n] verse markers; keep them as verses when present,
-    // otherwise return the passage as one block rather than inventing splits.
+    // Split on the verse markers in the HTML: elements carrying class "yv-v"
+    // and a v="N" attribute. Everything between one marker and the next is that
+    // verse's text. Falls back to [n] markers, then to a single block, so a
+    // format change degrades to readable rather than empty.
     const verses: BibleVerse[] = [];
-    const re = /\[(\d+)\]\s*([^[]*)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(content))) {
-      const text = tidy(m[2]);
-      if (text) verses.push({ book: p.bookName, chapter: p.chapter, verse: Number(m[1]), text });
+    const html = d.content ?? "";
+    const marker = /<[^>]*\bclass="[^"]*\byv-v\b[^"]*"[^>]*\bv="(\d+)"[^>]*>|<[^>]*\bv="(\d+)"[^>]*\bclass="[^"]*\byv-v\b[^"]*"[^>]*>/g;
+    const hits: { verse: number; start: number }[] = [];
+    let mm: RegExpExecArray | null;
+    while ((mm = marker.exec(html))) {
+      hits.push({ verse: Number(mm[1] ?? mm[2]), start: mm.index + mm[0].length });
+    }
+    for (let i = 0; i < hits.length; i++) {
+      const slice = html.slice(hits[i].start, hits[i + 1]?.start ?? html.length);
+      const text = stripHtml(slice);
+      if (text) {
+        verses.push({ book: p.bookName, chapter: p.chapter, verse: hits[i].verse, text });
+      }
+    }
+    if (verses.length === 0) {
+      const re = /\[(\d+)\]\s*([^[]*)/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(content))) {
+        const text = tidy(m[2]);
+        if (text) verses.push({ book: p.bookName, chapter: p.chapter, verse: Number(m[1]), text });
+      }
     }
     if (verses.length === 0) {
       verses.push({ book: p.bookName, chapter: p.chapter, verse: p.verseFrom ?? 1, text: content });
