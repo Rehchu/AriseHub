@@ -42,8 +42,9 @@ export default async function SermonPage({
     supabase.from("sermon_series").select("id, name"),
   ]);
 
+  const seriesRows = (series as { id: string; name: string }[] | null) ?? [];
   const seriesName =
-    (series as { id: string; name: string }[] | null)?.find(
+    seriesRows.find(
       (s) => s.id === (sermon as { series_id: string | null }).series_id,
     )?.name ?? null;
 
@@ -52,6 +53,7 @@ export default async function SermonPage({
       sermon={sermon as Sermon}
       cues={(cues ?? []) as Cue[]}
       seriesName={seriesName}
+      series={seriesRows}
       canManage={canManage}
     />
   );

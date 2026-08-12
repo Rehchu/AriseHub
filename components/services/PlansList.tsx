@@ -124,6 +124,12 @@ export function PlansList({
           >
             My availability
           </a>
+          <a
+            href="/services/archive"
+            className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
+          >
+            Archive
+          </a>
           {canManage && (
             <button
               onClick={() => setCreating((c) => !c)}

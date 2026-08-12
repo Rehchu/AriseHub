@@ -30,11 +30,13 @@ export function SermonDetail({
   sermon,
   cues,
   seriesName,
+  series,
   canManage,
 }: {
   sermon: Sermon;
   cues: Cue[];
   seriesName: string | null;
+  series: { id: string; name: string }[];
   canManage: boolean;
 }) {
   const router = useRouter();
@@ -44,6 +46,7 @@ export function SermonDetail({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [origin, setOrigin] = useState<string | undefined>(undefined);
+  const [editing, setEditing] = useState(false);
 
   // origin has to come from the browser: the embed only accepts commands from
   // the page that declared it.
@@ -103,6 +106,40 @@ export function SermonDetail({
     }
   }
 
+  /**
+   * The details a service plan can't supply.
+   *
+   * Archiving from a plan carries the title, date and campus across, so this is
+   * the rest — the video link above all, since without it there is nothing to
+   * play and nothing for the transcript to seek.
+   */
+  async function saveDetails(form: FormData) {
+    setBusy(true);
+    setMessage(null);
+    const refs = String(form.get("scripture") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const { error } = await supabase
+      .from("sermons")
+      .update({
+        title: String(form.get("title") ?? "").trim() || sermon.title,
+        speaker_name: String(form.get("speaker") ?? "").trim() || null,
+        youtube_url: String(form.get("youtube") ?? "").trim() || null,
+        summary: String(form.get("summary") ?? "").trim() || null,
+        series_id: String(form.get("series") ?? "") || null,
+        scripture_refs: refs,
+      })
+      .eq("id", sermon.id);
+    setBusy(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setEditing(false);
+    router.refresh();
+  }
+
   async function togglePublished() {
     setBusy(true);
     const next = !sermon.published;
@@ -117,12 +154,20 @@ export function SermonDetail({
 
   return (
     <div className="mx-auto w-full max-w-4xl p-4 lg:p-6">
-      <Link href="/sermons" className="text-sm text-ink-500 hover:text-ink-800">
-        ← All sermons
+      <Link href="/services/archive" className="text-sm text-ink-500 hover:text-ink-800">
+        ← Archive
       </Link>
 
       <div className="mt-2 mb-1 flex flex-wrap items-start justify-between gap-2">
         <h1 className="font-display text-2xl font-bold text-ink-900">{sermon.title}</h1>
+        {canManage && (
+          <button
+            onClick={() => setEditing((e) => !e)}
+            className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-700 transition hover:bg-ink-50"
+          >
+            {editing ? "Cancel" : "Edit details"}
+          </button>
+        )}
         {canManage && (
           <button
             onClick={togglePublished}
@@ -172,6 +217,80 @@ export function SermonDetail({
       )}
 
       {sermon.summary && <p className="mt-3 text-sm text-ink-700">{sermon.summary}</p>}
+
+      {canManage && editing && (
+        <form
+          action={saveDetails}
+          className="mt-4 grid gap-3 rounded-xl border border-ink-100 bg-white p-4 sm:grid-cols-2"
+        >
+          <label className="text-sm text-ink-700 sm:col-span-2">
+            YouTube link
+            <input
+              name="youtube"
+              defaultValue={sermon.youtube_url ?? ""}
+              placeholder="https://youtu.be/…"
+              className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-sm text-ink-700">
+            Title
+            <input
+              name="title"
+              defaultValue={sermon.title}
+              className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-sm text-ink-700">
+            Speaker
+            <input
+              name="speaker"
+              defaultValue={sermon.speaker_name ?? ""}
+              className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-sm text-ink-700">
+            Series
+            <select
+              name="series"
+              defaultValue={sermon.series_id ?? ""}
+              className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            >
+              <option value="">None</option>
+              {series.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm text-ink-700">
+            Scripture <span className="text-ink-400">(comma separated)</span>
+            <input
+              name="scripture"
+              defaultValue={(sermon.scripture_refs ?? []).join(", ")}
+              className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-sm text-ink-700 sm:col-span-2">
+            Summary
+            <textarea
+              name="summary"
+              rows={2}
+              defaultValue={sermon.summary ?? ""}
+              className="mt-1 w-full rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent disabled:opacity-50"
+            >
+              {busy ? "Saving…" : "Save details"}
+            </button>
+          </div>
+        </form>
+      )}
 
       {videoId ? (
         <div className="mt-4 overflow-hidden rounded-xl border border-ink-100 bg-black">
