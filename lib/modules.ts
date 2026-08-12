@@ -14,6 +14,7 @@ export type ModuleKey =
   | "tasks"
   | "it"
   | "ideas"
+  | "bible"
   | "admin";
 
 export interface ModuleDef {
@@ -56,6 +57,8 @@ export const MODULES: ModuleDef[] = [
   // everyone else lands on a self-service help page.
   { key: "it", label: "IT Support", href: "/it", icon: "wrench", accent: "#4b5563", ready: true },
   { key: "ideas", label: "Ideas", href: "/ideas", icon: "chart", accent: "#7c3aed", ready: true },
+  // Everyone can read the Bible — no roles gate.
+  { key: "bible", label: "Bible", href: "/bible", icon: "book", accent: "#4f46e5", ready: true },
   // /admin, not /admin/departments: the index routes each role to its own
   // entry page, and prefix-matching on /admin keeps the nav item lit on every
   // admin tab. IT_Admin and Staff belong in the gate — the layout already
