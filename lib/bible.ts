@@ -389,6 +389,18 @@ const yvKey = () =>
 /** Strip any residual markup, in case a response comes back HTML anyway. */
 const stripHtml = (s: string) => tidy(s.replace(/<[^>]*>/g, " "));
 
+/**
+ * Per-version copyright text, remembered from the catalogue.
+ *
+ * The passages endpoint does NOT return copyright, but YouVersion's licence
+ * requires the version's attribution to be shown wherever its text appears — so
+ * it is captured from /bibles and attached to every passage.
+ */
+const yvCopyright = new Map<string, string>();
+
+/** Version id -> human title, so a passage shows "New International Version". */
+const yvTitles = new Map<string, string>();
+
 const youversion: BibleProvider = {
   id: "youversion",
   label: "YouVersion",
@@ -416,10 +428,28 @@ const youversion: BibleProvider = {
       id?: string;
       content?: string;
       reference?: string;
-      copyright?: string;
     };
     const content = stripHtml(d.content ?? "");
     if (!content) throw new Error("No text found for that reference");
+
+    // Licence requirement: show the version's attribution wherever its text is
+    // shown. The passages endpoint omits it, so it comes from the catalogue —
+    // fetched once per version if this instance hasn't seen it yet.
+    let copyright = yvCopyright.get(translation);
+    if (copyright === undefined) {
+      try {
+        const vRes = await fetch(`${YV_BASE}/bibles/${encodeURIComponent(translation)}`, {
+          headers: { "X-YVP-App-Key": key },
+        });
+        if (vRes.ok) {
+          const v = (await vRes.json()) as { copyright?: string; title?: string };
+          copyright = v.copyright || "";
+          yvCopyright.set(translation, copyright);
+        }
+      } catch {
+        // Attribution lookup must not break the reading itself.
+      }
+    }
 
     // Some editions carry [n] verse markers; keep them as verses when present,
     // otherwise return the passage as one block rather than inventing splits.
@@ -437,8 +467,8 @@ const youversion: BibleProvider = {
     return {
       reference: d.reference || refLabel(p),
       translation,
-      translationName: translation,
-      copyright: d.copyright,
+      translationName: yvTitles.get(translation) || translation,
+      copyright: copyright || undefined,
       providerId: "youversion",
       verses,
       text: content,
@@ -447,36 +477,38 @@ const youversion: BibleProvider = {
   async translations() {
     const key = yvKey();
     if (!key) return [];
-    // language_ranges[] is mandatory; omitting it is a 422.
-    const res = await fetch(`${YV_BASE}/bibles?language_ranges[]=eng&page_size=100`, {
-      headers: { "X-YVP-App-Key": key },
-    });
-    if (!res.ok) throw new Error(`YouVersion ${res.status}`);
-    const d = (await res.json()) as {
-      data?: unknown[];
-      bibles?: unknown[];
-    };
-    const rows = (d.data ?? d.bibles ?? []) as {
+    // language_ranges[] is mandatory (a 422 without it). Both the ISO 639-3 and
+    // 2-letter codes are sent because the catalogue tags versions "en" while the
+    // parameter is documented as "eng" — asking for both avoids an empty list.
+    const url =
+      `${YV_BASE}/bibles?language_ranges[]=eng&language_ranges[]=en&page_size=100`;
+    const res = await fetch(url, { headers: { "X-YVP-App-Key": key } });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`YouVersion ${res.status}: ${body.slice(0, 200)}`);
+    }
+    const d = (await res.json()) as { data?: unknown[] };
+    const rows = (d.data ?? []) as {
       id?: string | number;
       abbreviation?: string;
-      local_abbreviation?: string;
+      localized_abbreviation?: string;
       title?: string;
-      name?: string;
-      local_title?: string;
+      localized_title?: string;
+      copyright?: string | null;
+      language_tag?: string;
     }[];
-    return rows
-      .filter((b) => b.id !== undefined)
-      .map((b) => ({
-        id: String(b.id),
-        name:
-          b.title ||
-          b.name ||
-          b.local_title ||
-          b.abbreviation ||
-          b.local_abbreviation ||
-          String(b.id),
-        language: "English",
-      }));
+    const out: Translation[] = [];
+    for (const b of rows) {
+      if (b.id === undefined) continue;
+      const id = String(b.id);
+      const name =
+        b.title || b.localized_title || b.abbreviation || b.localized_abbreviation || id;
+      // Remember attribution + title so passages can carry them.
+      if (b.copyright) yvCopyright.set(id, b.copyright);
+      yvTitles.set(id, name);
+      out.push({ id, name, language: "English" });
+    }
+    return out;
   },
 };
 
@@ -735,6 +767,32 @@ export async function annotationsFor(ref: string): Promise<{ footnotes: Footnote
   } catch {
     return { footnotes: [], from: NOTES_SOURCE.name };
   }
+}
+
+/**
+ * Per-provider health, for when a Bible source silently fails to appear.
+ *
+ * allTranslations() deliberately swallows a provider's error so one bad source
+ * cannot empty the whole list — which is right for readers, but leaves nothing
+ * to debug with. This reports what each provider actually did.
+ */
+export async function providerDiagnostics(): Promise<
+  { id: string; label: string; keyless: boolean; configured: boolean; count: number; error?: string; sample?: string[] }[]
+> {
+  return Promise.all(
+    PROVIDERS.map(async (p) => {
+      const base = { id: p.id, label: p.label, keyless: p.keyless, configured: p.configured() };
+      if (!base.configured) {
+        return { ...base, count: 0, error: "no key set — provider skipped" };
+      }
+      try {
+        const list = await p.translations();
+        return { ...base, count: list.length, sample: list.slice(0, 5).map((t) => `${t.name} [${t.id}]`) };
+      } catch (e) {
+        return { ...base, count: 0, error: e instanceof Error ? e.message : "failed" };
+      }
+    }),
+  );
 }
 
 /** Find the provider that serves a given translation id from the merged list. */
