@@ -519,6 +519,16 @@ export interface MergedTranslation extends Translation {
   providerId: string;
 }
 
+/**
+ * The Bibles to actually offer, by translation id (see BIBLE-LIST.md).
+ *
+ * EMPTY MEANS SHOW EVERYTHING. Fill this in to curate the dropdown down to the
+ * handful the church actually reads — a shorter list is faster to load and far
+ * easier to pick from than 75 entries. Ids that no configured provider serves
+ * are simply ignored, so a stale entry can't break the list.
+ */
+export const ALLOWED_TRANSLATIONS: string[] = [];
+
 /** Normalized key for spotting the same Bible offered by several providers. */
 const dedupeKey = (t: Translation) =>
   (t.name || t.id).toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -540,10 +550,14 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
     }),
   );
 
+  const allow = ALLOWED_TRANSLATIONS.length ? new Set(ALLOWED_TRANSLATIONS) : null;
   const seen = new Set<string>();
   const merged: MergedTranslation[] = [];
   for (const t of lists.flat()) {
-    if (englishOnly && !/english/i.test(t.language ?? "")) continue;
+    if (allow && !allow.has(t.id)) continue;
+    // The allowlist is the deliberate choice, so it overrides the English
+    // filter — a curated entry is never dropped for lacking a language tag.
+    if (!allow && englishOnly && !/english/i.test(t.language ?? "")) continue;
     const k = dedupeKey(t);
     if (seen.has(k)) continue;
     seen.add(k);
