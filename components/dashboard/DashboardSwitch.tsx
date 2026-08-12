@@ -3,7 +3,20 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon } from "@/components/shell/Icon";
-import type { ModuleDef } from "@/lib/modules";
+/**
+ * A module reduced to what a button needs.
+ *
+ * Deliberately NOT ModuleDef: that carries `showIf`, a function, and functions
+ * cannot cross the server/client boundary — passing one renders fine in the
+ * build and then fails at request time.
+ */
+export interface ModuleTile {
+  key: string;
+  label: string;
+  href: string;
+  icon: string;
+  accent: string;
+}
 import {
   onDashboardViewChange,
   readDashboardView,
@@ -28,7 +41,7 @@ export function DashboardSwitch({
   advanced,
   greeting,
 }: {
-  modules: ModuleDef[];
+  modules: ModuleTile[];
   advanced: React.ReactNode;
   greeting: React.ReactNode;
 }) {
@@ -73,8 +86,8 @@ export function DashboardSwitch({
   );
 }
 
-function ModuleGrid({ modules }: { modules: ModuleDef[] }) {
-  const tiles = modules.filter((m) => m.key !== "dashboard" && m.ready);
+function ModuleGrid({ modules }: { modules: ModuleTile[] }) {
+  const tiles = modules.filter((m) => m.key !== "dashboard");
   return (
     <nav aria-label="Modules" className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
       {tiles.map((m) => (

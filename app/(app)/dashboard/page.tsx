@@ -277,7 +277,11 @@ export default async function DashboardPage() {
     "border-l border-t border-ink-100 lg:border-t-0",
   ];
 
-  const moduleTiles = visibleModules(me?.role);
+  // Plain objects only: ModuleDef carries showIf (a function), which cannot be
+  // serialised to a client component.
+  const moduleTiles = visibleModules(me?.role)
+    .filter((m) => m.ready)
+    .map((m) => ({ key: m.key, label: m.label, href: m.href, icon: m.icon, accent: m.accent }));
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
