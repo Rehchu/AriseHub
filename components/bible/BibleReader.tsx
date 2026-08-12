@@ -5,7 +5,7 @@ import { Icon } from "@/components/shell/Icon";
 import type { Passage, Translation } from "@/lib/bible";
 
 const DEFAULT_REF = "John 3:16-17";
-const DEFAULT_TRANSLATION = "web";
+const DEFAULT_TRANSLATION = "BSB"; // Berean Standard Bible (keyless, modern)
 
 export function BibleReader() {
   const [ref, setRef] = useState(DEFAULT_REF);
@@ -104,7 +104,7 @@ export function BibleReader() {
           aria-label="Translation"
           className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
         >
-          {translations.length === 0 && <option value="web">World English Bible</option>}
+          {translations.length === 0 && <option value="BSB">Berean Standard Bible</option>}
           {translations.map((t) => (
             <option key={t.id} value={t.id}>
               {t.name}

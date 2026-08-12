@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getProvider } from "@/lib/bible";
+import { getProvider, providerForTranslation } from "@/lib/bible";
 
 // GET /api/bible/passage?ref=John+3:16&translation=web&provider=bible-api
 //
@@ -21,7 +21,11 @@ export async function GET(req: NextRequest) {
   const providerId = searchParams.get("provider");
 
   try {
-    const provider = getProvider(providerId);
+    // The reader sends a Bible, not a provider — look up whichever provider
+    // serves that translation and use it.
+    const provider =
+      (translation ? await providerForTranslation(translation) : null) ??
+      getProvider(providerId);
     const passage = await provider.getPassage(ref, translation);
     return NextResponse.json(passage);
   } catch (e) {
