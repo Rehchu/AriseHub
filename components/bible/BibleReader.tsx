@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/shell/Icon";
-import type { BookInfo, Passage, Translation } from "@/lib/bible";
+import type { BookInfo, MergedTranslation, Passage } from "@/lib/bible";
 
 const DEFAULT_TRANSLATION = "BSB"; // Berean Standard Bible (keyless, modern)
 const DEFAULT_BOOK = "JHN";
@@ -14,7 +14,7 @@ export function BibleReader() {
   const [chapter, setChapter] = useState(DEFAULT_CHAPTER);
   const [ref, setRef] = useState("John 3");
   const [translation, setTranslation] = useState(DEFAULT_TRANSLATION);
-  const [translations, setTranslations] = useState<Translation[]>([]);
+  const [translations, setTranslations] = useState<MergedTranslation[]>([]);
   const [passage, setPassage] = useState<Passage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +46,7 @@ export function BibleReader() {
       .then((r) => r.json())
       .then((d) => {
         if (!Array.isArray(d.translations) || d.translations.length === 0) return;
-        const list = d.translations as Translation[];
+        const list = d.translations as MergedTranslation[];
         setTranslations(list);
         // The default id isn't guaranteed to survive de-duplication across
         // providers. If it's missing, a <select> silently displays its first
@@ -236,7 +236,9 @@ export function BibleReader() {
           {translations.length === 0 && <option value="BSB">Berean Standard Bible</option>}
           {translations.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.name}
+              {/* Very few Bibles have recordings, so mark the ones that do —
+                  otherwise a listener has no way to find them. */}
+              {t.hasAudio ? `${t.name} 🎧` : t.name}
             </option>
           ))}
         </select>

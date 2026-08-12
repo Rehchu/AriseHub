@@ -715,7 +715,22 @@ const PROVIDERS: BibleProvider[] = [youversion, helloao, apiBible, biblia, bible
 /** A translation in the merged list, remembering which provider serves it. */
 export interface MergedTranslation extends Translation {
   providerId: string;
+  /** Has narrated chapter recordings — surfaced so listeners can find them. */
+  hasAudio?: boolean;
 }
+
+/**
+ * Translations known to publish narrated audio.
+ *
+ * A snapshot, not a live check: the catalogue endpoints don't report audio, so
+ * knowing would otherwise mean probing a chapter of all 50+ English Bibles on
+ * every page load. Only two of 53 carry recordings today, which is exactly why
+ * they need flagging — nobody would find them by scrolling.
+ *
+ * To refresh: fetch /api/{id}/JHN/1.json for each translation and keep the ones
+ * with a non-empty thisChapterAudioLinks.
+ */
+const AUDIO_TRANSLATIONS = new Set(["BSB", "AAB"]);
 
 /**
  * The Bibles to actually offer, by translation id (see BIBLE-LIST.md).
@@ -759,7 +774,7 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
     const k = dedupeKey(t);
     if (seen.has(k)) continue;
     seen.add(k);
-    merged.push(t);
+    merged.push(AUDIO_TRANSLATIONS.has(t.id) ? { ...t, hasAudio: true } : t);
   }
   return merged.sort((a, b) => a.name.localeCompare(b.name));
 }
