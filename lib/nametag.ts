@@ -25,12 +25,34 @@ export interface NameTagOptions {
    */
   printHere: boolean;
   /**
-   * When on, this device polls every few seconds for check-ins that have no
-   * badge yet (from self-service tablets) and prints them — once each. Only
-   * meaningful on the printer station (printHere). Off by default; you turn it
-   * on at the one computer by the DYMO.
+   * When on, this device polls for check-ins that have no badge yet (from
+   * self-service tablets) and prints them — once each. Only meaningful on the
+   * printer station (printHere). Off by default; you turn it on at the one
+   * computer by the DYMO.
    */
   autoPrint: boolean;
+  /**
+   * How often (ms) the auto-print station polls for un-badged check-ins. Lower
+   * makes a badge print sooner after a tablet check-in; too low just hammers the
+   * database for no real gain. Per device, clamped to
+   * [AUTO_PRINT_MIN_MS, AUTO_PRINT_MAX_MS]. Only used when autoPrint is on.
+   */
+  autoPrintIntervalMs: number;
+}
+
+// Bounds for the auto-print poll. The floor keeps a fast station from hammering
+// Supabase; the ceiling keeps "automatic" actually feeling automatic. The delay
+// a parent sees is on average half the interval (the badge prints on the next
+// tick after check-in), so 3s ≈ a ~1.5s typical wait, down from ~3s at 6s.
+export const AUTO_PRINT_MIN_MS = 2000;
+export const AUTO_PRINT_MAX_MS = 15000;
+export const AUTO_PRINT_DEFAULT_MS = 3000;
+
+/** Clamp a stored/typed interval into the safe range, defaulting when unset. */
+export function clampAutoPrintInterval(ms: number | undefined | null): number {
+  const n = Number(ms);
+  if (!Number.isFinite(n)) return AUTO_PRINT_DEFAULT_MS;
+  return Math.min(AUTO_PRINT_MAX_MS, Math.max(AUTO_PRINT_MIN_MS, Math.round(n)));
 }
 
 export const DEFAULT_TAG_OPTIONS: NameTagOptions = {
@@ -44,6 +66,7 @@ export const DEFAULT_TAG_OPTIONS: NameTagOptions = {
   fontScale: 1,
   printHere: true,
   autoPrint: false,
+  autoPrintIntervalMs: AUTO_PRINT_DEFAULT_MS,
 };
 
 export interface NameTagData {

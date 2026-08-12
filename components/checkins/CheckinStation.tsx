@@ -7,6 +7,7 @@ import { Icon } from "@/components/shell/Icon";
 import {
   printNameTag,
   DEFAULT_TAG_OPTIONS,
+  clampAutoPrintInterval,
   type NameTagData,
   type NameTagOptions,
 } from "@/lib/nametag";
@@ -343,14 +344,14 @@ export function CheckinStation({
       }
     };
 
-    const iv = setInterval(tick, 6000);
+    const iv = setInterval(tick, clampAutoPrintInterval(tagOpts.autoPrintIntervalMs));
     void tick();
     return () => {
       alive = false;
       clearInterval(iv);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kiosk, tagOpts.printHere, tagOpts.autoPrint, supabase, rooms, templates, printer, printGuardianTag]);
+  }, [kiosk, tagOpts.printHere, tagOpts.autoPrint, tagOpts.autoPrintIntervalMs, supabase, rooms, templates, printer, printGuardianTag]);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -968,6 +969,33 @@ export function CheckinStation({
                   has to tap print.
                 </span>
               </span>
+            </label>
+          )}
+
+          {tagOpts.printHere && tagOpts.autoPrint && (
+            <label className="mb-3 flex items-start gap-3 rounded-lg border border-ink-100 bg-ink-50 px-3 py-2.5 text-sm text-ink-800">
+              <span className="flex-1">
+                How quickly auto-print checks for new badges
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  Lower prints a badge sooner after a tablet check-in. Very low
+                  just polls the database harder for little gain — 3 seconds is a
+                  good balance. Tune on-site.
+                </span>
+              </span>
+              <select
+                className="mt-0.5 shrink-0 rounded-md border border-ink-300 bg-ink-50 px-2 py-1 text-sm text-ink-800"
+                value={clampAutoPrintInterval(tagOpts.autoPrintIntervalMs)}
+                onChange={(e) =>
+                  updateTagOpts({ autoPrintIntervalMs: Number(e.target.value) })
+                }
+              >
+                <option value={2000}>2 seconds</option>
+                <option value={3000}>3 seconds</option>
+                <option value={4000}>4 seconds</option>
+                <option value={6000}>6 seconds</option>
+                <option value={8000}>8 seconds</option>
+                <option value={10000}>10 seconds</option>
+              </select>
             </label>
           )}
 
