@@ -33,6 +33,7 @@ public/__probe.*
 # real member names and faces, and the .pptx embeds them. Regenerate the decks with
 # tools/build-deck.mjs and tools/build-leadership-deck.mjs.
 /*.pptx
+/*.pdf
 /tools/deck-shots/
 
 # Print agent TLS material — a private key, generated per machine.
