@@ -24,6 +24,8 @@ export function BibleReader() {
   /** Which narrator's recording is selected, when a chapter has several. */
   const [narrator, setNarrator] = useState(0);
   const booksRef = useRef<BookInfo[]>([]);
+  /** Monotonic id per lookup, so a stale response cannot win. */
+  const lookupSeq = useRef(0);
   // The translation-load effect runs once, so it needs the live reference
   // rather than the value captured at mount.
   const refRef = useRef("John 3");
@@ -72,6 +74,12 @@ export function BibleReader() {
   const lookup = useCallback(async (r: string, t: string) => {
     const q = r.trim();
     if (!q) return;
+    // Two lookups can be in flight at once — the one fired on mount, and the
+    // one fired when the default translation turns out not to be in the list.
+    // Without this the slower response wins, which showed a "this Bible doesn't
+    // include that passage" error sitting above the passage it had just
+    // successfully loaded.
+    const seq = ++lookupSeq.current;
     setLoading(true);
     setError(null);
     setParaphrase(null);
@@ -81,6 +89,7 @@ export function BibleReader() {
         `/api/bible/passage?ref=${encodeURIComponent(q)}&translation=${encodeURIComponent(t)}`,
       );
       const d = await res.json();
+      if (seq !== lookupSeq.current) return; // a newer lookup already ran
       if (!res.ok) throw new Error(d.error || "Couldn't find that passage");
       const p = d as Passage;
       setPassage(p);
@@ -97,10 +106,11 @@ export function BibleReader() {
         }
       }
     } catch (e) {
+      if (seq !== lookupSeq.current) return;
       setPassage(null);
       setError(e instanceof Error ? e.message : "Lookup failed");
     } finally {
-      setLoading(false);
+      if (seq === lookupSeq.current) setLoading(false);
     }
   }, []);
 
