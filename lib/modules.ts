@@ -19,6 +19,7 @@ export type ModuleKey =
   | "announcements"
   | "prayer"
   | "followup"
+  | "maintenance"
   | "admin";
 
 export interface ModuleDef {
@@ -71,6 +72,8 @@ export const MODULES: ModuleDef[] = [
   { key: "prayer", label: "Prayer", href: "/prayer", icon: "heart", accent: "#be123c", ready: true },
   // Contact details and who has gone quiet — leads and staff, not everyone.
   { key: "followup", label: "Follow-up", href: "/followup", icon: "users", accent: "#0d9488", ready: true, roles: ["Super_Admin", "Staff"] },
+  // Anyone can report something broken; RLS shows them only their own.
+  { key: "maintenance", label: "Maintenance", href: "/maintenance", icon: "wrench", accent: "#78350f", ready: true },
   // /admin, not /admin/departments: the index routes each role to its own
   // entry page, and prefix-matching on /admin keeps the nav item lit on every
   // admin tab. IT_Admin and Staff belong in the gate — the layout already
