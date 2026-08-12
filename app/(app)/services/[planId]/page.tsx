@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { PlanDetail, type Item, type Assignment } from "@/components/services/PlanDetail";
+import { ServiceNotes, type ServiceNote } from "@/components/services/ServiceNotes";
 import type { Blockout, ServingPattern } from "@/lib/availability";
 
 export default async function PlanPage({
@@ -79,7 +80,18 @@ export default async function PlanPage({
     assignee: Array.isArray(a.assignee) ? (a.assignee[0] ?? null) : a.assignee,
   }));
 
+  // One note per plan for now: the handoff is "what is going on screen this
+  // Sunday", not a per-person notebook.
+  const { data: noteRow } = await supabase
+    .from("service_notes")
+    .select("*")
+    .eq("plan_id", planId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
+    <>
     <PlanDetail
       plan={plan as unknown as { id: string; title: string; service_date: string; notes: string | null }}
       departmentName={departmentName}
@@ -93,5 +105,15 @@ export default async function PlanPage({
       patterns={(patterns ?? []) as ServingPattern[]}
       alreadyServing={alreadyServing}
     />
+    <div className="mx-auto max-w-3xl px-4 pb-8 sm:px-6">
+      <ServiceNotes
+        planId={planId}
+        planTitle={(plan as unknown as { title: string }).title}
+        initial={(noteRow ?? null) as ServiceNote | null}
+        canManage={canManage}
+        currentProfileId={profileId}
+      />
+    </div>
+    </>
   );
 }
