@@ -57,8 +57,44 @@ function slide(color = BG) {
   return s;
 }
 
+/**
+ * Speaker notes.
+ *
+ * The slides carry headlines; these carry what to actually say, so nobody has
+ * to stand there reading the screen aloud. They print in PowerPoint's presenter
+ * view and under File → Print → Notes Pages.
+ */
+function speak(s, text) {
+  s.addNotes(text.trim());
+  return s;
+}
+
+/**
+ * Every slide, by its title.
+ *
+ * Notes are attached at the END of this script rather than inline in each
+ * block: threading a call through thirty-odd blocks is easy to get wrong and
+ * hard to read, and a note that silently fails to attach is worse than none.
+ */
+const BY_TITLE = new Map();
+
+/** Attach the notes written at the bottom of this file. */
+function applyNotes(notes) {
+  const missing = [];
+  for (const [title, text] of Object.entries(notes)) {
+    const s = BY_TITLE.get(title);
+    if (!s) {
+      missing.push(title);
+      continue;
+    }
+    speak(s, text);
+  }
+  return missing;
+}
+
 /** Content-slide header: kicker + title + accent rule. */
 function head(s, title, kicker) {
+  BY_TITLE.set(title, s);
   if (kicker) {
     s.addText(kicker.toUpperCase(), {
       x: 0.7, y: 0.5, w: 12, h: 0.3, fontFace: "Arial",
@@ -234,6 +270,7 @@ function para(s, text, box, opts = {}) {
 /* ═══════════════ SECTION DIVIDER — designed so it reads as finished */
 function section(title, subtitle, num) {
   const s = slide(BG);
+  BY_TITLE.set(title, s);
   s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.22, h: H, fill: { color: REDDEEP } });
   s.addShape(pptx.ShapeType.rect, { x: 0.22, y: 0, w: 0.06, h: H, fill: { color: BLUR } });
   // Big ghosted section number, a watermark just above the background.
@@ -508,6 +545,123 @@ section("Administration & insight", "Configure the church; see how it's doing", 
   );
 }
 
+/* ═══════════════════════════════ SECTION: BIBLE & ARCHIVE */
+section("The Bible and the archive", "Study during the week; catch up on any Sunday", "7");
+
+/** A grid of titled cards — used where there is no screenshot to show. */
+function cardGrid(s, items, opts = {}) {
+  const cols = opts.cols ?? 2;
+  const w = cols === 2 ? 5.9 : 3.85;
+  const gap = 0.35;
+  items.forEach((it, i) => {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = 0.7 + col * (w + gap);
+    const y = (opts.y ?? 1.85) + row * (opts.h ?? 1.62);
+    s.addShape(pptx.ShapeType.roundRect, {
+      x, y, w, h: (opts.h ?? 1.62) - 0.16,
+      fill: { color: PANEL },
+      line: { color: opts.accent ?? LINE, width: 1 },
+      rectRadius: 0.06,
+    });
+    s.addText(it[0], {
+      x: x + 0.22, y: y + 0.14, w: w - 0.44, h: 0.35,
+      fontSize: 13, bold: true, color: opts.titleColor ?? WHITE, fontFace: "Arial", fit: "shrink",
+    });
+    s.addText(it[1], {
+      x: x + 0.22, y: y + 0.52, w: w - 0.44, h: (opts.h ?? 1.62) - 0.74,
+      fontSize: 10.5, color: BODY, lineSpacingMultiple: 1.1, fontFace: "Arial", fit: "shrink",
+    });
+  });
+}
+
+{
+  const s = slide(BG);
+  head(s, "A Bible built into the app", "Bible");
+  cardGrid(s, [
+    ["Every translation in one list", "Six sources behind one menu — the licensed modern translations the church already reads, plus the classics. You pick a Bible, not a provider."],
+    ["Study notes on any translation", "The scholarly footnotes that usually only come with one Bible are shown alongside whichever you're reading, and labelled where they came from."],
+    ["Read it aloud", "Narrated chapters for the Bibles that publish them — for the car, or for anyone who finds reading hard."],
+    ["Plain language on demand", "A 'Simplify' button restates a passage in everyday English, always shown beside the real verse and never presented as scripture."],
+    ["Built for finding things", "Jump by book and chapter, type a reference, or copy a passage with its reference ready to paste into notes."],
+    ["Costs nothing", "Public-domain sources are free; the licensed ones come through the church's own YouVersion key."],
+  ]);
+  speak(s, `
+This is new since you last saw AriseHub. It is a full Bible, in the app, on everyone's phone.
+
+The thing worth stressing: we are not showing one translation. Six different sources sit behind a single menu, including the licensed modern translations through our own YouVersion account — so it is legal, and it is the wording people actually read.
+
+Two touches I would point at. First, study notes: normally those come with one particular Bible. We show them next to whatever you're reading, and we say where they came from, so nobody mistakes a footnote for scripture. Second, Simplify — it puts a passage into plain English for anyone who finds the older wording hard going. It always sits beside the real verse, clearly marked as an explanation, never as the Bible itself. That line matters and we hold it firmly.
+
+If someone asks about cost: nothing. The free sources are public domain, and the licensed ones come through our own key.`);
+}
+
+{
+  const s = slide(BG);
+  head(s, "Every service, kept", "Sermon archive");
+  cardGrid(s, [
+    ["Searchable by anything", "Date, speaker, series or scripture — and the words of the message itself, once a transcript is uploaded."],
+    ["The video, in the app", "Links the YouTube upload we already make. No second video library to maintain."],
+    ["Transcript that jumps", "Tap any line and the video moves to the moment it was said. Search inside a message for the bit you half-remember."],
+    ["Slides become a download", "The Proclaim export is trimmed to the message and turned into a PowerPoint people can view in the app or download."],
+    ["Slides follow the video", "One pass marking where each slide went up, and afterwards the slides advance by themselves as the message plays."],
+    ["Nothing goes public by accident", "Everything starts as a draft; only staff see it until it is deliberately published."],
+  ]);
+  speak(s, `
+The archive answers a question we get constantly: "where's that message about…?"
+
+Everything is searchable — date, speaker, series, scripture. And once we upload the captions file, the words of the sermon themselves become searchable. Somebody can find the two minutes they were thinking of, not just the right Sunday.
+
+The transcript is clickable. Tap a line and the video jumps to that moment. That is the piece people react to.
+
+We also take the Proclaim slides. You print the presentation to PDF as usual, upload it, and pick the pages that were actually the message — the countdown and announcements stay out. It becomes a PowerPoint anyone can view in the app or download.
+
+One honest note: this is built and working, but it has not yet run against a real Sunday's files. That is the next thing to try, not something to promise from the platform today.`);
+}
+
+/* ═══════════════════════════════ SECTION: CARE & UPKEEP */
+section("Looking after people and the building", "The quiet work between Sundays", "8");
+
+{
+  const s = slide(BG);
+  head(s, "Nobody slips through", "Follow-up & prayer");
+  cardGrid(s, [
+    ["A real follow-up pipeline", "First visit → contacted → in a group → serving → member, with a name against every stage. Not a list of guests — a list of who is doing what next."],
+    ["It nags when things stall", "A card sitting too long in one stage is pulled to the top. The ones that go quiet are exactly the ones that get missed."],
+    ["“We haven't seen them”, automatically", "Each week it flags people who attended regularly and have stopped. One tap turns that into a follow-up with someone's name on it."],
+    ["Prayer requests", "Anyone can ask; it goes to the prayer team and nobody else. Sharing with the church is a deliberate choice, off by default."],
+  ]);
+  speak(s, `
+This is the part most church software leaves half-done. Planning Center and Elvanto will tell you a guest visited. They will not tell you who is calling them on Tuesday.
+
+The pipeline has a person's name at every stage, and it pushes stalled cards to the top — because the ones that go quiet are precisely the ones that get forgotten.
+
+The drop-off alert is the piece I would highlight. Every week it looks at who attended regularly and has stopped, and flags them. That is the family that used to be here every Sunday and quietly hasn't been for a month. One tap and it becomes a follow-up with someone responsible.
+
+Prayer requests are deliberately simple: they go to the prayer team and nobody else. Staff do not get blanket access — a prayer request is not administrative data. Sharing more widely is a choice the person makes, and it is off by default.`);
+}
+
+{
+  const s = slide(BG);
+  head(s, "Sunday runs on paper and people", "Services & upkeep");
+  cardGrid(s, [
+    ["Notes to the Media team", "Ministers write what they want on screen; Media see it and mark it into Proclaim. The deadline is a nudge, never a lock — late additions are flagged, not blocked."],
+    ["Printable run sheet", "The order of service with the running clock and who's on, laid out for the desk and the stage. Available to everyone serving, not just staff."],
+    ["Announcements with approval", "Ministry leaders ask; an approver decides. Approved ones show in the app and go on the list for the weekend slides."],
+    ["Maintenance requests", "Something broken? Three fields and a photo. It lands in the maintenance team's chat and on their phones."],
+  ]);
+  speak(s, `
+Four small things that take real friction out of a week.
+
+Service notes: the minister writes what they want on screen, and Media see it in one place instead of chasing texts on Saturday night. Deliberately, the deadline never locks anything — if something comes to you last minute it still goes through; it is just flagged so Media notice rather than discover it Sunday morning.
+
+The run sheet prints. That sounds trivial until you are at the sound desk with a phone that keeps sleeping.
+
+Maintenance is the newest. Bradly's own point shaped it: people usually just tell the maintenance team directly at church. So the form is three fields and a photo, and there is a "someone told me about this" option — so when a volunteer mentions the broken door, whoever was told can log it in twenty seconds instead of it evaporating. It arrives in the maintenance team's chat and on their phones, where they already talk.
+
+For that one to work, the maintenance people do need to be added to the Maintenance department in the app. That is a two-minute job and worth mentioning.`);
+}
+
 /* ═══════════════════════════════════════ EVERY FEATURE (matrix) */
 {
   const s = slide(BG);
@@ -515,15 +669,15 @@ section("Administration & insight", "Configure the church; see how it's doing", 
   const columns = [
     [
       ["Children's check-in", ["Staffed desk + kiosk mode", "Guardian pickup codes", "Pickup verification", "Allergy flags + details", "Age-based room assignment", "Name-tag designer", "DYMO + network printing", "Auto-print new check-ins", "Offline check-in queue", "Tablet lockdown + PIN", "Auto-checkout rules", "Family registration"]],
-      ["Services & scheduling", ["Service plans + running clock", "Song library with keys", "Volunteer scheduling", "Calendar & by-person views", "Availability & blockouts", "Accept / decline + notify"]],
+      ["Services & scheduling", ["Service plans + running clock", "Song library with keys", "Volunteer scheduling", "Calendar & by-person views", "Availability & blockouts", "Accept / decline + notify", "Printable run sheet", "Notes handoff to Media"]],
     ],
     [
-      ["People & membership", ["Church directory", "Roles & title hierarchy", "Departments & campuses", "Invite-link self-registration", "Email-verified onboarding", "Elvanto sync", "Custom fields"]],
-      ["Communication", ["Department group chats", "Direct messages", "IT support threads", "Attachments (access-revoking)", "Web push (iOS relay)", "Per-device delivery status", "Broadcast test"]],
+      ["People & membership", ["Church directory", "Roles & title hierarchy", "Departments & campuses", "Invite-link self-registration", "Email-verified onboarding", "Elvanto sync", "Custom fields", "Follow-up pipeline", "Drop-off alerts"]],
+      ["Communication", ["Department group chats", "Direct messages", "IT support threads", "Attachments (access-revoking)", "Web push (iOS relay)", "Per-device delivery status", "Announcements + approval", "Prayer requests"]],
     ],
     [
-      ["Groups, events & forms", ["Small groups", "Attendance tracking", "Church calendar", "Event requests & approvals", "Room booking (no double-book)", "Form builder + public forms", "Tasks", "Idea board with voting", "Reports & trends"]],
-      ["IT operations & platform", ["IT ticketing (helpdesk)", "Asset & license tracking", "Wi-Fi & password vault", "Ticket status emails", "Audit log", "Row-level security throughout", "Dark / light, mobile-first PWA", "Self-hosted, own the data"]],
+      ["Bible & sermon archive", ["Bible reader, 6 sources", "Licensed translations", "Study notes on any Bible", "Narrated audio", "Plain-language Simplify", "Searchable sermon archive", "Slides → PowerPoint", "Transcript with video sync"]],
+      ["Operations & platform", ["IT ticketing (helpdesk)", "Maintenance requests", "Asset & license tracking", "Wi-Fi & password vault", "Audit log", "Row-level security throughout", "Simple or detailed dashboard", "Self-hosted, own the data"]],
     ],
   ];
   const colW = 3.95;
@@ -672,6 +826,9 @@ section("Administration & insight", "Configure the church; see how it's doing", 
   const s = slide(BG);
   s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.22, h: H, fill: { color: REDDEEP } });
   s.addShape(pptx.ShapeType.rect, { x: 0.22, y: 0, w: 0.06, h: H, fill: { color: BLUR } });
+  // Registered by hand: this slide builds its own title rather than using
+  // head(), so it would otherwise never receive its speaker notes.
+  BY_TITLE.set("Where it stands today", s);
   s.addText("Where it stands today", { x: 0.9, y: 1.7, w: 11, h: 0.7, fontSize: 34, bold: true, color: WHITE, fontFace: "Arial" });
   bullets(
     s,
@@ -688,6 +845,113 @@ section("Administration & insight", "Configure the church; see how it's doing", 
   s.addText("AriseHub — built for Arise, owned by Arise.", {
     x: 0.95, y: 6.45, w: 11, h: 0.4, fontSize: 15, bold: true, italic: true, color: RED, fontFace: "Arial",
   });
+}
+
+/* ═══════════════════════════════════════════════ SPEAKER NOTES */
+// What to SAY, not what is on the slide. These print in presenter view and via
+// File → Print → Notes Pages, so nobody has to read the screen aloud.
+const missingNotes = applyNotes({
+  "What AriseHub is": `
+The one idea to land: it is ONE app, not a suite of separate tools.
+
+The same login runs children's check-in, the volunteer rota, the directory, communication and the church's IT. Nobody is juggling four systems or four passwords.
+
+The last card is the one nobody else has — the church's own IT: help-desk tickets, equipment, licences, Wi-Fi passwords. Flag it now; you come back to it later as the thing that genuinely sets this apart.`,
+
+  "Why we built it, rather than bought it": `
+Answer the obvious question before it is asked: why build instead of buy?
+
+Fit and cost. It matches how Arise actually runs a Sunday, and it doesn't charge per person or per campus, so the bill doesn't grow as the church does.
+
+Then put the panel on the right into your own words. Planning Center and Elvanto are companies with support teams and a decade of polish; we are not pretending otherwise. We traded that for fit, ownership and zero cost — and this deck is honest about both sides. Saying that yourself, before anyone else does, is worth more than any feature slide.`,
+
+  "One home for the whole weekend": `
+This is what everyone sees when they open the app.
+
+The next service and how staffed it is, replies still outstanding, who has checked in today, open IT tickets — and recent conversation underneath.
+
+Worth mentioning: there are two versions of this screen. A simple grid of buttons for anyone who just wants to get somewhere, and this detailed view. Each person picks, on each device.`,
+
+  "A staffed check-in station": `
+The most important screen in the platform, so slow down here.
+
+Every child gets a unique pickup code. The allergy flag prints on the badge automatically — the volunteer holding a snack box can see it without asking anyone.
+
+The line that matters most: it works offline. Church Wi-Fi drops. Check-ins queue on the device and sync when it returns, so nobody is standing at a desk with thirty children in line and a spinning wheel.`,
+
+  "Safeguarding is built in, not bolted on": `
+Release verification is the heart of this. The station names who collected each child, or records why it was released otherwise. That is the bit that matters if anything is ever questioned.
+
+Tablet lockdown keeps a lobby device on the check-in page, with a PIN to leave.
+
+Be straight about the limit: this locks the app, not the tablet. For a device left unattended we also turn on the iPad or Android setting that stops someone swiping away. Saying that shows we've thought it through rather than oversold it.`,
+
+  "Security — because it holds children's records": `
+Do not rush this slide. It earns trust with anyone cautious.
+
+In plain words: the database itself enforces who can see what — not just the screens. Even if somebody got round the app, the data would not come back.
+
+Children's information is tightest of all. Dates of birth, allergies and medical notes are shut off from the whole church and opened only to the check-in role.
+
+Every guardian change, role change and pickup override is recorded permanently — who, and when.
+
+And "verified, not assumed": 217 automated tests, 99 of which sign in as each role and prove somebody in that role genuinely cannot see what they shouldn't.`,
+
+  "AriseHub vs Planning Center vs Elvanto": `
+Walk the rows, don't read them.
+
+Three to draw out: cost — nothing, versus roughly $313 a month for Planning Center at our size. IT help-desk — the only one of the three that has it. Data ownership — ours, not rented.
+
+Be straight about the two amber rows: no giving module, and support is in-house rather than a company. Both are real, and both come up on the next slides.
+
+Check these prices before the meeting — vendors change them.`,
+
+  "Where AriseHub wins": `
+Keep this brisk — the room believes most of it by now.
+
+The two to say out loud: it costs nothing and never scales with our size, and changes ship the same day they're asked for. A request on Sunday can be live by Sunday. No support ticket, no roadmap voting.`,
+
+  "Where the others win — the honest read": `
+Deliver this as confidently as the good news. It is what makes the rest believable.
+
+No giving module — the next slide shows that costs nothing to solve.
+
+Support is one team, not a company. Fine day to day, thinner if that person is unavailable. Say it plainly.
+
+It is younger and less battle-tested than software used by thousands of churches. Simply true.
+
+Then read the red box as written: Planning Center and Elvanto are companies. AriseHub is us. That is the strength and the risk in one sentence. Let it sit before moving on.`,
+
+  "What it costs": `
+The numbers do the work.
+
+Zero, versus roughly $3,750 a year for Planning Center, or $1,400 for Elvanto.
+
+Then close the one real gap: Tithe.ly gives away online giving free — unlimited donations, the app, recurring gifts, year-end tax statements. AriseHub for ministry and IT, Tithe.ly for giving, and the whole comparison is covered at nothing a month.
+
+If asked what it does cost to run: hosting and the database both sit inside free tiers at our size.`,
+
+  "Everything in one platform": `
+Don't read this list. Let it sit while you say: "this is everything, on one screen, so you can see the shape of it."
+
+Then pick two or three the room cares about and speak to those. For most leadership meetings that is children's check-in, the follow-up pipeline, and the IT column.
+
+If somebody wants the detail, the deck is theirs afterwards.`,
+
+  "Where it stands today": `
+Land three things and stop.
+
+It is live and in use today — this is not a proposal for something to be built.
+
+It is secured properly and tested, and we own the data outright.
+
+It costs nothing to run, so the money stays with ministry.
+
+Then be specific about what you want from the room. If that is approval to roll the newer modules out church-wide, ask for it plainly. If it is a decision on giving, ask for that. Don't end on "any questions?" — end on the thing you need decided.`,
+});
+
+if (missingNotes.length) {
+  console.log(`No slide matched these notes: ${missingNotes.join(" | ")}`);
 }
 
 const out = path.join(process.cwd(), "AriseHub-Leadership-Presentation.pptx");
