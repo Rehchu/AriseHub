@@ -771,14 +771,47 @@ export interface MergedTranslation extends Translation {
 const AUDIO_TRANSLATIONS = new Set(["BSB", "AAB"]);
 
 /**
- * The Bibles to actually offer, by translation id (see BIBLE-LIST.md).
+ * Which of the FREE Bibles to offer.
  *
- * EMPTY MEANS SHOW EVERYTHING. Fill this in to curate the dropdown down to the
- * handful the church actually reads — a shorter list is faster to load and far
- * easier to pick from than 75 entries. Ids that no configured provider serves
- * are simply ignored, so a stale entry can't break the list.
+ * The keyless sources between them carry 75 English "translations", but most are
+ * near-identical editions of the same text (five World English Bibles, four
+ * Septuagints, three ASVs) or are made for specific communities rather than this
+ * church. Scrolling that to find the KJV is worse than having fewer choices.
+ *
+ * Curation applies ONLY to keyless providers. Anything from a keyed provider —
+ * YouVersion, API.Bible, Biblia — is always kept: those were licensed
+ * deliberately, and their ids can't be listed here in advance anyway, so a
+ * blanket allowlist would silently delete the very translations the church pays
+ * attention to.
+ *
+ * Empty means keep every free Bible too.
  */
-export const ALLOWED_TRANSLATIONS: string[] = [];
+const KEYLESS_KEEP = new Set([
+  // Modern, readable — the everyday ones.
+  "BSB", // Berean Standard Bible (narrated)
+  "ENGWEBP", // World English Bible
+  "eng_net", // NET Bible
+  "eng_lsv", // Literal Standard Version
+  "eng_fbv", // Free Bible Version
+  // Traditional.
+  "eng_kjv", // King James Version
+  "eng_kja", // King James Version + Apocrypha
+  "eng_asv", // American Standard Version (1901)
+  "eng_gnv", // Geneva Bible 1599
+  "eng_dby", // Darby
+  "eng_ylt", // Young's Literal
+  "eng_dra", // Douay-Rheims 1899
+  // Easier reading — pairs with the Simplify button for anyone who finds the
+  // traditional wording hard going.
+  "eng_bbe", // Bible in Basic English
+  "eng_pev", // Plain English Version
+  "eng_t4t", // Translation for Translators
+  // Distinct traditions worth keeping rather than another edition of the same
+  // text.
+  "eng_jps", // JPS TaNaKH 1917
+  "eng_wmb", // World Messianic Bible
+  "AAB", // Accessible Ancients Bible (the other narrated one)
+]);
 
 /** Normalized key for spotting the same Bible offered by several providers. */
 const dedupeKey = (t: Translation) =>
@@ -801,14 +834,21 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
     }),
   );
 
-  const allow = ALLOWED_TRANSLATIONS.length ? new Set(ALLOWED_TRANSLATIONS) : null;
+  // Which providers need curating: the free ones. A keyed provider's catalogue
+  // is already a deliberate choice — somebody licensed those — so it passes
+  // through untouched.
+  const keyless = new Set(PROVIDERS.filter((p) => p.keyless).map((p) => p.id));
+  const curate = KEYLESS_KEEP.size > 0;
+
   const seen = new Set<string>();
   const merged: MergedTranslation[] = [];
   for (const t of lists.flat()) {
-    if (allow && !allow.has(t.id)) continue;
-    // The allowlist is the deliberate choice, so it overrides the English
-    // filter — a curated entry is never dropped for lacking a language tag.
-    if (!allow && englishOnly && !/english/i.test(t.language ?? "")) continue;
+    const isKeyless = keyless.has(t.providerId);
+    if (curate && isKeyless && !KEYLESS_KEEP.has(t.id)) continue;
+    // Licensed Bibles are kept whatever their language tag says: they were
+    // chosen on purpose, and dropping one over metadata would be worse than
+    // showing it.
+    if (isKeyless && englishOnly && !/english/i.test(t.language ?? "")) continue;
     const k = dedupeKey(t);
     if (seen.has(k)) continue;
     seen.add(k);
