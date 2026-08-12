@@ -551,12 +551,15 @@ section("The Bible and the archive", "Study during the week; catch up on any Sun
 /** A grid of titled cards — used where there is no screenshot to show. */
 function cardGrid(s, items, opts = {}) {
   const cols = opts.cols ?? 2;
-  const w = cols === 2 ? 5.9 : 3.85;
+  // One column is the narrow stack that sits beside a screenshot; two and three
+  // fill the slide on their own.
+  const w = opts.w ?? (cols === 1 ? 5.1 : cols === 2 ? 5.9 : 3.85);
   const gap = 0.35;
+  const startX = opts.x ?? 0.7;
   items.forEach((it, i) => {
     const col = i % cols;
     const row = Math.floor(i / cols);
-    const x = 0.7 + col * (w + gap);
+    const x = startX + col * (w + gap);
     const y = (opts.y ?? 1.85) + row * (opts.h ?? 1.62);
     s.addShape(pptx.ShapeType.roundRect, {
       x, y, w, h: (opts.h ?? 1.62) - 0.16,
@@ -625,12 +628,19 @@ section("Looking after people and the building", "The quiet work between Sundays
 {
   const s = slide(BG);
   head(s, "Nobody slips through", "Follow-up & prayer");
-  cardGrid(s, [
-    ["A real follow-up pipeline", "First visit → contacted → in a group → serving → member, with a name against every stage. Not a list of guests — a list of who is doing what next."],
-    ["It nags when things stall", "A card sitting too long in one stage is pulled to the top. The ones that go quiet are exactly the ones that get missed."],
-    ["“We haven't seen them”, automatically", "Each week it flags people who attended regularly and have stopped. One tap turns that into a follow-up with someone's name on it."],
-    ["Prayer requests", "Anyone can ask; it goes to the prayer team and nobody else. Sharing with the church is a deliberate choice, off by default."],
-  ]);
+  // The directory is the data underneath follow-up, so this screenshot is
+  // honestly related rather than decoration.
+  picture(s, "people.png", { x: 0.7, y: 1.85, w: 6.4 }, "Everyone is already in the directory");
+  cardGrid(
+    s,
+    [
+      ["A real follow-up pipeline", "First visit → contacted → in a group → serving → member, with a name against every stage."],
+      ["It nags when things stall", "A card sitting too long in one stage is pulled to the top — the quiet ones are the ones that get missed."],
+      ["“We haven't seen them”", "Each week it flags people who attended regularly and stopped. One tap makes it someone's job."],
+      ["Prayer requests", "Anyone can ask; it goes to the prayer team and nobody else. Sharing wider is a deliberate choice."],
+    ],
+    { cols: 1, x: 7.4, w: 5.2, y: 1.85, h: 1.28 },
+  );
   speak(s, `
 This is the part most church software leaves half-done. Planning Center and Elvanto will tell you a guest visited. They will not tell you who is calling them on Tuesday.
 
@@ -644,12 +654,19 @@ Prayer requests are deliberately simple: they go to the prayer team and nobody e
 {
   const s = slide(BG);
   head(s, "Sunday runs on paper and people", "Services & upkeep");
-  cardGrid(s, [
-    ["Notes to the Media team", "Ministers write what they want on screen; Media see it and mark it into Proclaim. The deadline is a nudge, never a lock — late additions are flagged, not blocked."],
-    ["Printable run sheet", "The order of service with the running clock and who's on, laid out for the desk and the stage. Available to everyone serving, not just staff."],
-    ["Announcements with approval", "Ministry leaders ask; an approver decides. Approved ones show in the app and go on the list for the weekend slides."],
-    ["Maintenance requests", "Something broken? Three fields and a photo. It lands in the maintenance team's chat and on their phones."],
-  ]);
+  // The service plan is where the notes and the run sheet actually live, so
+  // this is the screen these four things hang off.
+  picture(s, "serviceplan.png", { x: 0.7, y: 1.85, w: 6.4 }, "The plan these all hang off");
+  cardGrid(
+    s,
+    [
+      ["Notes to the Media team", "Ministers write what they want on screen; Media mark it into Proclaim. The deadline nudges, never locks."],
+      ["Printable run sheet", "The order of service and who's on, laid out for the desk and the stage — not just for staff."],
+      ["Announcements with approval", "Leaders ask, an approver decides; approved ones reach the app and the weekend slide list."],
+      ["Maintenance requests", "Three fields and a photo. It lands in the maintenance team's chat and on their phones."],
+    ],
+    { cols: 1, x: 7.4, w: 5.2, y: 1.85, h: 1.28 },
+  );
   speak(s, `
 Four small things that take real friction out of a week.
 
