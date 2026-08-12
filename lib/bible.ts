@@ -552,6 +552,46 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
   return merged.sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** A book of the Bible, for the reader's navigation. */
+export interface BookInfo {
+  osis: string;
+  name: string;
+  chapters: number;
+}
+
+let bookCache: BookInfo[] | null = null;
+
+/**
+ * The 66 books with their chapter counts, so the reader can offer real
+ * navigation instead of making people type a reference. Cached per instance —
+ * the canon does not change. Falls back to the built-in book list (without
+ * chapter counts) if the lookup fails, so navigation degrades rather than dies.
+ */
+export async function bibleBooks(): Promise<BookInfo[]> {
+  if (bookCache) return bookCache;
+  try {
+    const res = await fetch("https://bible.helloao.org/api/BSB/books.json");
+    if (!res.ok) throw new Error(`AO Lab ${res.status}`);
+    const d = (await res.json()) as {
+      books?: { id: string; commonName?: string; name?: string; numberOfChapters?: number }[];
+    };
+    const books = (d.books ?? [])
+      .filter((b) => b.id && b.numberOfChapters)
+      .map((b) => ({
+        osis: b.id,
+        name: b.commonName || b.name || b.id,
+        chapters: b.numberOfChapters as number,
+      }));
+    if (books.length) {
+      bookCache = books;
+      return books;
+    }
+  } catch {
+    // fall through to the static list
+  }
+  return BOOKS.map((b) => ({ osis: b.osis, name: DISPLAY[b.osis], chapters: 0 }));
+}
+
 /**
  * The Bible whose study notes are borrowed when the selected translation has
  * none. BSB (keyless, modern, well annotated) is a safe default for a reader

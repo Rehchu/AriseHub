@@ -1,14 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/shell/Icon";
-import type { Passage, Translation } from "@/lib/bible";
+import type { BookInfo, Passage, Translation } from "@/lib/bible";
 
-const DEFAULT_REF = "John 3:16-17";
 const DEFAULT_TRANSLATION = "BSB"; // Berean Standard Bible (keyless, modern)
+const DEFAULT_BOOK = "JHN";
+const DEFAULT_CHAPTER = 3;
 
 export function BibleReader() {
-  const [ref, setRef] = useState(DEFAULT_REF);
+  const [books, setBooks] = useState<BookInfo[]>([]);
+  const [book, setBook] = useState(DEFAULT_BOOK);
+  const [chapter, setChapter] = useState(DEFAULT_CHAPTER);
+  const [ref, setRef] = useState("John 3");
   const [translation, setTranslation] = useState(DEFAULT_TRANSLATION);
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [passage, setPassage] = useState<Passage | null>(null);
@@ -16,9 +20,20 @@ export function BibleReader() {
   const [error, setError] = useState<string | null>(null);
   const [paraphrase, setParaphrase] = useState<string | null>(null);
   const [simplifying, setSimplifying] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const booksRef = useRef<BookInfo[]>([]);
 
-  // Translation list (once).
+  // Book list and translation list, once.
   useEffect(() => {
+    fetch("/api/bible/books")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.books)) {
+          setBooks(d.books);
+          booksRef.current = d.books;
+        }
+      })
+      .catch(() => {});
     fetch("/api/bible/translations")
       .then((r) => r.json())
       .then((d) => {
@@ -33,13 +48,27 @@ export function BibleReader() {
     setLoading(true);
     setError(null);
     setParaphrase(null);
+    setCopied(false);
     try {
       const res = await fetch(
         `/api/bible/passage?ref=${encodeURIComponent(q)}&translation=${encodeURIComponent(t)}`,
       );
       const d = await res.json();
       if (!res.ok) throw new Error(d.error || "Couldn't find that passage");
-      setPassage(d as Passage);
+      const p = d as Passage;
+      setPassage(p);
+      // Keep the book/chapter pickers in step with whatever was actually found,
+      // including free-typed references like "1 Cor 13:4".
+      const m = p.reference.match(/^(.*?)\s+(\d+)/);
+      if (m) {
+        const hit = booksRef.current.find(
+          (b) => b.name.toLowerCase() === m[1].trim().toLowerCase(),
+        );
+        if (hit) {
+          setBook(hit.osis);
+          setChapter(Number(m[2]));
+        }
+      }
     } catch (e) {
       setPassage(null);
       setError(e instanceof Error ? e.message : "Lookup failed");
@@ -50,8 +79,32 @@ export function BibleReader() {
 
   // Show something on first load.
   useEffect(() => {
-    void lookup(DEFAULT_REF, DEFAULT_TRANSLATION);
+    void lookup("John 3", DEFAULT_TRANSLATION);
   }, [lookup]);
+
+  /** Jump to a whole chapter via the pickers / arrows. */
+  function goTo(osis: string, ch: number) {
+    const b = books.find((x) => x.osis === osis);
+    if (!b) return;
+    const safe = Math.min(Math.max(1, ch), b.chapters || ch);
+    setBook(osis);
+    setChapter(safe);
+    const r = `${b.name} ${safe}`;
+    setRef(r);
+    void lookup(r, translation);
+  }
+
+  /** Previous/next chapter, rolling over book boundaries. */
+  function step(delta: number) {
+    const i = books.findIndex((b) => b.osis === book);
+    if (i === -1) return;
+    const b = books[i];
+    const target = chapter + delta;
+    if (target >= 1 && (!b.chapters || target <= b.chapters)) return goTo(book, target);
+    const nb = books[i + delta];
+    if (!nb) return;
+    goTo(nb.osis, delta > 0 ? 1 : nb.chapters || 1);
+  }
 
   async function simplify() {
     if (!passage) return;
@@ -74,13 +127,92 @@ export function BibleReader() {
     }
   }
 
+  async function copyWithReference() {
+    if (!passage) return;
+    const body = passage.verses.map((v) => `${v.verse}. ${v.text}`).join("\n");
+    try {
+      await navigator.clipboard.writeText(
+        `${body}\n\n— ${passage.reference} (${passage.translationName})`,
+      );
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError("Couldn't copy — your browser blocked clipboard access.");
+    }
+  }
+
+  const current = books.find((b) => b.osis === book);
+
   return (
     <div className="mx-auto max-w-3xl p-4 lg:p-6">
       <h1 className="mb-1 font-display text-2xl font-bold text-ink-900">Bible</h1>
       <p className="mb-4 text-sm text-ink-500">
-        Read a passage — or tap Simplify for a plain-language explanation alongside it.
+        Pick a book and chapter, or type a reference. Tap Simplify for a plain-language
+        explanation alongside the text.
       </p>
 
+      {/* Book / chapter navigation */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <select
+          value={book}
+          onChange={(e) => goTo(e.target.value, 1)}
+          aria-label="Book"
+          className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
+        >
+          {books.length === 0 && <option value={DEFAULT_BOOK}>John</option>}
+          {books.map((b) => (
+            <option key={b.osis} value={b.osis}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <select
+          value={chapter}
+          onChange={(e) => goTo(book, Number(e.target.value))}
+          aria-label="Chapter"
+          className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
+        >
+          {Array.from({ length: current?.chapters || 1 }, (_, i) => i + 1).map((c) => (
+            <option key={c} value={c}>
+              Chapter {c}
+            </option>
+          ))}
+        </select>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => step(-1)}
+            aria-label="Previous chapter"
+            className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-700 transition hover:bg-ink-50"
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => step(1)}
+            aria-label="Next chapter"
+            className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-700 transition hover:bg-ink-50"
+          >
+            ›
+          </button>
+        </div>
+        <select
+          value={translation}
+          onChange={(e) => {
+            setTranslation(e.target.value);
+            void lookup(ref, e.target.value);
+          }}
+          aria-label="Translation"
+          className="ml-auto max-w-[15rem] rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
+        >
+          {translations.length === 0 && <option value="BSB">Berean Standard Bible</option>}
+          {translations.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Free-typed reference, for verse ranges */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -91,26 +223,10 @@ export function BibleReader() {
         <input
           value={ref}
           onChange={(e) => setRef(e.target.value)}
-          placeholder="e.g. John 3:16-17, Psalm 23, Romans 8"
+          placeholder="e.g. John 3:16-17, Psalm 23, 1 Cor 13:4"
           aria-label="Passage reference"
           className="min-w-0 flex-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 placeholder:text-ink-400"
         />
-        <select
-          value={translation}
-          onChange={(e) => {
-            setTranslation(e.target.value);
-            void lookup(ref, e.target.value);
-          }}
-          aria-label="Translation"
-          className="rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900"
-        >
-          {translations.length === 0 && <option value="BSB">Berean Standard Bible</option>}
-          {translations.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
         <button
           type="submit"
           className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent transition hover:bg-accent-strong"
@@ -191,7 +307,13 @@ export function BibleReader() {
               <Icon name="help" size={16} />
               {simplifying ? "Simplifying…" : "Simplify"}
             </button>
-            <span className="text-xs text-ink-400">Plain-language explanation of this passage</span>
+            <button
+              onClick={copyWithReference}
+              className="flex items-center gap-2 rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm font-semibold text-ink-800 transition hover:bg-ink-50"
+            >
+              <Icon name={copied ? "check" : "link"} size={16} />
+              {copied ? "Copied" : "Copy with reference"}
+            </button>
           </div>
 
           {paraphrase && (
