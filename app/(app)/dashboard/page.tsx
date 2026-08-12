@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { visibleModules } from "@/lib/modules";
 import type { UserRole } from "@/lib/database.types";
 import { SundayHeading } from "@/components/dashboard/SundayHeading";
 import { StatStrip, StatCell } from "@/components/dashboard/StatStrip";
@@ -15,10 +14,10 @@ import {
   type RecentMessageRow,
 } from "@/components/dashboard/RecentMessages";
 
-// Every module stays one click away, as a text strip rather than a wall of
-// tiles duplicating the sidebar. Built from visibleModules, not a hardcoded
-// list: the old list offered Reports to people whose click bounced straight
-// back to this page, and omitted Tasks, IT and Ideas entirely.
+// The dashboard used to end with a text strip linking every module. It
+// duplicated navigation that already exists three other ways — the sidebar, the
+// bottom bar and search — so it was removed. Modules are now findable by name
+// in the search box, which is where "where is X?" belongs.
 
 /** "2026-08-16" → "Sunday, Aug 16". Date-only, so UTC keeps it exact. */
 function planDateLabel(iso: string, style: "long" | "short" = "long") {
@@ -43,7 +42,6 @@ export default async function DashboardPage() {
     .single();
   const me = profileRow as { id: string; role?: UserRole } | null;
   const myProfileId = me?.id ?? "";
-  const moduleLinks = visibleModules(me?.role).filter((m) => m.key !== "dashboard");
 
   // --- The next service plan this user is allowed to see -------------------
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -255,23 +253,6 @@ export default async function DashboardPage() {
         <RecentMessages rows={messageRows.map(({ sortKey: _, ...r }) => r)} />
       </div>
 
-      <nav
-        aria-label="All modules"
-        className="mt-8 flex flex-wrap items-baseline gap-x-4 gap-y-2 border-t border-ink-100 pt-4"
-      >
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-          Modules
-        </span>
-        {moduleLinks.map((m) => (
-          <Link
-            key={m.key}
-            href={m.href}
-            className="text-sm font-medium text-ink-700 hover:text-ink-900 hover:underline"
-          >
-            {m.label}
-          </Link>
-        ))}
-      </nav>
     </div>
   );
 }

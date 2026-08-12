@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "./Icon";
 import { Modal } from "@/components/ui/Modal";
+import type { ModuleDef } from "@/lib/modules";
 
 interface Hit {
   id: string;
@@ -21,7 +22,7 @@ interface Hit {
  * can only ever return rows the person could already open, so results can't
  * leak (e.g. private department chats or care items simply don't come back).
  */
-export function GlobalSearch() {
+export function GlobalSearch({ modules = [] }: { modules?: ModuleDef[] }) {
   const supabase = createClient();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -75,6 +76,23 @@ export function GlobalSearch() {
       if (seq !== searchSeq.current) return;
 
       const out: Hit[] = [];
+      // Pages first: someone typing "bible" or "check" wants the module, and it
+      // is the fastest possible answer — no round trip. Only ever the modules
+      // this person can already see, so search never advertises a page their
+      // role can't open.
+      for (const mod of modules) {
+        if (!mod.ready) continue;
+        if (!mod.label.toLowerCase().includes(term.toLowerCase())) continue;
+        out.push({
+          id: mod.key,
+          label: mod.label,
+          sub: mod.href,
+          href: mod.href,
+          kind: "Page",
+          icon: mod.icon,
+          accent: mod.accent,
+        });
+      }
       for (const p of (people.data ?? []) as { id: string; full_name: string; email: string | null; role: string }[]) {
         out.push({ id: p.id, label: p.full_name, sub: p.email ?? p.role.replace("_", " "), href: "/people", kind: "Person", icon: "users", accent: "#7c3aed" });
       }
@@ -97,7 +115,7 @@ export function GlobalSearch() {
       setCursor(0);
       setBusy(false);
     },
-    [supabase],
+    [supabase, modules],
   );
 
   // Debounce so typing doesn't fire a query per keystroke.
@@ -136,7 +154,7 @@ export function GlobalSearch() {
               <input
                 ref={inputRef}
                 className="flex-1 border-0 bg-transparent text-base outline-none placeholder:text-ink-400"
-                placeholder="Search people, tasks, events, groups, plans…"
+                placeholder="Search pages, people, tasks, events, groups…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 onKeyDown={(e) => {

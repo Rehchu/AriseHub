@@ -239,7 +239,9 @@ export function Shell({
             <span className="font-display text-lg font-bold">AriseHub</span>
           </div>
           <div className="flex-1" />
-          <GlobalSearch />
+          {/* Modules are searchable by name — the dashboard's link strip was
+              removed, so search is where "where is X?" gets answered. */}
+          <GlobalSearch modules={modules} />
           {!isIT && (
           <button
             onClick={() => setHelpOpen(true)}
