@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { SermonDetail, type Cue, type Sermon } from "@/components/sermons/SermonDetail";
+import type { SlideFile } from "@/components/sermons/SlidesPanel";
 
 // One archived message: the video, what it was about, and the transcript.
 // RLS hides unpublished sermons from everyone but the services roles, so a
@@ -33,13 +34,17 @@ export default async function SermonPage({
     .maybeSingle();
   if (!sermon) notFound();
 
-  const [{ data: cues }, { data: series }] = await Promise.all([
+  const [{ data: cues }, { data: series }, { data: files }] = await Promise.all([
     supabase
       .from("sermon_transcript_cues")
       .select("idx, start_seconds, end_seconds, text")
       .eq("sermon_id", sermonId)
       .order("idx"),
     supabase.from("sermon_series").select("id, name"),
+    supabase
+      .from("sermon_files")
+      .select("id, kind, storage_key, filename, page_number, page_from, page_to, visibility")
+      .eq("sermon_id", sermonId),
   ]);
 
   const seriesRows = (series as { id: string; name: string }[] | null) ?? [];
@@ -54,6 +59,7 @@ export default async function SermonPage({
       cues={(cues ?? []) as Cue[]}
       seriesName={seriesName}
       series={seriesRows}
+      files={(files ?? []) as SlideFile[]}
       canManage={canManage}
     />
   );

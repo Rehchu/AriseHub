@@ -8,7 +8,20 @@ import type { MediaBucket } from "@/lib/r2-types";
 // backstop against someone posting a video, not a working limit.
 const MAX_BYTES = 8 * 1024 * 1024;
 
-const ALLOWED = /^(image\/(jpeg|png|webp|gif|heic|heif)|application\/pdf|text\/plain)$/;
+// A service's slide export is a different shape of file: a morning's worth of
+// pages, and the PowerPoint built from them. Both legitimately run past the
+// photo limit, so slides get their own ceiling rather than forcing everything
+// else up to it.
+const SLIDES_FOLDER = /^sermon-slides(\/|$)/;
+const SLIDES_MAX_BYTES = 40 * 1024 * 1024;
+
+const ALLOWED =
+  /^(image\/(jpeg|png|webp|gif|heic|heif)|application\/pdf|text\/plain|application\/vnd\.openxmlformats-officedocument\.presentationml\.presentation)$/;
+
+// Proclaim's .prs backup has no registered media type and arrives as
+// octet-stream. That is a catch-all for "any binary at all", so it is accepted
+// ONLY inside the slides folder rather than widening the allowlist everywhere.
+const SLIDES_EXTRA_ALLOWED = /^application\/octet-stream$/;
 
 /**
  * Upload media to R2.
@@ -34,14 +47,18 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "file required" }, { status: 400 });
   }
-  if (file.size > MAX_BYTES) {
+  const isSlides = SLIDES_FOLDER.test(folder);
+  const limit = isSlides ? SLIDES_MAX_BYTES : MAX_BYTES;
+  if (file.size > limit) {
     return NextResponse.json(
-      { error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is 8 MB.` },
+      {
+        error: `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB — the limit is ${limit / 1024 / 1024} MB.`,
+      },
       { status: 413 },
     );
   }
   const type = file.type || "application/octet-stream";
-  if (!ALLOWED.test(type)) {
+  if (!ALLOWED.test(type) && !(isSlides && SLIDES_EXTRA_ALLOWED.test(type))) {
     return NextResponse.json({ error: `${type} files aren't allowed here.` }, { status: 415 });
   }
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Icon } from "@/components/shell/Icon";
 import { formatClock, youtubeEmbedUrl, youtubeId } from "@/lib/youtube";
+import { SlidesPanel, type SlideFile } from "./SlidesPanel";
 
 export interface Sermon {
   id: string;
@@ -31,12 +32,14 @@ export function SermonDetail({
   cues,
   seriesName,
   series,
+  files,
   canManage,
 }: {
   sermon: Sermon;
   cues: Cue[];
   seriesName: string | null;
   series: { id: string; name: string }[];
+  files: SlideFile[];
   canManage: boolean;
 }) {
   const router = useRouter();
@@ -338,6 +341,8 @@ export function SermonDetail({
           {message && <p className="mt-2 text-xs text-ink-600">{message}</p>}
         </div>
       )}
+
+      <SlidesPanel sermonId={sermon.id} files={files} canManage={canManage} />
 
       {rows.length > 0 && (
         <section className="mt-4">

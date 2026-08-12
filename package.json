@@ -17,6 +17,8 @@
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "next": "^16.3.0",
+    "pdfjs-dist": "^6.2.108",
+    "pptxgenjs": "^4.0.1",
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
@@ -29,7 +31,6 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "pg": "^8.23.0",
-    "pptxgenjs": "^4.0.1",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.9.3",
     "wrangler": "^4.121.0"
