@@ -22,6 +22,12 @@ export function BibleReader() {
   const [simplifying, setSimplifying] = useState(false);
   const [copied, setCopied] = useState(false);
   const booksRef = useRef<BookInfo[]>([]);
+  // The translation-load effect runs once, so it needs the live reference
+  // rather than the value captured at mount.
+  const refRef = useRef("John 3");
+  useEffect(() => {
+    refRef.current = ref;
+  }, [ref]);
 
   // Book list and translation list, once.
   useEffect(() => {
@@ -37,9 +43,28 @@ export function BibleReader() {
     fetch("/api/bible/translations")
       .then((r) => r.json())
       .then((d) => {
-        if (Array.isArray(d.translations)) setTranslations(d.translations);
+        if (!Array.isArray(d.translations) || d.translations.length === 0) return;
+        const list = d.translations as Translation[];
+        setTranslations(list);
+        // The default id isn't guaranteed to survive de-duplication across
+        // providers. If it's missing, a <select> silently displays its first
+        // option while state still holds the old id — so the reader shows one
+        // Bible and fetches another. Pick a real one and re-read.
+        setTranslation((cur) => {
+          if (list.some((t) => t.id === cur)) return cur;
+          const preferred =
+            ["BSB", "KJV", "ENGWEBP", "web", "eng_asv"]
+              .map((id) => list.find((t) => t.id === id))
+              .find(Boolean) ?? list[0];
+          if (preferred && preferred.id !== cur) {
+            void lookup(refRef.current, preferred.id);
+            return preferred.id;
+          }
+          return cur;
+        });
       })
       .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const lookup = useCallback(async (r: string, t: string) => {

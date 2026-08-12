@@ -39,9 +39,19 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json(passage);
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "lookup failed" },
-      { status: 502 },
-    );
+    // Provider errors are for the logs, not the reader. "WLDEH 404" tells a
+    // volunteer nothing; "this Bible doesn't have that passage" tells them what
+    // to do next. Not every translation carries every book — plenty are New
+    // Testament only — so a 404 here is ordinary, not a fault.
+    const raw = e instanceof Error ? e.message : "lookup failed";
+    let message = raw;
+    if (/\b404\b/.test(raw)) {
+      message = "This Bible doesn't include that passage — try another translation.";
+    } else if (/\b(5\d\d)\b/.test(raw)) {
+      message = "That Bible's source is unavailable right now — try another translation.";
+    } else if (/\b(401|403)\b/.test(raw)) {
+      message = "That Bible isn't available with the current licence.";
+    }
+    return NextResponse.json({ error: message, detail: raw }, { status: 502 });
   }
 }

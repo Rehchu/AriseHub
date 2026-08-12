@@ -480,33 +480,44 @@ const youversion: BibleProvider = {
     // language_ranges[] is mandatory (a 422 without it). Both the ISO 639-3 and
     // 2-letter codes are sent because the catalogue tags versions "en" while the
     // parameter is documented as "eng" — asking for both avoids an empty list.
-    const url =
-      `${YV_BASE}/bibles?language_ranges[]=eng&language_ranges[]=en&page_size=100`;
-    const res = await fetch(url, { headers: { "X-YVP-App-Key": key } });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`YouVersion ${res.status}: ${body.slice(0, 200)}`);
-    }
-    const d = (await res.json()) as { data?: unknown[] };
-    const rows = (d.data ?? []) as {
-      id?: string | number;
-      abbreviation?: string;
-      localized_abbreviation?: string;
-      title?: string;
-      localized_title?: string;
-      copyright?: string | null;
-      language_tag?: string;
-    }[];
+    //
+    // page_size caps at 99, NOT the 100 the docs imply: 100 is a hard 400.
     const out: Translation[] = [];
-    for (const b of rows) {
-      if (b.id === undefined) continue;
-      const id = String(b.id);
-      const name =
-        b.title || b.localized_title || b.abbreviation || b.localized_abbreviation || id;
-      // Remember attribution + title so passages can carry them.
-      if (b.copyright) yvCopyright.set(id, b.copyright);
-      yvTitles.set(id, name);
-      out.push({ id, name, language: "English" });
+    let pageToken: string | null = null;
+    for (let page = 0; page < 6; page++) {
+      const url =
+        `${YV_BASE}/bibles?language_ranges[]=eng&language_ranges[]=en&page_size=99` +
+        (pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : "");
+      const res: Response = await fetch(url, { headers: { "X-YVP-App-Key": key } });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`YouVersion ${res.status}: ${body.slice(0, 200)}`);
+      }
+      const d = (await res.json()) as {
+        data?: unknown[];
+        next_page_token?: string | null;
+      };
+      const rows = (d.data ?? []) as {
+        id?: string | number;
+        abbreviation?: string;
+        localized_abbreviation?: string;
+        title?: string;
+        localized_title?: string;
+        copyright?: string | null;
+        language_tag?: string;
+      }[];
+      for (const b of rows) {
+        if (b.id === undefined) continue;
+        const id = String(b.id);
+        const name =
+          b.title || b.localized_title || b.abbreviation || b.localized_abbreviation || id;
+        // Remember attribution + title so passages can carry them.
+        if (b.copyright) yvCopyright.set(id, b.copyright);
+        yvTitles.set(id, name);
+        out.push({ id, name, language: "English" });
+      }
+      pageToken = d.next_page_token ?? null;
+      if (!pageToken || rows.length === 0) break;
     }
     return out;
   },
