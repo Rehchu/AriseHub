@@ -60,6 +60,7 @@ export function SermonArchive({
   const [q, setQ] = useState("");
   const [seriesFilter, setSeriesFilter] = useState("");
   const [manual, setManual] = useState(false);
+  const [managingSeries, setManagingSeries] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +113,41 @@ export function SermonArchive({
       return;
     }
     router.push(`/services/archive/${(data as { id: string }).id}`);
+  }
+
+  async function addSeries(form: FormData) {
+    const name = String(form.get("name") ?? "").trim();
+    if (!name) return;
+    setBusyId("series");
+    setError(null);
+    const { error: err } = await supabase.from("sermon_series").insert({ name });
+    setBusyId(null);
+    if (err) return setError(err.message);
+    router.refresh();
+  }
+
+  async function renameSeries(id: string, name: string) {
+    const { error: err } = await supabase
+      .from("sermon_series")
+      .update({ name })
+      .eq("id", id);
+    if (err) return setError(err.message);
+    router.refresh();
+  }
+
+  /**
+   * Deleting a series does NOT delete its messages — series_id is set null by
+   * the foreign key, so the archive keeps every message and only the label goes.
+   */
+  async function deleteSeries(s: SeriesRow) {
+    const used = rows.filter((r) => r.series_id === s.id).length;
+    const warning = used
+      ? `Delete "${s.name}"? ${used} message${used === 1 ? "" : "s"} will stay in the archive but lose the series label.`
+      : `Delete "${s.name}"?`;
+    if (!window.confirm(warning)) return;
+    const { error: err } = await supabase.from("sermon_series").delete().eq("id", s.id);
+    if (err) return setError(err.message);
+    router.refresh();
   }
 
   async function addManual(form: FormData) {
@@ -191,14 +227,70 @@ export function SermonArchive({
       )}
 
       {canManage && (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1">
           <button
             onClick={() => setManual((m) => !m)}
             className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
           >
             {manual ? "Cancel" : "+ Archive a message with no plan (older services)"}
           </button>
+          <button
+            onClick={() => setManagingSeries((s) => !s)}
+            className="text-sm font-medium text-ink-500 transition hover:text-brand-600"
+          >
+            {managingSeries ? "Done with series" : "Manage series"}
+          </button>
         </div>
+      )}
+
+      {canManage && managingSeries && (
+        <section className="mb-6 rounded-xl border border-ink-100 bg-white p-4">
+          <h2 className="text-sm font-semibold text-ink-900">Series</h2>
+          <p className="mt-0.5 text-xs text-ink-500">
+            A series groups messages together — &quot;Rooted&quot;, &quot;Advent&quot;. Renaming one
+            updates it everywhere it is used.
+          </p>
+          <ul className="mt-2 divide-y divide-ink-100">
+            {series.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 py-2">
+                <input
+                  defaultValue={s.name}
+                  onBlur={(e) => {
+                    const name = e.target.value.trim();
+                    if (name && name !== s.name) void renameSeries(s.id, name);
+                  }}
+                  aria-label={`Rename ${s.name}`}
+                  className="min-w-0 flex-1 rounded-lg border border-ink-200 px-3 py-1.5 text-sm"
+                />
+                <button
+                  onClick={() => deleteSeries(s)}
+                  className="shrink-0 text-xs font-medium text-ink-400 hover:text-red-600"
+                  title="Messages keep their place in the archive; they just lose the series label."
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+            {series.length === 0 && (
+              <li className="py-2 text-sm text-ink-400">No series yet.</li>
+            )}
+          </ul>
+          <form action={addSeries} className="mt-2 flex flex-wrap gap-2">
+            <input
+              name="name"
+              required
+              placeholder="New series name"
+              className="min-w-0 flex-1 rounded-lg border border-ink-200 px-3 py-2 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={busyId === "series"}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-onaccent disabled:opacity-50"
+            >
+              Add
+            </button>
+          </form>
+        </section>
       )}
 
       {canManage && manual && (

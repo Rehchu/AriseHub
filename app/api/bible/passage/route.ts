@@ -49,7 +49,10 @@ export async function GET(req: NextRequest) {
     // Testament only — so a 404 here is ordinary, not a fault.
     const raw = e instanceof Error ? e.message : "lookup failed";
     let message = raw;
-    if (/\b404\b/.test(raw)) {
+    if (/\b(404|422)\b/.test(raw)) {
+      // 422 is how YouVersion rejects a reference a version cannot serve —
+      // usually a New Testament-only Bible being asked for an Old Testament
+      // book. Same thing a reader needs to hear as a 404.
       message = "This Bible doesn't include that passage — try another translation.";
     } else if (/\b(5\d\d)\b/.test(raw)) {
       message = "That Bible's source is unavailable right now — try another translation.";

@@ -69,6 +69,25 @@ export interface BibleProvider {
 /** Collapse the ragged whitespace these APIs pad verses with. */
 const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
 
+/**
+ * fetch with one retry on a 5xx or a thrown connection error.
+ *
+ * bible-api.com and Biblia have both returned 525 (a TLS handshake failure)
+ * when called FROM the Worker, while answering normally from elsewhere — the
+ * failure is in Cloudflare's path to those origins, not in the request. A retry
+ * costs nothing and clears the transient case; a genuinely unreachable host
+ * still drops out of the list rather than breaking it.
+ */
+async function fetchOnce(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    const res = await fetch(url, init);
+    if (res.status < 500) return res;
+  } catch {
+    /* fall through to the single retry */
+  }
+  return fetch(url, init);
+}
+
 // ── Reference parsing ───────────────────────────────────────────────────────
 // Chapter-based providers (helloao, API.Bible) need a book CODE, not "John", so
 // a free-typed reference has to be broken into {book, chapter, verses}.
@@ -216,7 +235,7 @@ const bibleApiCom: BibleProvider = {
     };
   },
   async translations() {
-    const res = await fetch("https://bible-api.com/data");
+    const res = await fetchOnce("https://bible-api.com/data");
     if (!res.ok) throw new Error(`bible-api.com ${res.status}`);
     const d = (await res.json()) as {
       translations?: { identifier: string; name: string; language: string }[];
@@ -425,6 +444,16 @@ const yvCopyright = new Map<string, string>();
 /** Version id -> human title, so a passage shows "New International Version". */
 const yvTitles = new Map<string, string>();
 
+/**
+ * Version id -> the books it actually contains.
+ *
+ * Plenty of translations are New Testament only, or partial. Asking one for
+ * Genesis returns a 422, which as a raw error tells a reader nothing. The
+ * catalogue lists each version's books, so the mismatch can be caught here and
+ * explained instead.
+ */
+const yvBooks = new Map<string, Set<string>>();
+
 const youversion: BibleProvider = {
   id: "youversion",
   label: "YouVersion",
@@ -436,6 +465,13 @@ const youversion: BibleProvider = {
     if (!translation) throw new Error("YouVersion needs a Bible id");
     const p = parseReference(ref);
     if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
+    // Many translations are New Testament only, or partial. Asking one for a
+    // book it doesn't carry answers 422, which as a raw status tells a reader
+    // nothing — so check the catalogue first and name the missing book.
+    const carried = yvBooks.get(translation);
+    if (carried && !carried.has(p.osis)) {
+      throw new Error(`This Bible doesn't include ${p.bookName}.`);
+    }
     // USFM reference: JHN.3 for a chapter, JHN.3.16 / JHN.3.16-JHN.3.17 for verses.
     const usfm =
       p.verseFrom === undefined
@@ -550,6 +586,7 @@ const youversion: BibleProvider = {
         localized_title?: string;
         copyright?: string | null;
         language_tag?: string;
+        books?: string[];
       }[];
       for (const b of rows) {
         if (b.id === undefined) continue;
@@ -558,6 +595,7 @@ const youversion: BibleProvider = {
           b.title || b.localized_title || b.abbreviation || b.localized_abbreviation || id;
         // Remember attribution + title so passages can carry them.
         if (b.copyright) yvCopyright.set(id, b.copyright);
+        if (Array.isArray(b.books) && b.books.length) yvBooks.set(id, new Set(b.books));
         yvTitles.set(id, name);
         out.push({ id, name, language: "English" });
       }
@@ -669,7 +707,7 @@ const biblia: BibleProvider = {
     const url =
       `${BIBLIA_BASE}/content/${encodeURIComponent(translation)}.txt` +
       `?passage=${encodeURIComponent(passage)}&key=${encodeURIComponent(key)}`;
-    const res = await fetch(url, { headers: { Referer: bibliaReferer() } });
+    const res = await fetchOnce(url, { headers: { Referer: bibliaReferer() } });
     if (!res.ok) throw new Error(`Biblia ${res.status}`);
     const body = tidy(await res.text());
     if (!body) throw new Error("No text found for that reference");

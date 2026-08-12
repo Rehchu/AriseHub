@@ -43,6 +43,10 @@ function dueJobs(scheduledTime) {
   if (h === 23 && m === 0) jobs.push("/api/cron/reminders?job=tomorrow");
   // Saturday 13:00 UTC — week-ahead digest, 7am Central (8am in winter).
   if (dow === 6 && h === 13 && m === 0) jobs.push("/api/cron/reminders?job=weekly");
+  // Monday 14:00 UTC — who stopped coming. Monday because the weekend's
+  // attendance is in by then, and a drop-off is a this-week phone call rather
+  // than something to discover next Sunday.
+  if (dow === 1 && h === 14 && m === 0) jobs.push("/api/cron/attendance-scan");
   return jobs;
 }
 
