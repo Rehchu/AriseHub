@@ -50,10 +50,43 @@ export function SermonDetail({
   const [message, setMessage] = useState<string | null>(null);
   const [origin, setOrigin] = useState<string | undefined>(undefined);
   const [editing, setEditing] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
 
   // origin has to come from the browser: the embed only accepts commands from
   // the page that declared it.
   useEffect(() => setOrigin(window.location.origin), []);
+
+  /**
+   * Where the video is up to, for syncing slides.
+   *
+   * With enablejsapi the player posts "infoDelivery" messages carrying
+   * currentTime, so the position is available without loading YouTube's script.
+   * It has to be asked to start talking first — hence the listening handshake.
+   */
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== "https://www.youtube.com") return;
+      try {
+        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
+        const t = data?.info?.currentTime;
+        if (typeof t === "number") setCurrentTime(t);
+      } catch {
+        /* not a player message */
+      }
+    }
+    window.addEventListener("message", onMessage);
+    const frame = iframeRef.current;
+    const handshake = setInterval(() => {
+      frame?.contentWindow?.postMessage(
+        JSON.stringify({ event: "listening", id: 1 }),
+        "https://www.youtube.com",
+      );
+    }, 1000);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      clearInterval(handshake);
+    };
+  }, []);
 
   const videoId = youtubeId(sermon.youtube_url);
 
@@ -342,7 +375,14 @@ export function SermonDetail({
         </div>
       )}
 
-      <SlidesPanel sermonId={sermon.id} files={files} canManage={canManage} />
+      <SlidesPanel
+        sermonId={sermon.id}
+        files={files}
+        canManage={canManage}
+        currentTime={currentTime}
+        onSeek={seek}
+        hasVideo={!!videoId}
+      />
 
       {rows.length > 0 && (
         <section className="mt-4">

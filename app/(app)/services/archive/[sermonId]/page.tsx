@@ -43,7 +43,7 @@ export default async function SermonPage({
     supabase.from("sermon_series").select("id, name"),
     supabase
       .from("sermon_files")
-      .select("id, kind, storage_key, filename, page_number, page_from, page_to, visibility")
+      .select("id, kind, storage_key, filename, page_number, page_from, page_to, visibility, starts_at_seconds")
       .eq("sermon_id", sermonId),
   ]);
 

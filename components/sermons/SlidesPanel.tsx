@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { formatClock as clock } from "@/lib/youtube";
 
 export interface SlideFile {
   id: string;
@@ -13,6 +14,8 @@ export interface SlideFile {
   page_from: number | null;
   page_to: number | null;
   visibility: string;
+  /** numeric() arrives as a string. Null until the sync editor has run. */
+  starts_at_seconds?: number | string | null;
 }
 
 interface Thumb {
@@ -40,10 +43,17 @@ export function SlidesPanel({
   sermonId,
   files,
   canManage,
+  currentTime = 0,
+  onSeek,
+  hasVideo = false,
 }: {
   sermonId: string;
   files: SlideFile[];
   canManage: boolean;
+  /** Where the video is up to, so slides can follow it. */
+  currentTime?: number;
+  onSeek?: (seconds: number) => void;
+  hasVideo?: boolean;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -54,11 +64,44 @@ export function SlidesPanel({
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState(0);
+  const [syncing, setSyncing] = useState(false);
 
-  const slides = files
-    .filter((f) => f.kind === "slide_image")
-    .sort((a, b) => (a.page_number ?? 0) - (b.page_number ?? 0));
+  const slides = useMemo(
+    () =>
+      files
+        .filter((f) => f.kind === "slide_image")
+        .sort((a, b) => (a.page_number ?? 0) - (b.page_number ?? 0))
+        .map((f) => ({
+          ...f,
+          startsAt:
+            f.starts_at_seconds === null || f.starts_at_seconds === undefined
+              ? null
+              : Number(f.starts_at_seconds),
+        })),
+    [files],
+  );
   const deck = files.find((f) => f.kind === "slides_pptx");
+  const synced = slides.some((s) => s.startsAt !== null);
+
+  /**
+   * Follow the video.
+   *
+   * The slide on screen is the last one whose timestamp has passed. Only takes
+   * over once someone has synced — before that, prev/next stays manual, because
+   * jumping the viewer around with no timings would be worse than not trying.
+   *
+   * Held back while the sync editor is open: the person marking slides is
+   * stepping through them deliberately and must not be overridden.
+   */
+  useEffect(() => {
+    if (!synced || syncing) return;
+    let next = -1;
+    for (let i = 0; i < slides.length; i++) {
+      const t = slides[i].startsAt;
+      if (t !== null && t <= currentTime + 0.25) next = i;
+    }
+    if (next >= 0) setViewing(next);
+  }, [currentTime, synced, slides, syncing]);
 
   /** Render every page to a thumbnail so the range can be chosen by eye. */
   async function loadPdf(file: File) {
@@ -235,6 +278,41 @@ export function SlidesPanel({
     }
   }
 
+  /**
+   * Mark where the slide on screen goes up.
+   *
+   * One pass through the video: play it, tap as each slide appears. Saved per
+   * slide rather than in a batch at the end, so an interrupted sync keeps
+   * whatever was already marked.
+   */
+  async function markSlideHere() {
+    const slide = slides[viewing];
+    if (!slide) return;
+    const at = Math.max(0, Math.round(currentTime * 1000) / 1000);
+    const { error } = await supabase
+      .from("sermon_files")
+      .update({ starts_at_seconds: at })
+      .eq("id", slide.id);
+    if (error) {
+      setStatus(error.message);
+      return;
+    }
+    setStatus(`Slide ${viewing + 1} starts at ${clock(at)}.`);
+    // Move on, since the next slide is what the operator is waiting for.
+    setViewing((v) => Math.min(slides.length - 1, v + 1));
+    router.refresh();
+  }
+
+  async function clearSyncPoints() {
+    const ids = slides.filter((s) => s.startsAt !== null).map((s) => s.id);
+    if (ids.length === 0) return;
+    await supabase.from("sermon_files").update({ starts_at_seconds: null }).in("id", ids);
+    setStatus("Cleared the sync points.");
+    router.refresh();
+  }
+
+  const current = slides[Math.min(viewing, Math.max(0, slides.length - 1))];
+
   return (
     <section className="mt-4">
       <h2 className="font-display text-lg font-bold text-ink-900">Slides</h2>
@@ -267,6 +345,19 @@ export function SlidesPanel({
             <span className="text-sm text-ink-500">
               {Math.min(viewing + 1, slides.length)} / {slides.length}
             </span>
+            {current?.startsAt !== null && current?.startsAt !== undefined && (
+              <button
+                onClick={() => onSeek?.(current.startsAt as number)}
+                disabled={!hasVideo}
+                className="rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 font-mono text-xs text-brand-500 disabled:opacity-40"
+                title="Jump the video to this slide"
+              >
+                {clock(current.startsAt as number)}
+              </button>
+            )}
+            {synced && !syncing && (
+              <span className="text-xs text-ink-400">follows the video</span>
+            )}
             {deck && (
               <a
                 href={`/api/files/${deck.storage_key}`}
@@ -277,6 +368,49 @@ export function SlidesPanel({
               </a>
             )}
           </div>
+        </div>
+      )}
+
+      {canManage && slides.length > 0 && hasVideo && (
+        <div className="mt-3 rounded-xl border border-ink-100 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-ink-900">Sync slides to the video</h3>
+            <button
+              onClick={() => setSyncing((s) => !s)}
+              className="rounded-lg border border-ink-200 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 hover:bg-ink-50"
+            >
+              {syncing ? "Done" : synced ? "Re-sync" : "Start"}
+            </button>
+          </div>
+          {syncing ? (
+            <>
+              <p className="mt-1 text-xs text-ink-500">
+                Play the video above. Each time a new slide appears, press the button — it
+                records the moment and moves to the next slide. Everything saves as you go.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={markSlideHere}
+                  className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-onaccent hover:bg-accent-strong"
+                >
+                  Slide {Math.min(viewing + 1, slides.length)} starts here
+                </button>
+                <span className="font-mono text-sm text-ink-500">{clock(currentTime)}</span>
+                <button
+                  onClick={clearSyncPoints}
+                  className="ml-auto text-xs font-medium text-ink-400 hover:text-red-600"
+                >
+                  Clear all
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="mt-1 text-xs text-ink-500">
+              {synced
+                ? "Synced — slides advance with the video, and tapping a slide's time jumps there."
+                : "Not synced yet. One pass through the video and the slides will follow along by themselves."}
+            </p>
+          )}
         </div>
       )}
 
