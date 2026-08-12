@@ -21,6 +21,8 @@ export function BibleReader() {
   const [paraphrase, setParaphrase] = useState<string | null>(null);
   const [simplifying, setSimplifying] = useState(false);
   const [copied, setCopied] = useState(false);
+  /** Which narrator's recording is selected, when a chapter has several. */
+  const [narrator, setNarrator] = useState(0);
   const booksRef = useRef<BookInfo[]>([]);
   // The translation-load effect runs once, so it needs the live reference
   // rather than the value captured at mount.
@@ -286,6 +288,46 @@ export function BibleReader() {
               </p>
             ))}
           </div>
+
+          {passage.audio && passage.audio.length > 0 && (
+            <section className="mt-4 rounded-lg border border-ink-100 bg-ink-50 p-4">
+              <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500">Listen</h3>
+                {/* Recordings are per chapter, so say so when only a verse
+                    range is on screen. It is always this translation's own
+                    recording — audio is never borrowed from another Bible. */}
+                <span className="text-xs text-ink-400">
+                  {passage.translationName} · whole chapter
+                </span>
+              </div>
+              {passage.audio.length > 1 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {passage.audio.map((a, i) => (
+                    <button
+                      key={a.narrator}
+                      onClick={() => setNarrator(i)}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                        i === narrator
+                          ? "border-accent bg-accent text-onaccent"
+                          : "border-ink-200 bg-white text-ink-700 hover:bg-ink-100"
+                      }`}
+                    >
+                      {a.narrator}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <audio
+                key={passage.audio[Math.min(narrator, passage.audio.length - 1)].url}
+                controls
+                preload="none"
+                className="w-full"
+                src={passage.audio[Math.min(narrator, passage.audio.length - 1)].url}
+              >
+                Your browser doesn&apos;t support audio playback.
+              </audio>
+            </section>
+          )}
 
           {passage.footnotes && passage.footnotes.length > 0 && (
             <section className="mt-4 rounded-lg border border-ink-100 bg-ink-50 p-4">

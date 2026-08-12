@@ -13,6 +13,13 @@ export interface BibleVerse {
   text: string;
 }
 
+/** A narrated recording of a chapter. */
+export interface AudioTrack {
+  /** Reader's name, e.g. "Hays". */
+  narrator: string;
+  url: string;
+}
+
 /** A study note / footnote anchored to a verse. */
 export interface Footnote {
   verse: number;
@@ -36,6 +43,11 @@ export interface Passage {
    * the chosen Bible.
    */
   footnotesFrom?: string;
+  /**
+   * Narrated recordings for this CHAPTER (audio is never per-verse), when the
+   * source publishes them.
+   */
+  audio?: AudioTrack[];
 }
 
 export interface Translation {
@@ -242,6 +254,8 @@ const helloao: BibleProvider = {
           reference?: { chapter?: number; verse?: number };
         }[];
       };
+      /** narrator -> mp3 url, e.g. { hays: "https://…/hays.mp3" }. */
+      thisChapterAudioLinks?: Record<string, string>;
     };
     const all: BibleVerse[] = (d.chapter?.content ?? [])
       .filter((i) => i.type === "verse" && typeof i.number === "number")
@@ -276,6 +290,15 @@ const helloao: BibleProvider = {
       }))
       .sort((a, b) => a.verse - b.verse);
 
+    // Recordings are per chapter, so they come back whatever verse range was
+    // asked for — the reader is responsible for saying so.
+    const audio: AudioTrack[] = Object.entries(d.thisChapterAudioLinks ?? {})
+      .filter(([, url]) => typeof url === "string" && url)
+      .map(([narrator, url]) => ({
+        narrator: narrator.charAt(0).toUpperCase() + narrator.slice(1),
+        url,
+      }));
+
     return {
       reference: refLabel(p),
       translation: d.translation?.id ?? translation,
@@ -285,6 +308,7 @@ const helloao: BibleProvider = {
       verses,
       text: verses.map((v) => v.text).join(" "),
       ...(footnotes.length ? { footnotes } : {}),
+      ...(audio.length ? { audio } : {}),
     };
   },
   async translations() {

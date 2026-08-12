@@ -37,6 +37,10 @@ export async function GET(req: NextRequest) {
         passage.footnotesFrom = from;
       }
     }
+
+    // Audio is deliberately NOT borrowed from another translation the way notes
+    // are: someone listening wants to hear the version they are reading, not a
+    // different wording. A Bible without recordings simply has no player.
     return NextResponse.json(passage);
   } catch (e) {
     // Provider errors are for the logs, not the reader. "WLDEH 404" tells a
