@@ -16,6 +16,8 @@ export type ModuleKey =
   | "ideas"
   | "bible"
   | "sermons"
+  | "announcements"
+  | "prayer"
   | "admin";
 
 export interface ModuleDef {
@@ -63,6 +65,9 @@ export const MODULES: ModuleDef[] = [
   // Past messages. Congregation-wide: RLS only returns published ones to
   // everyone else, so the page is safe without a role gate here.
   { key: "sermons", label: "Sermons", href: "/services/archive", icon: "play", accent: "#0369a1", ready: true },
+  { key: "announcements", label: "Announcements", href: "/announcements", icon: "chat", accent: "#ea580c", ready: true },
+  // Anyone can ask for prayer; RLS keeps requests with the prayer team.
+  { key: "prayer", label: "Prayer", href: "/prayer", icon: "heart", accent: "#be123c", ready: true },
   // /admin, not /admin/departments: the index routes each role to its own
   // entry page, and prefix-matching on /admin keeps the nav item lit on every
   // admin tab. IT_Admin and Staff belong in the gate — the layout already
