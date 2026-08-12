@@ -130,6 +130,13 @@ export interface ParsedRef {
   verseTo?: number;
 }
 
+/** Human label for a parsed reference: "Psalms 23", "John 3:16-17". */
+export function refLabel(p: ParsedRef): string {
+  if (p.verseFrom === undefined) return `${p.bookName} ${p.chapter}`;
+  const end = p.verseTo && p.verseTo !== p.verseFrom ? `-${p.verseTo}` : "";
+  return `${p.bookName} ${p.chapter}:${p.verseFrom}${end}`;
+}
+
 /** "John 3:16-17" / "Ps 23" / "1 Cor 13:4" -> structured. null if unparseable. */
 export function parseReference(input: string): ParsedRef | null {
   const s = input.trim().toLowerCase().replace(/\s+/g, " ");
@@ -239,14 +246,8 @@ const helloao: BibleProvider = {
         : all.filter((v) => v.verse >= p.verseFrom! && v.verse <= (p.verseTo ?? p.verseFrom!));
     if (verses.length === 0) throw new Error("No verses found for that reference");
 
-    const shown =
-      p.verseFrom === undefined
-        ? `${p.bookName} ${p.chapter}`
-        : `${p.bookName} ${p.chapter}:${p.verseFrom}` +
-          (p.verseTo && p.verseTo !== p.verseFrom ? `-${p.verseTo}` : "");
-
     return {
-      reference: shown,
+      reference: refLabel(p),
       translation: d.translation?.id ?? translation,
       translationName: d.translation?.englishName || d.translation?.name || translation,
       copyright: d.translation?.licenseUrl,
@@ -275,10 +276,212 @@ const helloao: BibleProvider = {
   },
 };
 
-// Registered providers, most-preferred first. Keyed adapters (API.Bible via
-// API_BIBLE_KEY, Biblia via BIBLIA_API_KEY) land here next, behind this same
-// interface.
-const PROVIDERS: BibleProvider[] = [helloao, bibleApiCom];
+// ── WLDEH (keyless; CDN-hosted, large multi-language catalogue) ─────────────
+// Chapter JSON off jsDelivr; book segment is the lowercased name with spaces
+// removed ("1corinthians", "songofsolomon").
+const WLDEH_CDN = "https://cdn.jsdelivr.net/gh/wldeh/bible-api/bibles";
+const wldehBook = (osis: string) =>
+  (BOOKS.find((b) => b.osis === osis)?.names[0] ?? "").replace(/\s+/g, "");
+
+const wldeh: BibleProvider = {
+  id: "wldeh",
+  label: "WLDEH",
+  keyless: true,
+  configured: () => true,
+  async getPassage(ref, translation = "en-kjv") {
+    const p = parseReference(ref);
+    if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
+    const res = await fetch(
+      `${WLDEH_CDN}/${encodeURIComponent(translation)}/books/${wldehBook(p.osis)}/chapters/${p.chapter}.json`,
+    );
+    if (!res.ok) throw new Error(`WLDEH ${res.status}`);
+    const d = (await res.json()) as {
+      data?: { book: string; chapter: string; verse: string; text: string }[];
+    };
+    // Some chapters in this dataset list a verse more than once; keep the first
+    // of each. Paragraph pilcrows are markup, not text.
+    const byVerse = new Map<number, BibleVerse>();
+    for (const v of d.data ?? []) {
+      const n = Number(v.verse);
+      if (byVerse.has(n)) continue;
+      byVerse.set(n, {
+        book: p.bookName,
+        chapter: Number(v.chapter),
+        verse: n,
+        text: tidy(v.text.replace(/¶/g, "")),
+      });
+    }
+    const all: BibleVerse[] = [...byVerse.values()].sort((a, b) => a.verse - b.verse);
+    const verses =
+      p.verseFrom === undefined
+        ? all
+        : all.filter((v) => v.verse >= p.verseFrom! && v.verse <= (p.verseTo ?? p.verseFrom!));
+    if (verses.length === 0) throw new Error("No verses found for that reference");
+    return {
+      reference: refLabel(p),
+      translation,
+      translationName: translation,
+      providerId: "wldeh",
+      verses,
+      text: verses.map((v) => v.text).join(" "),
+    };
+  },
+  async translations() {
+    const res = await fetch(`${WLDEH_CDN}/bibles.json`);
+    if (!res.ok) throw new Error(`WLDEH ${res.status}`);
+    const d = (await res.json()) as {
+      id: string;
+      version: string;
+      language?: { name?: string };
+    }[];
+    return (d ?? []).map((t) => ({
+      id: t.id,
+      name: t.version,
+      language: t.language?.name,
+    }));
+  },
+};
+
+// ── API.Bible (key: API_BIBLE_KEY) ──────────────────────────────────────────
+// Bible ids look like de4e12af7f28f599-01; passages use OSIS ids (JHN.3.16).
+// Text comes back with [n] verse markers, which are split back into verses.
+const API_BIBLE_BASE = "https://rest.api.bible/v1";
+const apiBibleKey = () => process.env.API_BIBLE_KEY?.trim() || "";
+
+const apiBible: BibleProvider = {
+  id: "api-bible",
+  label: "API.Bible",
+  keyless: false,
+  configured: () => !!apiBibleKey(),
+  async getPassage(ref, translation) {
+    const key = apiBibleKey();
+    if (!key) throw new Error("API.Bible key not set");
+    if (!translation) throw new Error("API.Bible needs a Bible id");
+    const p = parseReference(ref);
+    if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
+    const passageId =
+      p.verseFrom === undefined
+        ? `${p.osis}.${p.chapter}`
+        : `${p.osis}.${p.chapter}.${p.verseFrom}-${p.osis}.${p.chapter}.${p.verseTo ?? p.verseFrom}`;
+    const url =
+      `${API_BIBLE_BASE}/bibles/${encodeURIComponent(translation)}/passages/${passageId}` +
+      `?content-type=text&include-verse-numbers=true&include-notes=false&include-titles=false&include-chapter-numbers=false`;
+    const res = await fetch(url, { headers: { "api-key": key } });
+    if (!res.ok) throw new Error(`API.Bible ${res.status}`);
+    const d = (await res.json()) as {
+      data?: { content?: string; reference?: string; copyright?: string; bibleId?: string };
+    };
+    const content = d.data?.content ?? "";
+    // "[16] For God so loved... [17] For God did not..."
+    const verses: BibleVerse[] = [];
+    const re = /\[(\d+)\]\s*([^[]*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content))) {
+      const text = tidy(m[2]);
+      if (text) {
+        verses.push({ book: p.bookName, chapter: p.chapter, verse: Number(m[1]), text });
+      }
+    }
+    if (verses.length === 0 && tidy(content)) {
+      verses.push({ book: p.bookName, chapter: p.chapter, verse: p.verseFrom ?? 1, text: tidy(content) });
+    }
+    if (verses.length === 0) throw new Error("No verses found for that reference");
+    return {
+      reference: d.data?.reference || refLabel(p),
+      translation,
+      translationName: translation,
+      copyright: d.data?.copyright,
+      providerId: "api-bible",
+      verses,
+      text: verses.map((v) => v.text).join(" "),
+    };
+  },
+  async translations() {
+    const key = apiBibleKey();
+    if (!key) return [];
+    const res = await fetch(`${API_BIBLE_BASE}/bibles`, { headers: { "api-key": key } });
+    if (!res.ok) throw new Error(`API.Bible ${res.status}`);
+    const d = (await res.json()) as {
+      data?: { id: string; name: string; abbreviation?: string; language?: { name?: string } }[];
+    };
+    return (d.data ?? []).map((t) => ({
+      id: t.id,
+      name: t.name,
+      language: t.language?.name,
+    }));
+  },
+};
+
+// ── Biblia / Faithlife (key: BIBLIA_API_KEY) ────────────────────────────────
+// Keys are URL-restricted, so calls send a Referer for the church's domain.
+// Terms of Use REQUIRE a visible "Powered by Biblia / Logos" acknowledgement —
+// the reader renders it whenever a passage comes from this provider.
+const BIBLIA_BASE = "https://api.biblia.com/v1/bible";
+const bibliaKey = () => process.env.BIBLIA_API_KEY?.trim() || "";
+const bibliaReferer = () =>
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://arisehub.myfaithtech.com";
+
+export const BIBLIA_ATTRIBUTION =
+  "This site uses the Biblia web services from Logos Bible Software.";
+
+const biblia: BibleProvider = {
+  id: "biblia",
+  label: "Biblia",
+  keyless: false,
+  configured: () => !!bibliaKey(),
+  async getPassage(ref, translation = "LEB") {
+    const key = bibliaKey();
+    if (!key) throw new Error("Biblia key not set");
+    const p = parseReference(ref);
+    if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
+    // Biblia wants "John3.16" / "John3.16-17" style passages.
+    const passage =
+      p.verseFrom === undefined
+        ? `${p.bookName.replace(/\s+/g, "")}${p.chapter}`
+        : `${p.bookName.replace(/\s+/g, "")}${p.chapter}.${p.verseFrom}` +
+          (p.verseTo && p.verseTo !== p.verseFrom ? `-${p.verseTo}` : "");
+    const url =
+      `${BIBLIA_BASE}/content/${encodeURIComponent(translation)}.txt` +
+      `?passage=${encodeURIComponent(passage)}&key=${encodeURIComponent(key)}`;
+    const res = await fetch(url, { headers: { Referer: bibliaReferer() } });
+    if (!res.ok) throw new Error(`Biblia ${res.status}`);
+    const body = tidy(await res.text());
+    if (!body) throw new Error("No text found for that reference");
+    // The .txt service returns a plain block, so it is kept as one passage
+    // rather than invented verse splits.
+    return {
+      reference: refLabel(p),
+      translation,
+      translationName: translation,
+      copyright: BIBLIA_ATTRIBUTION,
+      providerId: "biblia",
+      verses: [
+        { book: p.bookName, chapter: p.chapter, verse: p.verseFrom ?? 1, text: body },
+      ],
+      text: body,
+    };
+  },
+  async translations() {
+    const key = bibliaKey();
+    if (!key) return [];
+    const res = await fetch(`${BIBLIA_BASE}/find?key=${encodeURIComponent(key)}`, {
+      headers: { Referer: bibliaReferer() },
+    });
+    if (!res.ok) throw new Error(`Biblia ${res.status}`);
+    const d = (await res.json()) as {
+      bibles?: { bible: string; title?: string; languages?: string[] }[];
+    };
+    return (d.bibles ?? []).map((b) => ({
+      id: b.bible,
+      name: b.title || b.bible,
+      language: b.languages?.[0] ?? "English",
+    }));
+  },
+};
+
+// Registered providers, most-preferred first. Keyed ones sit out silently until
+// their key is set, so the list never breaks before the secrets land.
+const PROVIDERS: BibleProvider[] = [helloao, apiBible, biblia, bibleApiCom, wldeh];
 
 /** A translation in the merged list, remembering which provider serves it. */
 export interface MergedTranslation extends Translation {

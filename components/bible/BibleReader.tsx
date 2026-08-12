@@ -145,6 +145,22 @@ export function BibleReader() {
 
           {passage.copyright && <p className="mt-3 text-xs text-ink-400">{passage.copyright}</p>}
 
+          {/* Biblia's Terms of Use require a visible acknowledgement and links
+              whenever their service supplies the text. */}
+          {passage.providerId === "biblia" && (
+            <p className="mt-2 text-xs text-ink-400">
+              This site uses the{" "}
+              <a href="https://biblia.com/" className="underline" target="_blank" rel="noreferrer">
+                Biblia
+              </a>{" "}
+              web services from{" "}
+              <a href="https://www.logos.com/" className="underline" target="_blank" rel="noreferrer">
+                Logos Bible Software
+              </a>
+              .
+            </p>
+          )}
+
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-ink-100 pt-4">
             <button
               onClick={simplify}
