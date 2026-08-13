@@ -49,6 +49,22 @@ function clockAt(min: number) {
   return Math.floor(min / 60) + ":" + String(min % 60).padStart(2, "0");
 }
 
+/**
+ * Did the database refuse this because the person already holds the position?
+ *
+ * 23505 is the unique violation. plan_assignments_slot_uniq allows any number
+ * of UNFILLED slots for a position but only one row per person per position on
+ * a plan, so this is the only way it can fire from these two screens.
+ */
+function duplicateSlot(error: { code?: string; message?: string }) {
+  return error.code === "23505" || /duplicate key|plan_assignments_slot_uniq/i.test(error.message ?? "");
+}
+
+/** What to say when it does. A raw constraint name helps nobody on a Sunday. */
+function alreadyOn(who: string, position: string) {
+  return `${who} is already on ${position} for this service.`;
+}
+
 export function PlanDetail({
   plan,
   initialItems,
@@ -198,7 +214,12 @@ export function PlanDetail({
       .select("id, position, profile_id, status")
       .single();
     setAddingPos(false);
-    if (error) return setPosError(error.message);
+    if (error) {
+      const who = people.find((p) => p.id === posPerson)?.full_name ?? "That person";
+      return setPosError(
+        duplicateSlot(error) ? alreadyOn(who, posName.trim()) : error.message,
+      );
+    }
     if (!data) return setPosError("Couldn't add — try again");
     const assignee = posPerson
       ? { full_name: people.find((p) => p.id === posPerson)?.full_name ?? "" }
@@ -222,6 +243,7 @@ export function PlanDetail({
   /** Fill an existing unfilled position — same invite semantics as adding one. */
   async function assignPerson(a: Assignment, personId: string) {
     const fullName = people.find((p) => p.id === personId)?.full_name ?? "";
+    const previous = assignments;
     setAssignments((as) =>
       as.map((x) =>
         x.id === a.id
@@ -230,10 +252,18 @@ export function PlanDetail({
       ),
     );
     setPickerFor(null);
-    await supabase
+    const { error } = await supabase
       .from("plan_assignments")
       .update({ profile_id: personId, status: "invited" })
       .eq("id", a.id);
+    // The update was painted optimistically. It can now be REFUSED — the same
+    // person cannot hold one position twice on a plan — so a failure has to put
+    // the row back, or the screen would show somebody scheduled who is not.
+    if (error) {
+      setAssignments(previous);
+      setPosError(duplicateSlot(error) ? alreadyOn(fullName, a.position) : "Couldn't assign — try again");
+      return;
+    }
     if (personId !== currentProfileId) {
       notify(
         personId,
