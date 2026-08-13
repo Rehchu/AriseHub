@@ -48,6 +48,13 @@ export interface Passage {
    * source publishes them.
    */
   audio?: AudioTrack[];
+  /**
+   * Set when the Bible on screen numbers its verses differently from the
+   * English — the Hebrew counting a psalm's heading as verse 1, say. Explains
+   * what was shown and why, because a silent shift would send the wrong verse
+   * onto a slide.
+   */
+  versificationNote?: string;
 }
 
 export interface Translation {
@@ -1166,9 +1173,21 @@ async function audioSupport(providerId: string): Promise<string> {
 
 /** Find the provider that serves a given translation id from the merged list. */
 export async function providerForTranslation(id: string): Promise<BibleProvider | null> {
-  const all = await allTranslations(false);
-  const hit = all.find((t) => t.id === id);
+  const hit = await translationFor(id);
   return hit ? getProvider(hit.providerId) : null;
+}
+
+/**
+ * The merged catalogue row for a translation id.
+ *
+ * Callers that need BOTH the provider and the Bible's metadata (its language,
+ * for working out how it numbers verses) should use this and read
+ * `providerId` off the result, rather than calling providerForTranslation as
+ * well — the catalogue is refetched on each call.
+ */
+export async function translationFor(id: string): Promise<MergedTranslation | null> {
+  const all = await allTranslations(false);
+  return all.find((t) => t.id === id) ?? null;
 }
 
 /** Providers usable right now (keyless, or key present). */

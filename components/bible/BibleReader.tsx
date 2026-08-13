@@ -298,6 +298,16 @@ export function BibleReader() {
             <span className="shrink-0 text-xs text-ink-400">{passage.translationName}</span>
           </div>
 
+          {/* The source texts number their verses differently from the
+              English. Say which verse is actually on screen BEFORE it is read,
+              not in a footnote underneath — the whole risk is quoting the
+              wrong one onto a slide. */}
+          {passage.versificationNote && (
+            <p className="mb-3 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-xs leading-relaxed text-ink-700">
+              {passage.versificationNote}
+            </p>
+          )}
+
           <div className="space-y-1.5 leading-relaxed text-ink-800">
             {passage.verses.map((v) => (
               <p key={`${v.chapter}:${v.verse}`}>

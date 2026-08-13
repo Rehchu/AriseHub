@@ -4,8 +4,11 @@ import {
   annotationsFor,
   audioForTranslationName,
   getProvider,
-  providerForTranslation,
+  parseReference,
+  refLabel,
+  translationFor,
 } from "@/lib/bible";
+import { mapReference, versificationOf } from "@/lib/versification";
 
 // GET /api/bible/passage?ref=John+3:16&translation=web&provider=bible-api
 //
@@ -27,11 +30,30 @@ export async function GET(req: NextRequest) {
 
   try {
     // The reader sends a Bible, not a provider — look up whichever provider
-    // serves that translation and use it.
-    const provider =
-      (translation ? await providerForTranslation(translation) : null) ??
-      getProvider(providerId);
-    const passage = await provider.getPassage(ref, translation);
+    // serves that translation and use it. The catalogue row comes back too, so
+    // its language is available for the verse-numbering step below without a
+    // second lookup.
+    const record = translation ? await translationFor(translation) : null;
+    const provider = record ? getProvider(record.providerId) : getProvider(providerId);
+
+    // The Greek and Hebrew number their verses differently from the English.
+    // A reference is typed the way it is preached — English numbering — so it
+    // is shifted here to land on the same words in the source text. Psalm 3:1
+    // in the Hebrew is the superscription, not "LORD, how are they increased".
+    let wanted = ref;
+    let versificationNote: string | undefined;
+    const parsed = record ? parseReference(ref) : null;
+    if (record && parsed) {
+      const scheme = versificationOf(record);
+      const mapped = mapReference(parsed.osis, parsed.chapter, scheme, parsed.verseFrom, parsed.verseTo);
+      versificationNote = mapped.note;
+      if (mapped.verseFrom !== undefined && mapped.verseFrom !== parsed.verseFrom) {
+        wanted = refLabel({ ...parsed, verseFrom: mapped.verseFrom, verseTo: mapped.verseTo });
+      }
+    }
+
+    const passage = await provider.getPassage(wanted, translation);
+    if (versificationNote) passage.versificationNote = versificationNote;
 
     // Study notes should be there whatever Bible was picked. If the selected
     // one carries none, borrow them and say where they came from.
