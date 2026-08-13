@@ -25,9 +25,21 @@ const env = Object.fromEntries(
     .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
 );
 
-const url = env.NEXT_PUBLIC_SUPABASE_URL;
-const key = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
-if (!url || !key) throw new Error("need NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY in .env.local");
+// The process environment wins over .env.local so a one-off run can pass a key
+// inline without leaving it on disk:
+//
+//   SUPABASE_SERVICE_ROLE_KEY=… node tools/import-dictionaries.mjs
+//
+// This is a service-role key either way — it bypasses RLS completely — so it
+// belongs in as few places as possible, and should be rotated after any run
+// where it was handled outside the usual secret store.
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+const key =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SECRET_KEY ||
+  env.SUPABASE_SECRET_KEY ||
+  env.SUPABASE_SERVICE_ROLE_KEY;
+if (!url || !key) throw new Error("need NEXT_PUBLIC_SUPABASE_URL and a Supabase service key");
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 const BASE = "https://raw.githubusercontent.com/neuu-org/bible-dictionary-dataset/HEAD/data/01_parsed";
@@ -41,7 +53,24 @@ for (const letter of LETTERS) {
   if (!res.ok) { console.log(`  ${letter}.json — ${res.status}, skipped`); continue; }
   const data = await res.json();
 
-  const rows = Object.values(data).map((e) => ({
+  // Two headwords in one file can share a slug — "Fig" and "Fig-tree" both
+  // slugify to "fig" in places. Postgres refuses to upsert the same key twice
+  // in one statement ("cannot affect row a second time"), so they are merged
+  // here: one entry, both dictionaries' definitions, citations pooled.
+  const bySlug = new Map();
+  for (const e of Object.values(data)) {
+    const prior = bySlug.get(e.slug);
+    if (!prior) {
+      bySlug.set(e.slug, { ...e, definitions: [...(e.definitions ?? [])], sources: [...(e.sources ?? [])], scripture_refs: [...(e.scripture_refs ?? [])] });
+      continue;
+    }
+    prior.definitions.push(...(e.definitions ?? []));
+    prior.scripture_refs.push(...(e.scripture_refs ?? []));
+    for (const s of e.sources ?? []) if (!prior.sources.includes(s)) prior.sources.push(s);
+  }
+  const merged = [...bySlug.values()];
+
+  const rows = merged.map((e) => ({
     slug: e.slug,
     name: e.name,
     definitions: e.definitions ?? [],
@@ -60,7 +89,7 @@ for (const letter of LETTERS) {
   await db.from("dictionary_refs").delete().in("entry_id", [...idBySlug.values()]);
 
   const refRows = [];
-  for (const e of Object.values(data)) {
+  for (const e of merged) {
     const entryId = idBySlug.get(e.slug);
     if (!entryId) continue;
     for (const r of e.scripture_refs ?? []) {
