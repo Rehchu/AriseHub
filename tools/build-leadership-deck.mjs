@@ -254,7 +254,8 @@ function para(s, text, box, opts = {}) {
 {
   const s = slide(BG);
   head(s, "One home for the whole weekend", "The dashboard");
-  picture(s, "dashboard.png", { x: 0.7, y: 1.85, w: 8.4 });
+  picture(s, "dashboard-grid.png", { x: 0.7, y: 1.85, w: 5.8 }, "Simple view — every module a tap away");
+  picture(s, "dashboard-detailed.png", { x: 6.83, y: 1.85, w: 5.8 }, "Detailed view — the weekend at a glance");
   bullets(
     s,
     [
@@ -263,8 +264,10 @@ function para(s, text, box, opts = {}) {
       "Recent messages across every department chat.",
       "Everything one tap away — dark or light, phone or desktop.",
     ],
-    { x: 9.4, y: 2.15, w: 3.3, h: 4.2 },
-    { fontSize: 13.5, gap: 13 },
+    // Below the two screenshots now, not beside them: the pair spans the full
+    // width, and a column here would sit on top of the right-hand image.
+    { x: 0.7, y: 5.5, w: 11.9, h: 1.6 },
+    { fontSize: 13, gap: 7 },
   );
 }
 
@@ -582,14 +585,13 @@ function cardGrid(s, items, opts = {}) {
 {
   const s = slide(BG);
   head(s, "A Bible built into the app", "Bible");
+  picture(s, "bible.png", { x: 0.7, y: 1.85, w: 6.4 }, "The reader, on any phone");
   cardGrid(s, [
     ["Every translation in one list", "Six sources behind one menu — the licensed modern translations the church already reads, plus the classics. You pick a Bible, not a provider."],
     ["Study notes on any translation", "The scholarly footnotes that usually only come with one Bible are shown alongside whichever you're reading, and labelled where they came from."],
     ["Read it aloud", "Narrated chapters for the Bibles that publish them — for the car, or for anyone who finds reading hard."],
     ["Plain language on demand", "A 'Simplify' button restates a passage in everyday English, always shown beside the real verse and never presented as scripture."],
-    ["Built for finding things", "Jump by book and chapter, type a reference, or copy a passage with its reference ready to paste into notes."],
-    ["Costs nothing", "Public-domain sources are free; the licensed ones come through the church's own YouVersion key."],
-  ]);
+  ], { cols: 1, x: 7.4, w: 5.2, y: 1.85, h: 1.28 });
   speak(s, `
 This is new since you last saw AriseHub. It is a full Bible, in the app, on everyone's phone.
 
@@ -603,14 +605,13 @@ If someone asks about cost: nothing. The free sources are public domain, and the
 {
   const s = slide(BG);
   head(s, "Every service, kept", "Sermon archive");
+  picture(s, "sermon-detail.png", { x: 0.7, y: 1.85, w: 6.4 }, "A service being archived");
   cardGrid(s, [
     ["Searchable by anything", "Date, speaker, series or scripture — and the words of the message itself, once a transcript is uploaded."],
     ["The video, in the app", "Links the YouTube upload we already make. No second video library to maintain."],
     ["Transcript that jumps", "Tap any line and the video moves to the moment it was said. Search inside a message for the bit you half-remember."],
     ["Slides become a download", "The Proclaim export is trimmed to the message and turned into a PowerPoint people can view in the app or download."],
-    ["Slides follow the video", "One pass marking where each slide went up, and afterwards the slides advance by themselves as the message plays."],
-    ["Nothing goes public by accident", "Everything starts as a draft; only staff see it until it is deliberately published."],
-  ]);
+  ], { cols: 1, x: 7.4, w: 5.2, y: 1.85, h: 1.28 });
   speak(s, `
 The archive answers a question we get constantly: "where's that message about…?"
 
@@ -631,7 +632,7 @@ section("Looking after people and the building", "The quiet work between Sundays
   head(s, "Nobody slips through", "Follow-up & prayer");
   // The directory is the data underneath follow-up, so this screenshot is
   // honestly related rather than decoration.
-  picture(s, "people.png", { x: 0.7, y: 1.85, w: 6.4 }, "Everyone is already in the directory");
+  picture(s, "followup.png", { x: 0.7, y: 1.85, w: 6.4 }, "The follow-up board");
   cardGrid(
     s,
     [

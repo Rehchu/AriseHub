@@ -528,7 +528,15 @@ const youversion: BibleProvider = {
     }
     for (let i = 0; i < hits.length; i++) {
       const slice = html.slice(hits[i].start, hits[i + 1]?.start ?? html.length);
-      const text = stripHtml(slice);
+      // The marker element also PRINTS the verse number, so stripping tags
+      // leaves it at the head of the text — and the reader draws its own number
+      // beside it, giving "30 30 He must increase". Drop the leading label when
+      // it matches the verse this actually is; a verse that genuinely opens with
+      // a number ("40 days") is left alone.
+      const text = stripHtml(slice).replace(
+        new RegExp(`^${hits[i].verse}(?![0-9])[.)\\s]*`),
+        "",
+      );
       if (text) {
         verses.push({ book: p.bookName, chapter: p.chapter, verse: hits[i].verse, text });
       }
@@ -771,6 +779,34 @@ export interface MergedTranslation extends Translation {
 const AUDIO_TRANSLATIONS = new Set(["BSB", "AAB"]);
 
 /**
+ * Where a narrated copy of a Bible lives, keyed by its de-duplicated NAME.
+ *
+ * The recordings sit on the free AO Lab editions. Once a licensed edition of
+ * the same translation won de-duplication, the audio vanished from the app
+ * even though nothing about it had changed. Matching on name rather than id
+ * keeps it: it is the same translation, so the recording still matches the
+ * words on screen — which is the rule audio has to satisfy.
+ */
+const AUDIO_BY_NAME = new Map([
+  ["bereanstandardbible", "BSB"],
+  ["accessibleancientsbible", "AAB"],
+]);
+
+/** Narrated chapters for a translation NAME, wherever the recording lives. */
+export async function audioForTranslationName(
+  ref: string,
+  translationName: string,
+): Promise<AudioTrack[]> {
+  const id = AUDIO_BY_NAME.get(dedupeKey({ id: "", name: translationName }));
+  if (!id) return [];
+  try {
+    return (await helloao.getPassage(ref, id)).audio ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Which of the FREE Bibles to offer.
  *
  * The keyless sources between them carry 75 English "translations", but most are
@@ -852,7 +888,8 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
     const k = dedupeKey(t);
     if (seen.has(k)) continue;
     seen.add(k);
-    merged.push(AUDIO_TRANSLATIONS.has(t.id) ? { ...t, hasAudio: true } : t);
+    const narrated = AUDIO_TRANSLATIONS.has(t.id) || AUDIO_BY_NAME.has(k);
+    merged.push(narrated ? { ...t, hasAudio: true } : t);
   }
   return merged.sort((a, b) => a.name.localeCompare(b.name));
 }

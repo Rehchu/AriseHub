@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { annotationsFor, getProvider, providerForTranslation } from "@/lib/bible";
+import {
+  annotationsFor,
+  audioForTranslationName,
+  getProvider,
+  providerForTranslation,
+} from "@/lib/bible";
 
 // GET /api/bible/passage?ref=John+3:16&translation=web&provider=bible-api
 //
@@ -36,6 +41,14 @@ export async function GET(req: NextRequest) {
         passage.footnotes = footnotes;
         passage.footnotesFrom = from;
       }
+    }
+
+    // The recordings live on the free copy of a translation, so a licensed
+    // edition of the SAME Bible arrives without them. Attaching them here is
+    // not borrowing another translation — it is the same words, read aloud.
+    if (!passage.audio?.length) {
+      const audio = await audioForTranslationName(ref, passage.translationName);
+      if (audio.length) passage.audio = audio;
     }
 
     // Audio is deliberately NOT borrowed from another translation the way notes
