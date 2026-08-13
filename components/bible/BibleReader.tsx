@@ -49,6 +49,8 @@ export function BibleReader() {
   const [references, setReferences] = useState<DictionaryEntry[]>([]);
   const [referenceCredit, setReferenceCredit] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<string | null>(null);
+  /** A whole chapter can cite 25+ entries; show a handful until asked. */
+  const [showAllReferences, setShowAllReferences] = useState(false);
   const booksRef = useRef<BookInfo[]>([]);
   /** Monotonic id per lookup, so a stale response cannot win. */
   const lookupSeq = useRef(0);
@@ -133,6 +135,8 @@ export function BibleReader() {
       // dictionaries are a footer, and waiting on them would hold up the words
       // people came to read. Same sequence guard, so a stale set never lands.
       setReferences([]);
+      setShowAllReferences(false);
+      setOpenEntry(null);
       fetch(`/api/bible/reference?ref=${encodeURIComponent(q)}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((rd) => {
@@ -447,28 +451,46 @@ export function BibleReader() {
                   Browse the dictionary
                 </a>
               </h3>
-              <ul className="space-y-2">
-                {references.map((e) => (
-                  <li key={e.slug} className="text-sm leading-relaxed text-ink-700">
+              {/* Each entry is a full-width ROW, not inline text in a button.
+                  Touch devices give every button a 44px minimum (globals.css,
+                  for one-handed use at the check-in desk); wrapped round a short
+                  label that height becomes dead space, and twenty-five of them
+                  read as a broken list. As a row it is simply the tap target. */}
+              <ul className="divide-y divide-ink-100">
+                {(showAllReferences ? references : references.slice(0, 8)).map((e) => (
+                  <li key={e.slug}>
                     <button
                       type="button"
                       onClick={() => setOpenEntry(openEntry === e.slug ? null : e.slug)}
-                      className="text-left font-semibold text-brand-600 underline decoration-dotted underline-offset-2"
+                      aria-expanded={openEntry === e.slug}
+                      className="flex w-full flex-wrap items-baseline gap-x-2 py-1 text-left"
                     >
-                      {e.name}
-                    </button>
-                    {e.verses.length > 0 && (
-                      <span className="ml-1.5 text-xs text-ink-400">
-                        v{e.verses.join(", ")}
+                      <span className="text-sm font-semibold text-brand-600">{e.name}</span>
+                      {e.verses.length > 0 && (
+                        <span className="text-xs text-ink-400">v{e.verses.join(", ")}</span>
+                      )}
+                      <span className="text-xs text-ink-400">
+                        {e.sources.map((s) => DICTIONARY_NAMES[s] ?? s).join(" · ")}
                       </span>
+                    </button>
+                    {openEntry === e.slug && (
+                      <p className="pb-2 text-sm leading-relaxed text-ink-700">{e.excerpt}…</p>
                     )}
-                    <span className="ml-1.5 text-xs text-ink-400">
-                      {e.sources.map((s) => DICTIONARY_NAMES[s] ?? s).join(" · ")}
-                    </span>
-                    {openEntry === e.slug && <span className="block mt-0.5">{e.excerpt}…</span>}
                   </li>
                 ))}
               </ul>
+
+              {references.length > 8 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllReferences((v) => !v)}
+                  className="mt-1 text-xs font-semibold text-brand-600 underline"
+                >
+                  {showAllReferences
+                    ? "Show fewer"
+                    : `Show all ${references.length} entries`}
+                </button>
+              )}
               {referenceCredit && (
                 <p className="mt-3 text-xs text-ink-400">{referenceCredit}</p>
               )}
