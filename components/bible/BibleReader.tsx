@@ -8,6 +8,21 @@ const DEFAULT_TRANSLATION = "BSB"; // Berean Standard Bible (keyless, modern)
 const DEFAULT_BOOK = "JHN";
 const DEFAULT_CHAPTER = 3;
 
+/** A dictionary article that cites the passage on screen. */
+interface DictionaryEntry {
+  slug: string;
+  name: string;
+  sources: string[];
+  verses: number[];
+  excerpt: string;
+}
+
+/** Which dictionary a definition came from. */
+const DICTIONARY_NAMES: Record<string, string> = {
+  EAS: "Easton's",
+  SMI: "Smith's",
+};
+
 export function BibleReader() {
   const [books, setBooks] = useState<BookInfo[]>([]);
   const [book, setBook] = useState(DEFAULT_BOOK);
@@ -23,6 +38,10 @@ export function BibleReader() {
   const [copied, setCopied] = useState(false);
   /** Which narrator's recording is selected, when a chapter has several. */
   const [narrator, setNarrator] = useState(0);
+  /** Dictionary entries that cite the passage on screen. */
+  const [references, setReferences] = useState<DictionaryEntry[]>([]);
+  const [referenceCredit, setReferenceCredit] = useState<string | null>(null);
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
   const booksRef = useRef<BookInfo[]>([]);
   /** Monotonic id per lookup, so a stale response cannot win. */
   const lookupSeq = useRef(0);
@@ -93,6 +112,20 @@ export function BibleReader() {
       if (!res.ok) throw new Error(d.error || "Couldn't find that passage");
       const p = d as Passage;
       setPassage(p);
+      // Reference works for this passage. Fired separately and not awaited: the
+      // dictionaries are a footer, and waiting on them would hold up the words
+      // people came to read. Same sequence guard, so a stale set never lands.
+      setReferences([]);
+      fetch(`/api/bible/reference?ref=${encodeURIComponent(q)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((rd) => {
+          if (seq !== lookupSeq.current || !rd) return;
+          setReferences(rd.entries ?? []);
+          setReferenceCredit(rd.attribution ?? null);
+        })
+        .catch(() => {
+          /* the passage is what matters; a missing footer is not an error */
+        });
       // Keep the book/chapter pickers in step with whatever was actually found,
       // including free-typed references like "1 Cor 13:4".
       const m = p.reference.match(/^(.*?)\s+(\d+)/);
@@ -375,6 +408,47 @@ export function BibleReader() {
                   </li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {/* Reference works that discuss these verses, sitting with the study
+              notes rather than on a page of their own — the point is to have
+              them to hand while reading. Each is an excerpt; the full article
+              opens in place, and the dictionary view holds the rest. */}
+          {references.length > 0 && (
+            <section className="mt-4 rounded-lg border border-ink-100 bg-ink-50 p-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-500">
+                Reference
+                <span className="ml-1 font-normal normal-case tracking-normal text-ink-400">
+                  — {references.length} {references.length === 1 ? "entry" : "entries"} on this
+                  passage
+                </span>
+              </h3>
+              <ul className="space-y-2">
+                {references.map((e) => (
+                  <li key={e.slug} className="text-sm leading-relaxed text-ink-700">
+                    <button
+                      type="button"
+                      onClick={() => setOpenEntry(openEntry === e.slug ? null : e.slug)}
+                      className="text-left font-semibold text-brand-600 underline decoration-dotted underline-offset-2"
+                    >
+                      {e.name}
+                    </button>
+                    {e.verses.length > 0 && (
+                      <span className="ml-1.5 text-xs text-ink-400">
+                        v{e.verses.join(", ")}
+                      </span>
+                    )}
+                    <span className="ml-1.5 text-xs text-ink-400">
+                      {e.sources.map((s) => DICTIONARY_NAMES[s] ?? s).join(" · ")}
+                    </span>
+                    {openEntry === e.slug && <span className="block mt-0.5">{e.excerpt}…</span>}
+                  </li>
+                ))}
+              </ul>
+              {referenceCredit && (
+                <p className="mt-3 text-xs text-ink-400">{referenceCredit}</p>
+              )}
             </section>
           )}
 
