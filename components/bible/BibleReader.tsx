@@ -27,7 +27,14 @@ export function BibleReader() {
   const [books, setBooks] = useState<BookInfo[]>([]);
   const [book, setBook] = useState(DEFAULT_BOOK);
   const [chapter, setChapter] = useState(DEFAULT_CHAPTER);
-  const [ref, setRef] = useState("John 3");
+  // A ?ref= in the URL wins over the default. The dictionary links back this
+  // way, so a word study can run from an article straight into the passage it
+  // cites. Read once, at first render, rather than in an effect that would
+  // paint John 3 and then jump.
+  const [ref, setRef] = useState(() => {
+    if (typeof window === "undefined") return "John 3";
+    return new URLSearchParams(window.location.search).get("ref")?.trim() || "John 3";
+  });
   const [translation, setTranslation] = useState(DEFAULT_TRANSLATION);
   const [translations, setTranslations] = useState<MergedTranslation[]>([]);
   const [passage, setPassage] = useState<Passage | null>(null);
@@ -47,7 +54,7 @@ export function BibleReader() {
   const lookupSeq = useRef(0);
   // The translation-load effect runs once, so it needs the live reference
   // rather than the value captured at mount.
-  const refRef = useRef("John 3");
+  const refRef = useRef(ref);
   useEffect(() => {
     refRef.current = ref;
   }, [ref]);
@@ -75,10 +82,20 @@ export function BibleReader() {
         // Bible and fetches another. Pick a real one and re-read.
         setTranslation((cur) => {
           if (list.some((t) => t.id === cur)) return cur;
+          // Prefer by NAME, not id. An id belongs to one provider, and which
+          // provider wins de-duplication changes as catalogues move — every id
+          // in the old list here had gone stale, so the fallback was dropping
+          // through to list[0], by then the 1904 Patriarchal Greek New
+          // Testament. A Greek NT cannot serve Genesis, so the reader opened
+          // on an error. Names survive that, because they are canonicalised.
           const preferred =
-            ["BSB", "KJV", "ENGWEBP", "web", "eng_asv"]
-              .map((id) => list.find((t) => t.id === id))
-              .find(Boolean) ?? list[0];
+            [/^berean standard bible$/i, /^king james version$/i, /^world english bible$/i, /^new international version 2011$/i, /^new american standard bible/i]
+              .map((re) => list.find((t) => re.test(t.name)))
+              .find(Boolean) ??
+            // Last resort is still an ENGLISH Bible with a whole canon, never
+            // simply the first row.
+            list.find((t) => /english/i.test(t.language ?? "")) ??
+            list[0];
           if (preferred && preferred.id !== cur) {
             void lookup(refRef.current, preferred.id);
             return preferred.id;
@@ -417,12 +434,18 @@ export function BibleReader() {
               opens in place, and the dictionary view holds the rest. */}
           {references.length > 0 && (
             <section className="mt-4 rounded-lg border border-ink-100 bg-ink-50 p-4">
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-500">
+              <h3 className="mb-2 flex flex-wrap items-baseline gap-x-2 text-xs font-bold uppercase tracking-wide text-ink-500">
                 Reference
-                <span className="ml-1 font-normal normal-case tracking-normal text-ink-400">
+                <span className="font-normal normal-case tracking-normal text-ink-400">
                   — {references.length} {references.length === 1 ? "entry" : "entries"} on this
                   passage
                 </span>
+                <a
+                  href="/bible/dictionary"
+                  className="ml-auto font-normal normal-case tracking-normal text-brand-600 underline"
+                >
+                  Browse the dictionary
+                </a>
               </h3>
               <ul className="space-y-2">
                 {references.map((e) => (
