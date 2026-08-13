@@ -10,6 +10,10 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // lib/*.ts is imported both by Next (which resolves extensionless) and by
+    // the node --test suite (which does not). Writing the extension satisfies
+    // both; safe here because nothing is emitted.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

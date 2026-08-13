@@ -6,6 +6,14 @@
 // (API.Bible, Biblia) read their key from the environment and quietly sit out
 // when it is absent, so nothing breaks before the secret is set.
 
+import {
+  BOOK_ALIASES,
+  BOOK_DISPLAY,
+  NUMBERED_BOOKS,
+  ORDINAL_WORDS,
+  ROMAN_ORDINALS,
+} from "./usfm-books.ts";
+
 export interface BibleVerse {
   book: string;
   chapter: number;
@@ -191,30 +199,84 @@ export interface ParsedRef {
   chapter: number;
   verseFrom?: number;
   verseTo?: number;
+  /**
+   * Last chapter of a range that crosses a chapter break — "Matthew 5:1-7:29".
+   * Absent for the ordinary single-chapter case, so existing callers that only
+   * read `chapter` keep working.
+   */
+  chapterTo?: number;
 }
 
 /** Human label for a parsed reference: "Psalms 23", "John 3:16-17". */
 export function refLabel(p: ParsedRef): string {
   if (p.verseFrom === undefined) return `${p.bookName} ${p.chapter}`;
+  if (p.chapterTo && p.chapterTo !== p.chapter) {
+    return `${p.bookName} ${p.chapter}:${p.verseFrom}-${p.chapterTo}:${p.verseTo}`;
+  }
   const end = p.verseTo && p.verseTo !== p.verseFrom ? `-${p.verseTo}` : "";
   return `${p.bookName} ${p.chapter}:${p.verseFrom}${end}`;
 }
 
-/** "John 3:16-17" / "Ps 23" / "1 Cor 13:4" -> structured. null if unparseable. */
-export function parseReference(input: string): ParsedRef | null {
-  const s = input.trim().toLowerCase().replace(/\s+/g, " ");
-  // Leading book name (may start with a number), then chapter[:verses].
-  const m = s.match(/^((?:[123]\s*)?[a-z][a-z ]*?)\s*(\d+)(?::(\d+)(?:\s*-\s*(\d+))?)?$/);
+/**
+ * Resolve a free-typed book name to its USFM code.
+ *
+ * Handles the three ways a numbered book gets written — "1 John", "I John",
+ * "First John" — by pulling the ordinal off the front and looking the stem up
+ * separately. An impossible ordinal ("4 John") finds nothing, which is right.
+ */
+function resolveBook(raw: string): string | null {
+  // The ported table keys multi-word books with the spaces removed
+  // ("songofsolomon"), so a typed "Song of Solomon" only matches once it is
+  // squashed the same way. Missing this dropped both spellings of the Song.
+  const squash = (s: string) => s.replace(/\s+/g, "");
+
+  // "St. John", "Saint Matthew" — the Douay-Rheims and the Catholic Public
+  // Domain Version style the Gospels this way, and both are in the reader. No
+  // book name begins with "St", so stripping it cannot shadow anything.
+  const bare = raw.replace(/^s(?:t|aint)\s+/, "");
+
+  const direct =
+    BOOK_ALIASES[raw] ?? BOOK_ALIASES[squash(raw)] ?? BOOK_ALIASES[squash(bare)];
+  if (direct) return direct;
+  raw = bare;
+
+  const m = raw.match(/^([123]|i{1,3}|first|second|third)\s+(.+)$/);
   if (!m) return null;
-  const rawBook = m[1].replace(/\s+/g, " ").trim();
-  const hit = BOOKS.find((b) => b.names.includes(rawBook));
-  if (!hit) return null;
+  const [, ord, stem] = m;
+  const n = /^[123]$/.test(ord)
+    ? Number(ord)
+    : (ORDINAL_WORDS[ord] ?? ROMAN_ORDINALS[ord]);
+  if (!n) return null;
+  return NUMBERED_BOOKS[squash(stem)]?.[String(n)] ?? null;
+}
+
+/**
+ * "John 3:16-17" / "Ps 23" / "I Cor 13:4" / "Matthew 5:1-7:29" -> structured.
+ * null if unparseable.
+ */
+export function parseReference(input: string): ParsedRef | null {
+  const s = input.trim().toLowerCase().replace(/\s+/g, " ").replace(/[.]/g, "");
+  // Book, then chapter[:verse[-[chapter:]verse]]. The optional "chapter:" in
+  // the tail is what makes a range able to cross a chapter break.
+  const m = s.match(
+    /^([123]\s*|i{1,3}\s+|first\s+|second\s+|third\s+)?([a-z][a-z ]*?)\s*(\d+)(?::(\d+)(?:\s*[-–]\s*(?:(\d+):)?(\d+))?)?$/,
+  );
+  if (!m) return null;
+  const [, ordinal, stem, chapter, vFrom, cTo, vTo] = m;
+  const osis = resolveBook(`${(ordinal ?? "").trim()} ${stem.trim()}`.trim());
+  if (!osis) return null;
+
+  const chapterTo = cTo ? Number(cTo) : undefined;
+  // "John 4:2-3:1" is a typo, not a range. Reject rather than silently swap.
+  if (chapterTo !== undefined && chapterTo < Number(chapter)) return null;
+
   return {
-    osis: hit.osis,
-    bookName: DISPLAY[hit.osis],
-    chapter: Number(m[2]),
-    verseFrom: m[3] ? Number(m[3]) : undefined,
-    verseTo: m[4] ? Number(m[4]) : m[3] ? Number(m[3]) : undefined,
+    osis,
+    bookName: BOOK_DISPLAY[osis] ?? osis,
+    chapter: Number(chapter),
+    verseFrom: vFrom ? Number(vFrom) : undefined,
+    verseTo: vTo ? Number(vTo) : vFrom ? Number(vFrom) : undefined,
+    ...(chapterTo !== undefined && chapterTo !== Number(chapter) ? { chapterTo } : {}),
   };
 }
 

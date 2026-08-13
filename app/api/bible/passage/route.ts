@@ -7,6 +7,9 @@ import {
   parseReference,
   refLabel,
   translationFor,
+  type BibleProvider,
+  type ParsedRef,
+  type Passage,
 } from "@/lib/bible";
 import { mapReference, versificationOf } from "@/lib/versification";
 
@@ -52,7 +55,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const passage = await provider.getPassage(wanted, translation);
+    // A range crossing a chapter break — "Matthew 5:1-7:29", the Sermon on the
+    // Mount — is asked for as whole chapters and trimmed at both ends. Every
+    // provider can serve a plain chapter, so this works for all of them rather
+    // than needing a passage-id syntax each one spells differently.
+    const passage =
+      parsed?.chapterTo && parsed.chapterTo !== parsed.chapter
+        ? await spanChapters(provider, parsed, translation)
+        : await provider.getPassage(wanted, translation);
     if (versificationNote) passage.versificationNote = versificationNote;
 
     // Study notes should be there whatever Bible was picked. If the selected
@@ -96,4 +106,62 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({ error: message, detail: raw }, { status: 502 });
   }
+}
+
+/**
+ * Fetch a reference that runs across a chapter break.
+ *
+ * Providers disagree about how to express such a range — API.Bible takes
+ * JHN.3.16-JHN.4.2, AO Lab serves whole chapters only, bible-api.com has its
+ * own spelling. Rather than teach each one, the chapters are fetched whole (the
+ * one thing they all do) and trimmed: the first from the opening verse, the
+ * last up to the closing one, the middle entire.
+ *
+ * Capped at MAX_SPAN chapters. Someone typing "Genesis 1:1-50:26" should get an
+ * honest refusal, not fifty round trips.
+ */
+const MAX_SPAN = 6;
+
+async function spanChapters(
+  provider: BibleProvider,
+  ref: ParsedRef,
+  translation?: string,
+): Promise<Passage> {
+  const from = ref.chapter;
+  const to = ref.chapterTo ?? ref.chapter;
+  if (to - from + 1 > MAX_SPAN) {
+    throw new Error(
+      `That range covers ${to - from + 1} chapters — ask for ${MAX_SPAN} or fewer at a time.`,
+    );
+  }
+
+  const chapters = await Promise.all(
+    Array.from({ length: to - from + 1 }, (_, i) =>
+      provider.getPassage(`${ref.bookName} ${from + i}`, translation),
+    ),
+  );
+
+  const verses = chapters.flatMap((c, i) => {
+    const chapter = from + i;
+    return c.verses.filter((v) => {
+      if (chapter === from && ref.verseFrom !== undefined && v.verse < ref.verseFrom) return false;
+      if (chapter === to && ref.verseTo !== undefined && v.verse > ref.verseTo) return false;
+      return true;
+    });
+  });
+
+  if (!verses.length) throw new Error("No verses found for that reference");
+
+  // Everything but the verses comes from the first chapter — same Bible, same
+  // provider, same copyright. Audio is dropped on purpose: recordings are per
+  // chapter, and a player for one chapter of six would be a lie about scope.
+  const head = chapters[0];
+  return {
+    ...head,
+    reference: refLabel(ref),
+    verses,
+    text: verses.map((v) => v.text).join(" "),
+    footnotes: chapters.flatMap((c) => c.footnotes ?? []),
+    audio: undefined,
+  };
 }
