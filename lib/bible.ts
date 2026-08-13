@@ -72,11 +72,21 @@ const tidy = (s: string) => s.replace(/\s+/g, " ").trim();
 /**
  * fetch with one retry on a 5xx or a thrown connection error.
  *
- * bible-api.com and Biblia have both returned 525 (a TLS handshake failure)
- * when called FROM the Worker, while answering normally from elsewhere — the
- * failure is in Cloudflare's path to those origins, not in the request. A retry
- * costs nothing and clears the transient case; a genuinely unreachable host
- * still drops out of the list rather than breaking it.
+ * bible-api.com and Biblia both return 525 (a TLS handshake failure) from the
+ * Worker now and then, while answering normally from elsewhere. They are small
+ * self-hosted origins — nginx and IIS — rather than the CDN-fronted endpoints
+ * the other providers use, and they intermittently drop Cloudflare's handshake.
+ * The failure is in the path to those origins, not in the request.
+ *
+ * USE THIS FOR EVERY provider call, not just the ones observed failing. The
+ * retry was originally added only where a failure had been seen, which left the
+ * two halves of a provider behaving differently: Biblia passages retried and
+ * succeeded while its catalogue did not, so the Bibles read fine in the app but
+ * the diagnostics page reported the provider dead. That inconsistency was far
+ * more confusing than the outage itself.
+ *
+ * Safe to apply everywhere: every provider call is an idempotent GET. A host
+ * that is genuinely down still drops out of the list rather than breaking it.
  */
 async function fetchOnce(url: string, init?: RequestInit): Promise<Response> {
   try {
@@ -209,7 +219,7 @@ const bibleApiCom: BibleProvider = {
   configured: () => true,
   async getPassage(ref, translation = "web") {
     const url = `https://bible-api.com/${encodeURIComponent(ref)}?translation=${encodeURIComponent(translation)}`;
-    const res = await fetch(url);
+    const res = await fetchOnce(url);
     if (!res.ok) throw new Error(`bible-api.com ${res.status}`);
     const d = (await res.json()) as {
       reference: string;
@@ -259,7 +269,7 @@ const helloao: BibleProvider = {
   async getPassage(ref, translation = "BSB") {
     const p = parseReference(ref);
     if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
-    const res = await fetch(
+    const res = await fetchOnce(
       `https://bible.helloao.org/api/${encodeURIComponent(translation)}/${p.osis}/${p.chapter}.json`,
     );
     if (!res.ok) throw new Error(`AO Lab ${res.status}`);
@@ -331,7 +341,7 @@ const helloao: BibleProvider = {
     };
   },
   async translations() {
-    const res = await fetch("https://bible.helloao.org/api/available_translations.json");
+    const res = await fetchOnce("https://bible.helloao.org/api/available_translations.json");
     if (!res.ok) throw new Error(`AO Lab ${res.status}`);
     const d = (await res.json()) as {
       translations?: {
@@ -365,7 +375,7 @@ const wldeh: BibleProvider = {
   async getPassage(ref, translation = "en-kjv") {
     const p = parseReference(ref);
     if (!p) throw new Error(`Couldn't understand "${ref}" — try e.g. John 3:16`);
-    const res = await fetch(
+    const res = await fetchOnce(
       `${WLDEH_CDN}/${encodeURIComponent(translation)}/books/${wldehBook(p.osis)}/chapters/${p.chapter}.json`,
     );
     if (!res.ok) throw new Error(`WLDEH ${res.status}`);
@@ -401,7 +411,7 @@ const wldeh: BibleProvider = {
     };
   },
   async translations() {
-    const res = await fetch(`${WLDEH_CDN}/bibles.json`);
+    const res = await fetchOnce(`${WLDEH_CDN}/bibles.json`);
     if (!res.ok) throw new Error(`WLDEH ${res.status}`);
     const d = (await res.json()) as {
       id: string;
@@ -482,7 +492,7 @@ const youversion: BibleProvider = {
     // HTML, not text: the plain-text form has no verse boundaries at all, so a
     // whole chapter arrives as one block. The HTML marks each verse with
     // class="yv-v" v="N", which is what makes numbered verses possible.
-    const res = await fetch(
+    const res = await fetchOnce(
       `${YV_BASE}/bibles/${encodeURIComponent(translation)}/passages/${usfm}?format=html`,
       { headers: { "X-YVP-App-Key": key } },
     );
@@ -501,7 +511,7 @@ const youversion: BibleProvider = {
     let copyright = yvCopyright.get(translation);
     if (copyright === undefined) {
       try {
-        const vRes = await fetch(`${YV_BASE}/bibles/${encodeURIComponent(translation)}`, {
+        const vRes = await fetchOnce(`${YV_BASE}/bibles/${encodeURIComponent(translation)}`, {
           headers: { "X-YVP-App-Key": key },
         });
         if (vRes.ok) {
@@ -577,7 +587,7 @@ const youversion: BibleProvider = {
       const url =
         `${YV_BASE}/bibles?language_ranges[]=eng&language_ranges[]=en&page_size=99` +
         (pageToken ? `&page_token=${encodeURIComponent(pageToken)}` : "");
-      const res: Response = await fetch(url, { headers: { "X-YVP-App-Key": key } });
+      const res: Response = await fetchOnce(url, { headers: { "X-YVP-App-Key": key } });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         throw new Error(`YouVersion ${res.status}: ${body.slice(0, 200)}`);
@@ -638,7 +648,7 @@ const apiBible: BibleProvider = {
     const url =
       `${API_BIBLE_BASE}/bibles/${encodeURIComponent(translation)}/passages/${passageId}` +
       `?content-type=text&include-verse-numbers=true&include-notes=true&include-titles=false&include-chapter-numbers=false`;
-    const res = await fetch(url, { headers: { "api-key": key } });
+    const res = await fetchOnce(url, { headers: { "api-key": key } });
     if (!res.ok) throw new Error(`API.Bible ${res.status}`);
     const d = (await res.json()) as {
       data?: { content?: string; reference?: string; copyright?: string; bibleId?: string };
@@ -671,7 +681,7 @@ const apiBible: BibleProvider = {
   async translations() {
     const key = apiBibleKey();
     if (!key) return [];
-    const res = await fetch(`${API_BIBLE_BASE}/bibles`, { headers: { "api-key": key } });
+    const res = await fetchOnce(`${API_BIBLE_BASE}/bibles`, { headers: { "api-key": key } });
     if (!res.ok) throw new Error(`API.Bible ${res.status}`);
     const d = (await res.json()) as {
       data?: { id: string; name: string; abbreviation?: string; language?: { name?: string } }[];
@@ -736,7 +746,7 @@ const biblia: BibleProvider = {
   async translations() {
     const key = bibliaKey();
     if (!key) return [];
-    const res = await fetch(`${BIBLIA_BASE}/find?key=${encodeURIComponent(key)}`, {
+    const res = await fetchOnce(`${BIBLIA_BASE}/find?key=${encodeURIComponent(key)}`, {
       headers: { Referer: bibliaReferer() },
     });
     if (!res.ok) throw new Error(`Biblia ${res.status}`);
@@ -849,9 +859,110 @@ const KEYLESS_KEEP = new Set([
   "AAB", // Accessible Ancients Bible (the other narrated one)
 ]);
 
+/**
+ * The languages this church reads: English to preach from, Greek and Hebrew to
+ * study.
+ *
+ * The source texts are not decoration. The ministers look up a word in the
+ * Greek or Hebrew and unpack it for the congregation — it is a regular part of
+ * a sermon here, and usually ends up on a slide — so those editions earn their
+ * place beside the English ones. Everything else is noise for this room:
+ * API.Bible lists 244 Bibles and WLDEH another 210, nearly all of them
+ * languages nobody in Pineville reads.
+ */
+const KEEP_LANGUAGE = /english|greek|hebrew/i;
+
+/**
+ * A source text rather than a reading Bible.
+ *
+ * These sit OUTSIDE the keyless curation below. That allowlist exists to stop a
+ * thousand near-identical English editions crowding the list, which is not what
+ * these are: roughly twenty survive de-duplication, and each is a distinct
+ * manuscript tradition — Textus Receptus, Byzantine, SBL, the Leningrad Codex —
+ * not another printing of the same words.
+ */
+export const isSourceText = (t: Translation) => /greek|hebrew/i.test(t.language ?? "");
+
+/**
+ * Keep this Bible on language grounds?
+ *
+ * A MISSING tag keeps it. Dropping a Bible over absent metadata is exactly how
+ * a licensed translation disappears without anyone noticing — YouVersion's
+ * catalogue IS the church's approved list, and no tag must ever be read as
+ * "not English". Only an explicit foreign tag filters anything out.
+ */
+export const languageKept = (t: Translation) => {
+  const lang = t.language?.trim();
+  return !lang || KEEP_LANGUAGE.test(lang);
+};
+
+/** Which script a Bible is in — the one line de-duplication must never cross. */
+const languageBucket = (lang = ""): "grc" | "heb" | "eng" =>
+  /greek/i.test(lang) ? "grc" : /hebrew/i.test(lang) ? "heb" : "eng";
+
+/**
+ * One work, published under several names.
+ *
+ * Providers name the same Bible differently — the Westminster Leningrad Codex
+ * arrived four times ("Westminster Leningrad Codex Hebrew OT", "The Hebrew
+ * Bible, Westminister Leningrad Codex" — note the misspelling), and the Textus
+ * Receptus three. Matching on the exact name missed every one of them.
+ *
+ * This table is deliberately EXPLICIT rather than a clever normalizer. The
+ * generic version — strip years, strip parentheticals — was tried first against
+ * the live catalogue and merged NASB 1995 with NASB 2020, and NIV with NIV
+ * Anglicized, keeping the Anglicized one. Those are different translations, and
+ * a wrong merge is invisible: the Bible simply stops being in the list and
+ * nobody notices for months. Rules cannot tell "1901 vs 1995" from "1995 vs
+ * 2020"; a person can, once, here.
+ *
+ * `lang` scopes each rule to a script, so /brenton/ cannot fold Brenton's Greek
+ * Septuagint into his English translation of it. Same for Family 35 and the
+ * Text-Critical NT, which both ship in Greek and in English.
+ *
+ * The canonical name is what the reader displays, so the survivor is the
+ * cleanest spelling rather than whichever provider happened to sort first.
+ *
+ * To add one: confirm the editions really are the same text, anchor the regex
+ * tightly enough to exclude neighbours (+ Apocrypha, British Edition, Updated),
+ * and add a must-not-merge case to tests/bible-dedupe.test.mjs.
+ */
+const SAME_WORK: { canon: string; lang: "eng" | "grc" | "heb"; match: RegExp }[] = [
+  { canon: "Westminster Leningrad Codex", lang: "heb", match: /westmin[ist]*ster\s+leningrad/i },
+  { canon: "Textus Receptus", lang: "grc", match: /textus\s+receptus/i },
+  { canon: "Text-Critical Greek New Testament", lang: "grc", match: /text-?critical/i },
+  { canon: "Solid Rock Greek New Testament", lang: "grc", match: /solid\s*rock/i },
+  { canon: "Greek New Testament, Family 35", lang: "grc", match: /family\s*35/i },
+  { canon: "Brenton Greek Septuagint", lang: "grc", match: /brenton/i },
+  { canon: "Brenton's English Septuagint", lang: "eng", match: /brenton/i },
+  { canon: "American Standard Version", lang: "eng", match: /american\s+standard\s+version/i },
+  // Anchored: must not catch "+ Apocrypha" or "Cambridge Paragraph Bible of the KJV".
+  {
+    canon: "King James Version",
+    lang: "eng",
+    match: /^(the\s+)?king\s+james\s+(\(authoris[ez]d\)\s+)?version$/i,
+  },
+  // Anchored: must not catch "British Edition" or "Updated", which are real variants.
+  {
+    canon: "World English Bible",
+    lang: "eng",
+    match: /^world\s+english\s+bible(,\s*american\s+english\s+edition.*)?$/i,
+  },
+  { canon: "Geneva Bible", lang: "eng", match: /^geneva\s+bible(\s+1599)?$/i },
+];
+
+/** The shared work this Bible belongs to, if any. */
+export const canonicalWork = (t: Translation) => {
+  const b = languageBucket(t.language);
+  return SAME_WORK.find((w) => w.lang === b && w.match.test(t.name || ""));
+};
+
 /** Normalized key for spotting the same Bible offered by several providers. */
-const dedupeKey = (t: Translation) =>
-  (t.name || t.id).toLowerCase().replace(/[^a-z0-9]/g, "");
+export const dedupeKey = (t: Translation) => {
+  const work = canonicalWork(t);
+  if (work) return `work:${work.canon}`;
+  return (t.name || t.id).toLowerCase().replace(/[^a-z0-9]/g, "");
+};
 
 /**
  * Every translation from every configured provider as ONE flat list — sorted
@@ -859,7 +970,7 @@ const dedupeKey = (t: Translation) =>
  * once; the earlier provider in PROVIDERS wins). The reader shows this list
  * directly: users pick a Bible, not a provider.
  */
-export async function allTranslations(englishOnly = true): Promise<MergedTranslation[]> {
+export async function allTranslations(filterLanguages = true): Promise<MergedTranslation[]> {
   const lists = await Promise.all(
     bibleProviders().map(async (p) => {
       try {
@@ -880,16 +991,30 @@ export async function allTranslations(englishOnly = true): Promise<MergedTransla
   const merged: MergedTranslation[] = [];
   for (const t of lists.flat()) {
     const isKeyless = keyless.has(t.providerId);
-    if (curate && isKeyless && !KEYLESS_KEEP.has(t.id)) continue;
-    // Licensed Bibles are kept whatever their language tag says: they were
-    // chosen on purpose, and dropping one over metadata would be worse than
-    // showing it.
-    if (isKeyless && englishOnly && !/english/i.test(t.language ?? "")) continue;
+    if (curate && isKeyless && !KEYLESS_KEEP.has(t.id) && !isSourceText(t)) continue;
+    // Language filtering applies to EVERY provider, keyed ones included.
+    //
+    // It used to spare them, on the reasoning that a licensed catalogue was
+    // "chosen on purpose". That holds for YouVersion — somebody licensed those
+    // twenty — but not for API.Bible, whose free catalogue is simply everything
+    // openly licensed: 244 Bibles, nobody chose Arapaho Luke. The result was a
+    // reader's list padded with hundreds of languages this church cannot read.
+    //
+    // Note this is a LANGUAGE filter, not an id allowlist. An allowlist over a
+    // keyed provider would silently delete licensed Bibles, which is the trap
+    // KEYLESS_KEEP is documented to avoid; filtering on an explicit foreign
+    // language tag cannot, because languageKept() keeps anything untagged.
+    if (filterLanguages && !languageKept(t)) continue;
     const k = dedupeKey(t);
     if (seen.has(k)) continue;
     seen.add(k);
+    // Show the canonical spelling when several providers name one work
+    // differently — otherwise the survivor is whichever sorted first, which is
+    // how "The Hebrew Bible, Westminister Leningrad Codex" (sic) won.
+    const work = canonicalWork(t);
+    const named = work ? { ...t, name: work.canon } : t;
     const narrated = AUDIO_TRANSLATIONS.has(t.id) || AUDIO_BY_NAME.has(k);
-    merged.push(narrated ? { ...t, hasAudio: true } : t);
+    merged.push(narrated ? { ...named, hasAudio: true } : named);
   }
   return merged.sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -912,7 +1037,7 @@ let bookCache: BookInfo[] | null = null;
 export async function bibleBooks(): Promise<BookInfo[]> {
   if (bookCache) return bookCache;
   try {
-    const res = await fetch("https://bible.helloao.org/api/BSB/books.json");
+    const res = await fetchOnce("https://bible.helloao.org/api/BSB/books.json");
     if (!res.ok) throw new Error(`AO Lab ${res.status}`);
     const d = (await res.json()) as {
       books?: { id: string; commonName?: string; name?: string; numberOfChapters?: number }[];
@@ -963,7 +1088,16 @@ export async function annotationsFor(ref: string): Promise<{ footnotes: Footnote
  * to debug with. This reports what each provider actually did.
  */
 export async function providerDiagnostics(): Promise<
-  { id: string; label: string; keyless: boolean; configured: boolean; count: number; error?: string; sample?: string[] }[]
+  {
+    id: string;
+    label: string;
+    keyless: boolean;
+    configured: boolean;
+    count: number;
+    error?: string;
+    sample?: string[];
+    audio?: string;
+  }[]
 > {
   return Promise.all(
     PROVIDERS.map(async (p) => {
@@ -973,12 +1107,61 @@ export async function providerDiagnostics(): Promise<
       }
       try {
         const list = await p.translations();
-        return { ...base, count: list.length, sample: list.slice(0, 5).map((t) => `${t.name} [${t.id}]`) };
+        return {
+          ...base,
+          count: list.length,
+          sample: list.slice(0, 5).map((t) => `${t.name} [${t.id}]`),
+          audio: await audioSupport(p.id),
+        };
       } catch (e) {
         return { ...base, count: 0, error: e instanceof Error ? e.message : "failed" };
       }
     }),
   );
+}
+
+/**
+ * Does this provider offer narrated Bibles to US, with the key we hold?
+ *
+ * Only API.Bible needs asking. Of the six sources, it is the one with an audio
+ * endpoint at all, and access is granted per key — two accounts querying the
+ * same endpoint can get different catalogues. So "does API.Bible have audio" is
+ * not answerable from the docs; only our own key can answer it.
+ *
+ * Do NOT describe these as Faith Comes By Hearing recordings. An earlier
+ * version of this comment did, and it was wrong: FCBH distributes through Bible
+ * Brain, a different API. What our key returned is largely Davar Partners and
+ * Biblica Open material in minority languages — 110 audio Bibles, of which the
+ * English overlap with anything this church reads is close to none.
+ *
+ * The rest are settled and hard-coded rather than probed: AO Lab was swept
+ * chapter by chapter across all 1,256 translations and exactly two carry
+ * narration; YouVersion's SDK exposes no audio surface at all; Biblia,
+ * bible-api.com and WLDEH are text-only by design.
+ */
+async function audioSupport(providerId: string): Promise<string> {
+  if (providerId !== "api-bible") {
+    return providerId === "helloao" ? "yes — BSB and AAB (2 of 1,256)" : "none — text-only source";
+  }
+  const key = apiBibleKey();
+  if (!key) return "unknown — no key";
+  try {
+    const res = await fetchOnce(`${API_BIBLE_BASE}/audio-bibles`, { headers: { "api-key": key } });
+    if (!res.ok) {
+      // 403 here is the interesting one: the endpoint exists but this key is
+      // not approved for audio, which is a licensing question, not a bug.
+      return res.status === 403
+        ? "no — key not approved for audio Bibles (403)"
+        : `unknown — API.Bible ${res.status}`;
+    }
+    const d = (await res.json()) as { data?: { id?: string; abbreviation?: string; name?: string }[] };
+    const list = d.data ?? [];
+    if (!list.length) return "none available to this key";
+    const names = list.slice(0, 8).map((a) => `${a.abbreviation || a.name} [${a.id}]`);
+    return `${list.length} available: ${names.join(", ")}${list.length > 8 ? " …" : ""}`;
+  } catch (e) {
+    return `unknown — ${e instanceof Error ? e.message : "probe failed"}`;
+  }
 }
 
 /** Find the provider that serves a given translation id from the merged list. */
