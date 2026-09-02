@@ -29,8 +29,17 @@ export function weekOfMonth(date: Date): number {
   return Math.floor((date.getDate() - 1) / 7) + 1;
 }
 
+// Format a Date as "yyyy-mm-dd" from its LOCAL calendar day. The rest of the
+// scheduler (weekOfMonth here, and getDay()/getFullYear()/getMonth()/getDate()
+// across ScheduleMatrix/ScheduleCalendar/PlanDetail) reads the local day, so
+// this must too. toISOString() converts to UTC first, which shifts the day for
+// part of every day in any non-UTC timezone — an Aug 30 blockout then read
+// "available" late on the 30th because UTC had already rolled to the 31st.
 function ymd(d: Date) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 /**
