@@ -21,11 +21,18 @@ export default async function PlanPage({
     .single();
   const profileId = (profile as { id: string } | null)?.id ?? "";
   const role = (profile as { role?: string } | null)?.role;
-  const canManage = role === "Super_Admin" || role === "Staff";
+  // Migration 0065 already grants a department lead edit rights on their own
+  // plans, and can_edit_plan() is the authority on it. The UI was asking a
+  // narrower question than the database — so a Praise Team leader who is not
+  // Staff saw no "Add a position", no "Find someone", and an empty people list,
+  // on a plan RLS would have let them edit. The songs page had this right; the
+  // scheduling screens did not.
+  const { data: editable } = await supabase.rpc("can_edit_plan", { pid: planId });
+  const canManage = role === "Super_Admin" || role === "Staff" || !!editable;
 
   const { data: plan } = await supabase
     .from("service_plans")
-    .select("id, title, service_date, notes, department:departments(name)")
+    .select("id, title, service_date, notes, department_id, department:departments(name)")
     .eq("id", planId)
     .maybeSingle();
   if (!plan) notFound();
@@ -36,7 +43,7 @@ export default async function PlanPage({
   const [{ data: items }, { data: assignments }, { data: people }] = await Promise.all([
     supabase
       .from("plan_items")
-      .select("id, sort_order, title, item_type, duration_minutes, notes, song_key")
+      .select("id, sort_order, title, item_type, duration_minutes, notes, song_id, song_key")
       .eq("plan_id", planId)
       .order("sort_order"),
     supabase
@@ -93,7 +100,15 @@ export default async function PlanPage({
   return (
     <>
     <PlanDetail
-      plan={plan as unknown as { id: string; title: string; service_date: string; notes: string | null }}
+      plan={
+        plan as unknown as {
+          id: string;
+          title: string;
+          service_date: string;
+          notes: string | null;
+          department_id: string | null;
+        }
+      }
       departmentName={departmentName}
       initialItems={(items ?? []) as Item[]}
       initialAssignments={normAssignments}

@@ -91,11 +91,21 @@ export async function POST(req: NextRequest) {
         `Reported by ${who}`;
 
       if (channelId) {
-        await admin.from("messages").insert({
+        // sender_profile_id, NOT profile_id — messages has no such column and
+        // it is NOT NULL, so this insert was failing every time. Supabase
+        // returns the error rather than throwing, and the result was discarded,
+        // so the push notifications below still fired: the request looked
+        // delivered while nothing was ever posted to the channel. Checked and
+        // logged now, because a silent best-effort is indistinguishable from a
+        // working one.
+        const { error: msgError } = await admin.from("messages").insert({
           channel_id: channelId,
-          profile_id: me.id,
+          sender_profile_id: me.id,
           body: text,
         });
+        if (msgError) {
+          console.error("maintenance: could not post to the department channel", msgError.message);
+        }
       }
 
       const { data: members } = await admin

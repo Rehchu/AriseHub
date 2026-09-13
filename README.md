@@ -41,7 +41,7 @@ Because everyone will have an AriseHub account, submitting an IT request should 
 3. Have these three values ready for the app + auth bridge (Phase 2): project **URL**, **anon key**, **service-role key** (Settings → API).
 
 ### What it creates
-`campuses`, `profiles` (+ `profile_medical` split out), `families`, `family_members`, `guardians`, `rooms`, `services`, `service_assignments`, `checkins`, `chms_audit_log` — with RLS on every table, `updated_at` triggers, and SECURITY-DEFINER helper functions for role/campus checks.
+`campuses`, `profiles` (+ `profile_medical` split out), `families`, `family_members`, `guardians`, `rooms`, `services`, `checkins`, `chms_audit_log` — with RLS on every table, `updated_at` triggers, and SECURITY-DEFINER helper functions for role/campus checks.
 
 ### Key access-control decisions baked in
 - **A profile is a PERSON, not a login.** `profiles.id` is its own uuid; `profiles.user_id` is a nullable link to `auth.users`. Children, visitors, and non-login members have `user_id = null` — essential, since check-in creates child profiles that will never have an auth account. Staff/admins with a Supabase login have `user_id` set.
