@@ -75,28 +75,29 @@ repository** (2026-09-15) and one is still a dashboard field:
    nobody had filled in, the two public values are now committed as defaults in
    `lib/supabase/env.ts` (see below). A bare checkout builds with no environment
    at all: verified, `npm run build` with zero `NEXT_PUBLIC_*` set exits 0.
-2. **The root build command produces the wrong directory** — and **it must stay
-   that way until fault 3 is fixed.** The root `npm run build` is `next build`,
-   which writes `.next/`, while the `arisehub` Worker's `wrangler.jsonc` serves
-   `.open-next/assets`. Making it `opennextjs-cloudflare build` looks like the
-   obvious fix. **It is actively destructive.** See the next section — this was
-   tried on 2026-09-15 and it overwrote the IT portal.
-3. **The `arise-it` build is pointed at the repo root**, exactly like the
-   `arisehub` one. It installs the root `package.json`, runs
-   `arisehub@0.1.0 build`, and never touches `arise-it-portal/`. The portal's
-   own config, build script and frontend are irrelevant to it. This is why
-   `arise-it` has not deployed since 2026-08-09 no matter what lands in the
-   repo — two Workers, one build, and it is AriseHub's. **Nothing in the
-   repository can fix this one**, because Root directory is per-Worker dashboard
-   state.
+2. ~~**The root build command produces the wrong directory.**~~ *Fixed, but only
+   after fault 3 was.* The root `npm run build` was `next build`, which writes
+   `.next/`, while the `arisehub` Worker's `wrangler.jsonc` serves
+   `.open-next/assets`. It is now `opennextjs-cloudflare build`. Changing it
+   while fault 3 was still open was **actively destructive** — see the next
+   section. The order mattered; it is not a change that can be made on its own.
+3. ~~**The `arise-it` build is pointed at the repo root**~~, exactly like the
+   `arisehub` one — it installed the root `package.json`, ran
+   `arisehub@0.1.0 build`, and never touched `arise-it-portal/`. That is why
+   `arise-it` did not deploy between 2026-08-09 and 2026-09-15 no matter what
+   landed in the repo: two Workers, one build, and it was AriseHub's. **Fixed in
+   the dashboard on 2026-09-15** — Root directory is now
+   `arise-it-portal/worker`. No commit could reach it; Root directory is
+   per-Worker dashboard state.
 
-So the remaining work is one field: Workers & Pages → `arise-it` → Settings →
-Build → Root directory = `arise-it-portal/worker`, with Build command
-`npm run build` and Deploy command `npx wrangler deploy`. `arisehub` needs
-nothing now — its build runs the right command and needs no build variables.
+Confirmed from the deployed code the moment it changed: `arise-it` went from
+150,456 lines of OpenNext bundle to 11,518 lines of portal, with `agentBlock`,
+`agent_refused` and `ASK_A_HUMAN` present — the agent guards from `a0796ff`
+running in production for the first time.
 
-**Workers Builds only builds the production branch**, so these fixes ship only
-once they are on `main`.
+**Workers Builds deploys branch builds to the real Worker**, not only `main`.
+A build on a pull-request branch replaced the live portal. Treat any green
+build on any branch as a deploy that has already happened.
 
 ### Never make the root `build` script produce `.open-next/` (2026-09-15)
 
@@ -118,13 +119,17 @@ Workers Builds binds a deploy to **its own** Worker. It does not honor the
 `"name"` in the wrangler config it just built — naming `arisehub` there did not
 stop it landing on `arise-it`.
 
-So the root build script is deliberately `next build`, producing a `.next/` that
-`wrangler deploy` cannot ship. That failure is a **safety interlock**, not an
-oversight: it is the only thing standing between a green root build and the IT
-portal being replaced by AriseHub. Remove it only after `arise-it`'s Root
-directory is `arise-it-portal/worker`, so the two builds stop sharing one
-command. Until then `arisehub` deploys via `npm run cf:build`, its dashboard
-Build command, or `npm run deploy` by hand.
+The repair was to put `next build` back, so the root build produced a `.next/`
+that `wrangler deploy` could not ship — a failure kept deliberately, as the only
+thing standing between a green root build and the portal being replaced. That
+interlock was removed once `arise-it`'s Root directory was set to
+`arise-it-portal/worker` and the two builds stopped sharing one command; the
+root script is `opennextjs-cloudflare build` again.
+
+The rule this leaves behind: **the root build script and `arise-it`'s Root
+directory are one decision, not two.** If `arise-it` is ever pointed back at the
+repo root, the root build script has to become `next build` in the same change,
+or the next green build takes the portal with it.
 
 ### The `build` script and `opennextjs-cloudflare` call each other
 
@@ -196,8 +201,7 @@ deploy aimed at whatever the nearest ancestor `.jsonc` names.
 
 ```bash
 # AriseHub — no environment needed; the public values are committed.
-# Note cf:build, not build: the root `build` script is next build on purpose.
-npm ci && npx tsc --noEmit && npm run cf:build
+npm ci && npx tsc --noEmit && npm run build   # = opennextjs-cloudflare build
 # Optional overrides, e.g. to build against a different project (supply BOTH):
 #   NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… npm run build
 # Optional features, off when unset: NEXT_PUBLIC_VAPID_PUBLIC_KEY (web push),
