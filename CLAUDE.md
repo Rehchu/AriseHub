@@ -16,32 +16,58 @@ They are separate databases but not separate projects: the portal's launcher,
 SSO and my-tickets bridge all live in AriseHub, and the portal accepts AriseHub
 Supabase tokens. Don't describe the portal as a standalone app.
 
-## CI: two deploy paths, and the one that works
+## CI: two deploy paths, and neither of them runs
 
 1. **`.github/workflows/deploy.yml`** — the repo's own pipeline, `on: push:
    branches: [main]`. Builds both Workers correctly. Does **not** run on PRs.
+   **GitHub Actions does not execute at all on this account** — see below.
 2. **Cloudflare Workers Builds** (Git integration, configured in the dashboard,
    posts `Workers Builds: arisehub` / `Workers Builds: arise-it` checks) — a
    second path that is **broken for both Workers**. Red checks from
    `cloudflare-workers-and-pages[bot]` on a PR are usually this, not your diff.
 
-### Known breakage (verified 2026-09-15, both pre-existing on `main`)
+So a merge to `main` ships nothing by itself. Until one of these is fixed,
+deploying means running wrangler by hand (commands below).
 
-**`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vs `ANON_KEY`.** Every Supabase client
-factory (`lib/supabase/client.ts`, `server.ts`, `middleware.ts`) reads
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. `deploy.yml` supplies
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, which nothing reads. The key comes out
-undefined, `createClient()` throws, and `next build` dies prerendering
-`/login`. Same commit, only the name changed:
+### GitHub Actions never starts (account-wide, verified 2026-09-15)
+
+Every Actions run across the account fails in 2–4 seconds having executed no
+steps: **126 runs, 0 successes** — AriseHub 33/33 since the workflow's first
+run on 2026-08-09, `Personal-dashboard-` 84/84, `ctrl-alt-pc-repair` 9/9.
+
+The jobs are created and get check runs, then die before a runner is assigned:
+`runner_id: 0`, empty `runner_name`, no `steps`, and `get_workflow_run_usage`
+reports `total_ms: 0`. A job in `Personal-dashboard-` that is **pure shell with
+no `uses:` at all** dies the same way, which rules out the Actions-policy
+theory recorded in that repo's workflow header. Nothing in any repository can
+change this; it is a GitHub account-level setting (Actions billing / spending
+limit, or Actions disabled for the account).
+
+Do not spend time debugging `deploy.yml` against a red run. Check
+`get_workflow_run_usage` first: `total_ms: 0` means the workflow never ran.
+
+### `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vs `ANON_KEY` (fixed 2026-09-15)
+
+Supabase renamed the anon key to the publishable key; same value, two names.
+Every Supabase client factory read only the new name while `deploy.yml`
+supplied the old one, so the key came out undefined, `createClient()` threw,
+and `next build` died prerendering `/login`. It compiled and typechecked
+either way — only prerender failed, so a typecheck-only gate never caught it.
+
+Both names are now accepted, in one place: **`lib/supabase/env.ts`**. Verified
+on the same commit, with only `NEXT_PUBLIC_SUPABASE_ANON_KEY` set:
 
 ```
-NEXT_PUBLIC_SUPABASE_ANON_KEY=…         → ✗ Error occurred prerendering page "/login"
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=…  → ✓ exit 0
+before → ✗ exit 1, Error occurred prerendering page "/login"
+after  → ✓ exit 0
 ```
 
-It compiles and typechecks either way — only prerender fails, so a
-typecheck-only gate never catches it. Fix is one line in `deploy.yml` plus the
-same variable in the Workers Builds settings.
+Two rules that file has to keep, both pinned in `tests/supabase-env.test.mjs`:
+the key is needed at **build** time (a Worker secret does nothing for a
+prerender), and each name must stay written out as a literal
+`process.env.NEXT_PUBLIC_…` expression, because Next inlines those by textual
+replacement — `process.env[name]` or destructuring resolves to undefined in the
+browser bundle however the environment is set.
 
 **`arise-it` resolves the wrong wrangler config.** Run wrangler from
 `arise-it-portal/worker` without `-c` and it picks up the repo-root

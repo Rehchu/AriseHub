@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import { bearerToken } from "@/lib/api-keys";
+import { supabasePublishableKey, supabaseUrl } from "./env";
 
 // Server-component / route-handler Supabase client. Reads and writes the auth
 // cookies via Next's cookie store so the session stays in sync.
@@ -14,8 +15,8 @@ export async function createClient() {
   const bearer = bearerToken((await headers()).get("authorization"));
   if (bearer) {
     const client = createSbClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      supabaseUrl(),
+      supabasePublishableKey(),
       {
         global: { headers: { Authorization: `Bearer ${bearer}` } },
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
@@ -33,8 +34,8 @@ export async function createClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    supabaseUrl(),
+    supabasePublishableKey(),
     {
       cookies: {
         getAll() {
