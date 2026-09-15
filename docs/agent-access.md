@@ -77,6 +77,29 @@ const { data: plans } = await db.from("service_plans").select("id, title, servic
   `Rehchu/AriseHub`; one that should deploy needs a Cloudflare API token. The
   owner creates those in GitHub and Cloudflare directly.
 
+### In the IT portal, four more
+
+The portal applies the owner's role, so a Super_Admin's agent would otherwise
+be able to read out every stored WiFi password. Four things are refused with a
+`403` there, whatever the owner's role — do them signed in to the portal in a
+browser:
+
+| Refused | Why |
+| --- | --- |
+| `GET /api/wifi/:id/reveal` | The password is encrypted at rest so it is not casually readable, and every reveal is logged against a person. An agent cannot be that person. |
+| `POST /api/access-passes`, `/:id/rotate`, `DELETE /:id` | A pass with `scope: "wifi"` hands its holder the decrypted password through the guest flow, so issuing one is the same disclosure as a reveal. Listing passes is fine. |
+| `POST /api/users/:id/reset-password`, `/unlock`, `/api/auth/change-password`, and any write to `/api/users` | How a person gains or loses access. Reading the directory is fine. |
+| Anything under `/api/api-keys` | The same rule AriseHub already applies to its own keys. |
+
+The portal tells an agent from a person by the credential: every browser path
+into it ends in a `church_session` cookie, so a bearer token on a protected
+route is not a browser. Nothing is stamped into the access token, and the
+portal never calls back to AriseHub to ask.
+
+Everything else — requests, assets, consumables, licenses, the dashboard — the
+agent does at the owner's role. Each write it makes is recorded in the portal's
+audit log as `agent_request`, and each refusal as `agent_refused`.
+
 ## 4. Revocation and audit
 
 - Revoking at **Admin → API keys** blocks new exchanges immediately. A session

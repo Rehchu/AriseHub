@@ -28,6 +28,12 @@ export interface AuthUser {
   id: number;
   role: Role;
   campusId: number | null;
+  /**
+   * Set when this request did not come from a browser — an AriseHub agent
+   * session (see lib/agent-guards.ts for how that is known, and what it is
+   * refused). Absent means a person signed in with the portal's own cookie.
+   */
+  automated?: true;
 }
 
 export type Variables = {
