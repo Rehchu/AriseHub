@@ -23,8 +23,9 @@ Supabase tokens. Don't describe the portal as a standalone app.
    **GitHub Actions does not execute at all on this account** — see below.
 2. **Cloudflare Workers Builds** (Git integration, configured in the dashboard,
    posts `Workers Builds: arisehub` / `Workers Builds: arise-it` checks) — a
-   second path that is **broken for both Workers**. Red checks from
-   `cloudflare-workers-and-pages[bot]` on a PR are usually this, not your diff.
+   second path that is **misconfigured for both Workers**, in the dashboard, so
+   no commit can fix it. Red checks from `cloudflare-workers-and-pages[bot]` on
+   a PR are usually this, not your diff. What the build log shows, below.
 
 So a merge to `main` ships nothing by itself. Until one of these is fixed,
 deploying means running wrangler by hand (commands below).
@@ -45,6 +46,48 @@ limit, or Actions disabled for the account).
 
 Do not spend time debugging `deploy.yml` against a red run. Check
 `get_workflow_run_usage` first: `total_ms: 0` means the workflow never ran.
+
+### What the Workers Builds settings actually are (build log, 2026-09-15)
+
+Read from both builds for `95eed29` — `arise-it` (id `8d62b759`) and `arisehub`
+(id `61890be6`). The logs are **identical**, which is the finding: the two
+Workers Builds are configured the same way, both at the repo root. A build log
+is the one piece of that dashboard state that ever reaches the repo.
+
+```
+Installing project dependencies: npm clean-install
+added 405 packages
+Executing user build command: npm run build
+> arisehub@0.1.0 build
+> next build
+...
+Error occurred prerendering page "/login"
+Error: NEXT_PUBLIC_SUPABASE_URL is not set. ...
+```
+
+Two separate faults, and the first one hides the second:
+
+1. **The `arise-it` build is pointed at the repo root**, exactly like the
+   `arisehub` one. It installs the root `package.json`, runs
+   `arisehub@0.1.0 build`, and never touches `arise-it-portal/`. The portal's
+   own config, build script and frontend are irrelevant to it. This is why
+   `arise-it` has not deployed since 2026-08-09 no matter what lands in the
+   repo — two Workers, one build, and it is AriseHub's.
+2. **Build variables are not set on either Worker.** Workers Builds has a
+   *Build* variables screen separate from Settings → Variables & Secrets, and a
+   runtime secret cannot satisfy a prerender. Every `NEXT_PUBLIC_*` name is
+   inlined at build time.
+
+A third fault waits behind those: the root `npm run build` is `next build`,
+which writes `.next/`. The `arisehub` Worker's `wrangler.jsonc` serves
+`.open-next/assets`, so even with variables set, that build command deploys
+nothing usable — it needs `npx opennextjs-cloudflare build`.
+
+The fixes are all dashboard fields, per Worker, under Settings → Build:
+`arise-it` needs Root directory `arise-it-portal/worker`, Build command
+`npm run build`, Deploy command `npx wrangler deploy`; `arisehub` needs Build
+command `npx opennextjs-cloudflare build`. Both need the `NEXT_PUBLIC_*` build
+variables.
 
 ### `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vs `ANON_KEY` (fixed 2026-09-15)
 
