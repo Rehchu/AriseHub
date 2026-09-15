@@ -86,3 +86,56 @@ describe("a missing key says what to set", () => {
     );
   });
 });
+
+describe("the production values are committed, so a bare checkout builds", () => {
+  // This is the fix for the fault that kept BOTH Cloudflare Workers Builds red:
+  // their build-variables screen was never filled in, and a NEXT_PUBLIC_* name
+  // that is unset at build time is unset in the bundle forever. Baking the two
+  // public values in means a clean checkout builds with no environment at all.
+  // If either default is ever removed, the build silently goes back to needing
+  // dashboard state that nobody can see from the repository.
+  test("the project URL is committed as a literal", () => {
+    // Matched against `source`, not `code`: the comment stripper above removes
+    // everything after a `//`, which inside a URL literal means the value
+    // itself. Anchoring on the declaration keeps that from weakening the check —
+    // a commented-out URL would not begin with `const DEFAULT_URL =`.
+    assert.match(
+      source,
+      /const DEFAULT_URL = "https:\/\/[a-z0-9]+\.supabase\.co";/,
+      "a default project URL must be committed, not left to the environment",
+    );
+    assert.ok(code.includes("DEFAULT_URL"), "and actually read, not just declared");
+  });
+
+  test("the publishable key is committed as a literal", () => {
+    assert.match(
+      code,
+      /"sb_publishable_[A-Za-z0-9_-]+"/,
+      "a default publishable key must be committed — it is public, and the " +
+        "build cannot ask a dashboard for it",
+    );
+  });
+});
+
+describe("but a build aimed elsewhere must bring its own key", () => {
+  // Falling back to the committed production key while pointed at another
+  // project would authenticate against the wrong database and fail as anything
+  // but a configuration mistake. Refusing is the whole value of the defaults
+  // being safe to commit.
+  test("a custom URL with no custom key is refused", () => {
+    assert.match(
+      code,
+      /ENV_URL\s*&&\s*ENV_URL\s*!==\s*DEFAULT_URL\s*&&\s*!ENV_PUBLISHABLE_KEY/,
+      "the two must be checked together, not defaulted independently",
+    );
+    assert.match(code, /throw new Error\(/);
+  });
+
+  test("both accessors run the check", () => {
+    assert.equal(
+      (code.match(/assertCoherent\(\);/g) ?? []).length,
+      2,
+      "supabaseUrl() and supabasePublishableKey() must both refuse a half-set environment",
+    );
+  });
+});
