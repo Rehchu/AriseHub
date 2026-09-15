@@ -15,7 +15,10 @@ export default async function SchedulePage() {
     .single();
   const profileId = (profile as { id: string } | null)?.id ?? "";
   const role = (profile as { role?: string } | null)?.role;
-  const canManage = role === "Super_Admin" || role === "Staff";
+  // Same as the plan list: leads schedule their own team, and RLS is what
+  // actually enforces which rows they may touch.
+  const { data: isLead } = await supabase.rpc("is_any_department_lead");
+  const canManage = role === "Super_Admin" || role === "Staff" || !!isLead;
 
   // A scheduling calendar only ever shows dates near today, so only load those.
   //

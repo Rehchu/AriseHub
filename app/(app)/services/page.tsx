@@ -13,7 +13,11 @@ export default async function ServicesPage() {
     .single();
   const profileId = (profile as { id: string } | null)?.id ?? "";
   const role = (profile as { role?: string } | null)?.role;
-  const canManage = role === "Super_Admin" || role === "Staff";
+  // A department lead can create and edit their own department's plans under
+  // migration 0065. No single plan is in scope on this list, so the question is
+  // "do you lead anything at all" — RLS still decides row by row.
+  const { data: isLead } = await supabase.rpc("is_any_department_lead");
+  const canManage = role === "Super_Admin" || role === "Staff" || !!isLead;
 
   // RLS returns all plans for services staff, or only plans you're scheduled on.
   const { data: plans } = await supabase

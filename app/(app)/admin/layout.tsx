@@ -39,6 +39,7 @@ export default async function AdminLayout({
       { href: "/admin/people", label: "People" },
       { href: "/admin/titles", label: "Titles" },
       { href: "/admin/fields", label: "Custom Fields" },
+      { href: "/admin/api-keys", label: "API keys" },
     );
   }
   if (isSuper || isIT) tabs.push({ href: "/admin/elvanto", label: "Elvanto" });

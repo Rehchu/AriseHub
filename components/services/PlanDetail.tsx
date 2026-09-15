@@ -18,6 +18,12 @@ export interface Item {
   item_type: "song" | "scripture" | "sermon" | "announcement" | "transition" | "prayer" | "other";
   duration_minutes: number | null;
   notes: string | null;
+  /**
+   * The library song this item points at. Carried so duplicating a plan keeps
+   * the link — it was written on create but never read back, so every copy of
+   * last Sunday quietly turned its songs into loose text with a key attached.
+   */
+  song_id: string | null;
   song_key: string | null;
 }
 export interface Assignment {
@@ -32,6 +38,13 @@ interface Plan {
   title: string;
   service_date: string;
   notes: string | null;
+  /**
+   * Which department owns this plan. Needed by duplicate(): migration 0065
+   * scopes plans by department, so a copy without it becomes a church-wide
+   * plan the owning team can no longer see — and a lead who is not Staff
+   * cannot insert it at all.
+   */
+  department_id: string | null;
 }
 
 const ITEM_TYPES: Item["item_type"][] = [
@@ -311,6 +324,7 @@ export function PlanDetail({
         service_date: dupDate,
         notes: plan.notes,
         created_by: currentProfileId,
+        department_id: plan.department_id,
       })
       .select("id")
       .single();
@@ -335,6 +349,7 @@ export function PlanDetail({
           item_type: i.item_type,
           duration_minutes: i.duration_minutes,
           notes: i.notes,
+          song_id: i.song_id,
           song_key: i.song_key,
           sort_order: idx,
         })),
