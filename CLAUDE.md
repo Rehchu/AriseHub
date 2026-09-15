@@ -75,12 +75,12 @@ repository** (2026-09-15) and one is still a dashboard field:
    nobody had filled in, the two public values are now committed as defaults in
    `lib/supabase/env.ts` (see below). A bare checkout builds with no environment
    at all: verified, `npm run build` with zero `NEXT_PUBLIC_*` set exits 0.
-2. ~~**The root build command produces the wrong directory.**~~ *Fixed in the
-   repo.* The root `npm run build` was `next build`, which writes `.next/`,
-   while the `arisehub` Worker's `wrangler.jsonc` serves `.open-next/assets`.
-   The root `build` script is now `opennextjs-cloudflare build`, so the
-   conventional command a CI system runs produces what the Worker actually
-   serves. `next build` on its own is still available as `npm run next:build`.
+2. **The root build command produces the wrong directory** — and **it must stay
+   that way until fault 3 is fixed.** The root `npm run build` is `next build`,
+   which writes `.next/`, while the `arisehub` Worker's `wrangler.jsonc` serves
+   `.open-next/assets`. Making it `opennextjs-cloudflare build` looks like the
+   obvious fix. **It is actively destructive.** See the next section — this was
+   tried on 2026-09-15 and it overwrote the IT portal.
 3. **The `arise-it` build is pointed at the repo root**, exactly like the
    `arisehub` one. It installs the root `package.json`, runs
    `arisehub@0.1.0 build`, and never touches `arise-it-portal/`. The portal's
@@ -98,14 +98,43 @@ nothing now — its build runs the right command and needs no build variables.
 **Workers Builds only builds the production branch**, so these fixes ship only
 once they are on `main`.
 
+### Never make the root `build` script produce `.open-next/` (2026-09-15)
+
+Both Workers Builds are rooted at the repo root, so **both run the root
+`npm run build` and then `npx wrangler deploy`** — including the one bound to
+the `arise-it` Worker. That build has always failed, which is the only reason
+it was harmless: it died at `next build` and never reached the deploy step.
+
+Commit `62029a4` removed the two reasons it failed — it committed the Supabase
+values so the prerender stopped throwing, and pointed the root `build` script at
+`opennextjs-cloudflare build` so the output matched what the Worker serves. The
+`arise-it` build then ran green all the way through and **deployed AriseHub onto
+the `arise-it` Worker.** Verified from the deployed code: zero portal markers
+(`church_session`, `arise_it_portal`, `wifiNetworks`, `decryptSecret` all absent),
+729 hits for `open-next`, `NEXT_PUBLIC_IT_PORTAL_URL` present, 10.3 MB across
+150,456 lines where the portal bundle is ~8,000.
+
+Workers Builds binds a deploy to **its own** Worker. It does not honor the
+`"name"` in the wrangler config it just built — naming `arisehub` there did not
+stop it landing on `arise-it`.
+
+So the root build script is deliberately `next build`, producing a `.next/` that
+`wrangler deploy` cannot ship. That failure is a **safety interlock**, not an
+oversight: it is the only thing standing between a green root build and the IT
+portal being replaced by AriseHub. Remove it only after `arise-it`'s Root
+directory is `arise-it-portal/worker`, so the two builds stop sharing one
+command. Until then `arisehub` deploys via `npm run cf:build`, its dashboard
+Build command, or `npm run deploy` by hand.
+
 ### The `build` script and `opennextjs-cloudflare` call each other
 
 `opennextjs-cloudflare build` runs the Next build by shelling out, and with
 nothing configured it runs **`npm run build`**
-(`@opennextjs/aws/dist/build/buildNextApp.js:11-13`). Since the root `build`
-script is now `opennextjs-cloudflare build`, that is a loop. `open-next.config.ts`
-sets `buildCommand: "next build"` explicitly to break it. Do not remove that line
-and do not point `buildCommand` back at an npm script.
+(`@opennextjs/aws/dist/build/buildNextApp.js:11-13`). So the moment the root
+`build` script becomes `opennextjs-cloudflare build`, the two call each other
+forever. `open-next.config.ts` pins `buildCommand: "next build"` to break that
+loop. The pin stays whether or not `build` is ever changed back — it costs
+nothing and it removes the trap.
 
 ### `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vs `ANON_KEY` (fixed 2026-09-15)
 
@@ -167,7 +196,8 @@ deploy aimed at whatever the nearest ancestor `.jsonc` names.
 
 ```bash
 # AriseHub — no environment needed; the public values are committed.
-npm ci && npx tsc --noEmit && npm run build
+# Note cf:build, not build: the root `build` script is next build on purpose.
+npm ci && npx tsc --noEmit && npm run cf:build
 # Optional overrides, e.g. to build against a different project (supply BOTH):
 #   NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… npm run build
 # Optional features, off when unset: NEXT_PUBLIC_VAPID_PUBLIC_KEY (web push),
