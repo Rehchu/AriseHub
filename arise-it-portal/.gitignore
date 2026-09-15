@@ -5,3 +5,4 @@ dist/
 worker/seed.sql
 *.log
 .DS_Store
+frontend/tsconfig.tsbuildinfo

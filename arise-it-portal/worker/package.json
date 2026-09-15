@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "npm run build --prefix ../frontend",
-    "deploy": "npm run build --prefix ../frontend && wrangler deploy",
+    "build": "npm ci --prefix ../frontend && npm run build --prefix ../frontend",
+    "deploy": "npm run build && wrangler deploy",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply arise_it_portal --local",
     "db:migrate:remote": "wrangler d1 migrations apply arise_it_portal --remote",

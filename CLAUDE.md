@@ -69,12 +69,28 @@ prerender), and each name must stay written out as a literal
 replacement — `process.env[name]` or destructuring resolves to undefined in the
 browser bundle however the environment is set.
 
-**`arise-it` resolves the wrong wrangler config.** Run wrangler from
-`arise-it-portal/worker` without `-c` and it picks up the repo-root
-`wrangler.jsonc` (AriseHub's Next worker) and dies on a missing
-`.open-next/assets`. Always `-c wrangler.toml` there. A Workers Build left at
-its defaults does the same thing, which is why `arise-it` last deployed
-2026-08-09.
+**`arise-it` used to resolve the wrong wrangler config (fixed 2026-09-15).**
+Wrangler looks for `wrangler.json`, then `wrangler.jsonc`, then `wrangler.toml`,
+and each name is a find-up that walks every ancestor directory before the next
+name is tried. With only a `wrangler.toml` in `arise-it-portal/worker`, the
+`.jsonc` search reached the repo root first, so any wrangler command run there
+without `-c` operated on **AriseHub's** config. Verified on the same command:
+
+```
+before → Read 82 files from .open-next/assets   · env.MEDIA (arisehub-media), env.AI
+after  → Read 19 files from ../frontend/dist    · env.DB (arise_it_portal), env.FILES
+```
+
+That is worse than a failed build. `npm run deploy` in that directory was
+`… && wrangler deploy` with no `-c`, so it built the portal frontend and then
+deployed the **AriseHub** Worker from whatever stale `.open-next/` was lying
+around, leaving `arise-it` untouched — which is why it last deployed
+2026-08-09 while `arisehub` moved at odd times.
+
+The config is now `arise-it-portal/worker/wrangler.jsonc`. A `.jsonc` in the
+directory wins the find-up, so the plain command is correct and `-c` is belt
+and braces. **`tools/cron-worker/wrangler.toml` still has the identical
+exposure** — a rootless wrangler run from there resolves the repo-root config.
 
 ### Building locally
 
@@ -88,7 +104,7 @@ NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… \
 # IT portal (mirrors deploy.yml's it-portal job)
 cd arise-it-portal/worker   && npm ci && npx tsc --noEmit
 cd arise-it-portal/frontend && npm ci && npm run build
-cd arise-it-portal/worker   && npx wrangler deploy --dry-run -c wrangler.toml
+cd arise-it-portal/worker   && npx wrangler deploy --dry-run
 ```
 
 ## Auth in the IT portal
@@ -127,10 +143,12 @@ Software licenses store no product key, so WiFi is the only credential surface.
   `node --test`. Security rules live as pure functions (`lib/authz.ts`,
   `arise-it-portal/worker/src/lib/agent-guards.ts`) precisely so the suite can
   pin them. Follow that rather than writing integration tests with mocks.
-- **`tests/rls/access-control.test.mjs` fails on a clean checkout.**
-  Pre-existing; don't chase it, and don't claim a suite is green without saying
-  so. Everything else passes.
-- **`arise-it-portal/frontend/tsconfig.tsbuildinfo` is tracked**, so the tree
-  looks dirty after any frontend build. It's TypeScript's incremental cache —
-  revert it, don't commit it. It arguably belongs in `.gitignore`.
+- **`tests/rls/access-control.test.mjs` skips itself without credentials.**
+  An earlier note here called it a failing test; it is not. `requireDb` calls
+  `t.skip` when neither `SUPABASE_DB_URL` nor `.supabase-db-password` is set, so
+  a clean checkout runs `npm test` to 330 tests / 231 pass / 0 fail / 99 skipped
+  and exit 0. A red suite is a real regression.
+- **`arise-it-portal/frontend/tsconfig.tsbuildinfo` is no longer tracked.** It
+  is TypeScript's incremental cache, and having it in git made the tree look
+  dirty after every frontend build. It is now in that package's `.gitignore`.
 - Root `tsconfig.json` **excludes `arise-it-portal`**; the portal has its own.
