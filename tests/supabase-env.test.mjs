@@ -21,7 +21,8 @@
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const source = readFileSync(
@@ -136,6 +137,41 @@ describe("but a build aimed elsewhere must bring its own key", () => {
       (code.match(/assertCoherent\(\);/g) ?? []).length,
       2,
       "supabaseUrl() and supabasePublishableKey() must both refuse a half-set environment",
+    );
+  });
+});
+
+describe("and nowhere else reads those names raw", () => {
+  // The committed defaults live in lib/supabase/env.ts, so a file reading
+  // process.env.NEXT_PUBLIC_SUPABASE_URL directly gets undefined wherever the
+  // environment does not set it — which, now that the defaults exist, is the
+  // normal case rather than the broken one. That is not theoretical: it is why
+  // POST /api/agent/token answered 500 and no agent could trade its key for a
+  // session, while the build itself was perfectly green.
+  const ROOT = fileURLToPath(new URL("..", import.meta.url));
+  const SKIP = new Set(["node_modules", ".next", ".open-next", ".git", "tests", "arise-it-portal", "tools"]);
+
+  function sources(dir, out = []) {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (SKIP.has(e.name) || e.name.startsWith(".")) continue;
+      const full = join(dir, e.name);
+      if (e.isDirectory()) sources(full, out);
+      else if (/\.tsx?$/.test(e.name)) out.push(full);
+    }
+    return out;
+  }
+
+  test("only lib/supabase/env.ts names them", () => {
+    const raw = /process\.env\.NEXT_PUBLIC_SUPABASE_(?:URL|PUBLISHABLE_KEY|ANON_KEY)/;
+    const offenders = sources(ROOT)
+      .filter((f) => !f.endsWith(join("lib", "supabase", "env.ts")))
+      .filter((f) => raw.test(readFileSync(f, "utf8")))
+      .map((f) => f.slice(ROOT.length));
+    assert.deepEqual(
+      offenders,
+      [],
+      "read the project URL and key through supabaseUrl() / supabasePublishableKey() " +
+        "so the committed defaults apply — a raw read is undefined without an environment",
     );
   });
 });
