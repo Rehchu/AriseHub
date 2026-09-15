@@ -36,7 +36,13 @@ jobs:
       - name: Build
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          # The app reads PUBLISHABLE_KEY — lib/supabase/{client,server,middleware}.ts
+          # all do, and nothing anywhere reads ANON_KEY. Supplying the old name left
+          # the key undefined at build time, so createClient() threw and the build
+          # died prerendering /login. It compiled and typechecked either way, which
+          # is why a typecheck-only gate never caught it. The fallback covers the
+          # repository secret still being stored under the older name.
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
           NEXT_PUBLIC_IT_PORTAL_URL: https://itportal.myfaithtech.com
           NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ secrets.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
