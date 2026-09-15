@@ -6,6 +6,8 @@
 //   * RFC 8291 — Message Encryption for Web Push (aes128gcm)
 //   * RFC 8292 — VAPID (voluntary application server identification)
 
+import { supabaseUrl } from "./supabase/env";
+
 function b64urlToBytes(s: string): Uint8Array {
   const padded = s.replace(/-/g, "+").replace(/_/g, "/").padEnd(s.length + ((4 - (s.length % 4)) % 4), "=");
   const bin = atob(padded);
@@ -188,9 +190,17 @@ export interface RelayConfig {
  * works on this project (see lib/supabase/admin.ts).
  */
 export function relayFromEnv(): RelayConfig | undefined {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SECRET_KEY;
-  return url && key ? { url, key } : undefined;
+  if (!key) return undefined;
+  // Same raw read as lib/supabase/admin.ts had, with a quieter symptom: this
+  // one returns undefined rather than throwing, so the relay just switched
+  // itself off and iOS push stopped without saying why. Keep it non-throwing —
+  // a missing relay is a degraded feature, not a broken request.
+  try {
+    return { url: supabaseUrl(), key };
+  } catch {
+    return undefined;
+  }
 }
 
 /** Apple's push network, which Cloudflare Workers cannot reach. */
