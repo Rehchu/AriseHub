@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createSbClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { bearerToken, isApiKey } from "@/lib/api-keys";
+import { supabasePublishableKey, supabaseUrl } from "./env";
 
 // Refreshes the Supabase auth session on every request and gates the app.
 // Unauthenticated users are bounced to /login (except public routes).
@@ -24,8 +25,8 @@ export async function updateSession(request: NextRequest) {
       );
     }
     const sb = createSbClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+      supabaseUrl(),
+      supabasePublishableKey(),
       { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
     );
     const {
@@ -40,8 +41,8 @@ export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    supabaseUrl(),
+    supabasePublishableKey(),
     {
       cookies: {
         getAll() {

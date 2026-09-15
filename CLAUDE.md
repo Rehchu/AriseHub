@@ -16,53 +16,201 @@ They are separate databases but not separate projects: the portal's launcher,
 SSO and my-tickets bridge all live in AriseHub, and the portal accepts AriseHub
 Supabase tokens. Don't describe the portal as a standalone app.
 
-## CI: two deploy paths, and the one that works
+## CI: two deploy paths, and neither of them runs
 
 1. **`.github/workflows/deploy.yml`** — the repo's own pipeline, `on: push:
    branches: [main]`. Builds both Workers correctly. Does **not** run on PRs.
+   **GitHub Actions does not execute at all on this account** — see below.
 2. **Cloudflare Workers Builds** (Git integration, configured in the dashboard,
    posts `Workers Builds: arisehub` / `Workers Builds: arise-it` checks) — a
-   second path that is **broken for both Workers**. Red checks from
-   `cloudflare-workers-and-pages[bot]` on a PR are usually this, not your diff.
+   second path that is **misconfigured for both Workers**, in the dashboard, so
+   no commit can fix it. Red checks from `cloudflare-workers-and-pages[bot]` on
+   a PR are usually this, not your diff. What the build log shows, below.
 
-### Known breakage (verified 2026-09-15, both pre-existing on `main`)
+So a merge to `main` ships nothing by itself. Until one of these is fixed,
+deploying means running wrangler by hand (commands below).
 
-**`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vs `ANON_KEY`.** Every Supabase client
-factory (`lib/supabase/client.ts`, `server.ts`, `middleware.ts`) reads
-`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. `deploy.yml` supplies
-`NEXT_PUBLIC_SUPABASE_ANON_KEY`, which nothing reads. The key comes out
-undefined, `createClient()` throws, and `next build` dies prerendering
-`/login`. Same commit, only the name changed:
+### GitHub Actions never starts (account-wide, verified 2026-09-15)
+
+Every Actions run across the account fails in 2–4 seconds having executed no
+steps: **126 runs, 0 successes** — AriseHub 33/33 since the workflow's first
+run on 2026-08-09, `Personal-dashboard-` 84/84, `ctrl-alt-pc-repair` 9/9.
+
+The jobs are created and get check runs, then die before a runner is assigned:
+`runner_id: 0`, empty `runner_name`, no `steps`, and `get_workflow_run_usage`
+reports `total_ms: 0`. A job in `Personal-dashboard-` that is **pure shell with
+no `uses:` at all** dies the same way, which rules out the Actions-policy
+theory recorded in that repo's workflow header. Nothing in any repository can
+change this; it is a GitHub account-level setting (Actions billing / spending
+limit, or Actions disabled for the account).
+
+Do not spend time debugging `deploy.yml` against a red run. Check
+`get_workflow_run_usage` first: `total_ms: 0` means the workflow never ran.
+
+### What the Workers Builds settings actually are (build log, 2026-09-15)
+
+Read from both builds for `95eed29` — `arise-it` (id `8d62b759`) and `arisehub`
+(id `61890be6`). The logs are **identical**, which is the finding: the two
+Workers Builds are configured the same way, both at the repo root. A build log
+is the one piece of that dashboard state that ever reaches the repo.
 
 ```
-NEXT_PUBLIC_SUPABASE_ANON_KEY=…         → ✗ Error occurred prerendering page "/login"
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=…  → ✓ exit 0
+Installing project dependencies: npm clean-install
+added 405 packages
+Executing user build command: npm run build
+> arisehub@0.1.0 build
+> next build
+...
+Error occurred prerendering page "/login"
+Error: NEXT_PUBLIC_SUPABASE_URL is not set. ...
 ```
 
-It compiles and typechecks either way — only prerender fails, so a
-typecheck-only gate never catches it. Fix is one line in `deploy.yml` plus the
-same variable in the Workers Builds settings.
+Three faults, and the first one hides the rest. **Two are now fixed in the
+repository** (2026-09-15) and one is still a dashboard field:
 
-**`arise-it` resolves the wrong wrangler config.** Run wrangler from
-`arise-it-portal/worker` without `-c` and it picks up the repo-root
-`wrangler.jsonc` (AriseHub's Next worker) and dies on a missing
-`.open-next/assets`. Always `-c wrangler.toml` there. A Workers Build left at
-its defaults does the same thing, which is why `arise-it` last deployed
-2026-08-09.
+1. ~~**Build variables are not set on either Worker.**~~ *Fixed in the repo.*
+   Workers Builds has a *Build* variables screen separate from Settings →
+   Variables & Secrets, and a runtime secret cannot satisfy a prerender — every
+   `NEXT_PUBLIC_*` name is inlined at build time. Rather than depend on a screen
+   nobody had filled in, the two public values are now committed as defaults in
+   `lib/supabase/env.ts` (see below). A bare checkout builds with no environment
+   at all: verified, `npm run build` with zero `NEXT_PUBLIC_*` set exits 0.
+2. ~~**The root build command produces the wrong directory.**~~ *Fixed, but only
+   after fault 3 was.* The root `npm run build` was `next build`, which writes
+   `.next/`, while the `arisehub` Worker's `wrangler.jsonc` serves
+   `.open-next/assets`. It is now `opennextjs-cloudflare build`. Changing it
+   while fault 3 was still open was **actively destructive** — see the next
+   section. The order mattered; it is not a change that can be made on its own.
+3. ~~**The `arise-it` build is pointed at the repo root**~~, exactly like the
+   `arisehub` one — it installed the root `package.json`, ran
+   `arisehub@0.1.0 build`, and never touched `arise-it-portal/`. That is why
+   `arise-it` did not deploy between 2026-08-09 and 2026-09-15 no matter what
+   landed in the repo: two Workers, one build, and it was AriseHub's. **Fixed in
+   the dashboard on 2026-09-15** — Root directory is now
+   `arise-it-portal/worker`. No commit could reach it; Root directory is
+   per-Worker dashboard state.
+
+Confirmed from the deployed code the moment it changed: `arise-it` went from
+150,456 lines of OpenNext bundle to 11,518 lines of portal, with `agentBlock`,
+`agent_refused` and `ASK_A_HUMAN` present — the agent guards from `a0796ff`
+running in production for the first time.
+
+**Workers Builds deploys branch builds to the real Worker**, not only `main`.
+A build on a pull-request branch replaced the live portal. Treat any green
+build on any branch as a deploy that has already happened.
+
+### Never make the root `build` script produce `.open-next/` (2026-09-15)
+
+Both Workers Builds are rooted at the repo root, so **both run the root
+`npm run build` and then `npx wrangler deploy`** — including the one bound to
+the `arise-it` Worker. That build has always failed, which is the only reason
+it was harmless: it died at `next build` and never reached the deploy step.
+
+Commit `62029a4` removed the two reasons it failed — it committed the Supabase
+values so the prerender stopped throwing, and pointed the root `build` script at
+`opennextjs-cloudflare build` so the output matched what the Worker serves. The
+`arise-it` build then ran green all the way through and **deployed AriseHub onto
+the `arise-it` Worker.** Verified from the deployed code: zero portal markers
+(`church_session`, `arise_it_portal`, `wifiNetworks`, `decryptSecret` all absent),
+729 hits for `open-next`, `NEXT_PUBLIC_IT_PORTAL_URL` present, 10.3 MB across
+150,456 lines where the portal bundle is ~8,000.
+
+Workers Builds binds a deploy to **its own** Worker. It does not honor the
+`"name"` in the wrangler config it just built — naming `arisehub` there did not
+stop it landing on `arise-it`.
+
+The repair was to put `next build` back, so the root build produced a `.next/`
+that `wrangler deploy` could not ship — a failure kept deliberately, as the only
+thing standing between a green root build and the portal being replaced. That
+interlock was removed once `arise-it`'s Root directory was set to
+`arise-it-portal/worker` and the two builds stopped sharing one command; the
+root script is `opennextjs-cloudflare build` again.
+
+The rule this leaves behind: **the root build script and `arise-it`'s Root
+directory are one decision, not two.** If `arise-it` is ever pointed back at the
+repo root, the root build script has to become `next build` in the same change,
+or the next green build takes the portal with it.
+
+### The `build` script and `opennextjs-cloudflare` call each other
+
+`opennextjs-cloudflare build` runs the Next build by shelling out, and with
+nothing configured it runs **`npm run build`**
+(`@opennextjs/aws/dist/build/buildNextApp.js:11-13`). So the moment the root
+`build` script becomes `opennextjs-cloudflare build`, the two call each other
+forever. `open-next.config.ts` pins `buildCommand: "next build"` to break that
+loop. The pin stays whether or not `build` is ever changed back — it costs
+nothing and it removes the trap.
+
+### `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` vs `ANON_KEY` (fixed 2026-09-15)
+
+Supabase renamed the anon key to the publishable key; same value, two names.
+Every Supabase client factory read only the new name while `deploy.yml`
+supplied the old one, so the key came out undefined, `createClient()` threw,
+and `next build` died prerendering `/login`. It compiled and typechecked
+either way — only prerender failed, so a typecheck-only gate never caught it.
+
+Both names are now accepted, in one place: **`lib/supabase/env.ts`** — which
+also **commits the project URL and publishable key as defaults**, so no build
+needs either name set at all. Both values are public by construction: the same
+URL is already in the portal's `wrangler.jsonc`, `/api/agent/token` hands the
+publishable key to any caller, and Next inlines both into every browser bundle
+shipped. RLS is what protects the data; hiding these protected nothing while
+costing every deploy. Setting `NEXT_PUBLIC_SUPABASE_URL` to a *different*
+project without also supplying a key now throws rather than silently
+authenticating against the wrong database. Verified on the earlier commit, with
+only `NEXT_PUBLIC_SUPABASE_ANON_KEY` set:
+
+```
+before → ✗ exit 1, Error occurred prerendering page "/login"
+after  → ✓ exit 0
+```
+
+Two rules that file has to keep, both pinned in `tests/supabase-env.test.mjs`:
+the key is needed at **build** time (a Worker secret does nothing for a
+prerender), and each name must stay written out as a literal
+`process.env.NEXT_PUBLIC_…` expression, because Next inlines those by textual
+replacement — `process.env[name]` or destructuring resolves to undefined in the
+browser bundle however the environment is set.
+
+**`arise-it` used to resolve the wrong wrangler config (fixed 2026-09-15).**
+Wrangler looks for `wrangler.json`, then `wrangler.jsonc`, then `wrangler.toml`,
+and each name is a find-up that walks every ancestor directory before the next
+name is tried. With only a `wrangler.toml` in `arise-it-portal/worker`, the
+`.jsonc` search reached the repo root first, so any wrangler command run there
+without `-c` operated on **AriseHub's** config. Verified on the same command:
+
+```
+before → Read 82 files from .open-next/assets   · env.MEDIA (arisehub-media), env.AI
+after  → Read 19 files from ../frontend/dist    · env.DB (arise_it_portal), env.FILES
+```
+
+That is worse than a failed build. `npm run deploy` in that directory was
+`… && wrangler deploy` with no `-c`, so it built the portal frontend and then
+deployed the **AriseHub** Worker from whatever stale `.open-next/` was lying
+around, leaving `arise-it` untouched — which is why it last deployed
+2026-08-09 while `arisehub` moved at odd times.
+
+The config is now `arise-it-portal/worker/wrangler.jsonc`. A `.jsonc` in the
+directory wins the find-up, so the plain command is correct and `-c` is belt
+and braces. `tools/cron-worker/` had the identical exposure and was converted
+to `wrangler.jsonc` the same way (2026-09-15); there is no `wrangler.toml` left
+in this repository. Keep it that way — a new `.toml` beside a Worker is a
+deploy aimed at whatever the nearest ancestor `.jsonc` names.
 
 ### Building locally
 
 ```bash
-# AriseHub
-npm ci && npx tsc --noEmit
-NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… \
-  NEXT_PUBLIC_VAPID_PUBLIC_KEY=… NEXT_PUBLIC_IT_PORTAL_URL=… \
-  NEXT_PUBLIC_TURNSTILE_SITE_KEY=… npx next build
+# AriseHub — no environment needed; the public values are committed.
+npm ci && npx tsc --noEmit && npm run build   # = opennextjs-cloudflare build
+# Optional overrides, e.g. to build against a different project (supply BOTH):
+#   NEXT_PUBLIC_SUPABASE_URL=… NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=… npm run build
+# Optional features, off when unset: NEXT_PUBLIC_VAPID_PUBLIC_KEY (web push),
+#   NEXT_PUBLIC_TURNSTILE_SITE_KEY (bot protection).
 
 # IT portal (mirrors deploy.yml's it-portal job)
 cd arise-it-portal/worker   && npm ci && npx tsc --noEmit
 cd arise-it-portal/frontend && npm ci && npm run build
-cd arise-it-portal/worker   && npx wrangler deploy --dry-run -c wrangler.toml
+cd arise-it-portal/worker   && npx wrangler deploy --dry-run
 ```
 
 ## Auth in the IT portal
@@ -101,10 +249,12 @@ Software licenses store no product key, so WiFi is the only credential surface.
   `node --test`. Security rules live as pure functions (`lib/authz.ts`,
   `arise-it-portal/worker/src/lib/agent-guards.ts`) precisely so the suite can
   pin them. Follow that rather than writing integration tests with mocks.
-- **`tests/rls/access-control.test.mjs` fails on a clean checkout.**
-  Pre-existing; don't chase it, and don't claim a suite is green without saying
-  so. Everything else passes.
-- **`arise-it-portal/frontend/tsconfig.tsbuildinfo` is tracked**, so the tree
-  looks dirty after any frontend build. It's TypeScript's incremental cache —
-  revert it, don't commit it. It arguably belongs in `.gitignore`.
+- **`tests/rls/access-control.test.mjs` skips itself without credentials.**
+  An earlier note here called it a failing test; it is not. `requireDb` calls
+  `t.skip` when neither `SUPABASE_DB_URL` nor `.supabase-db-password` is set, so
+  a clean checkout runs `npm test` to 330 tests / 231 pass / 0 fail / 99 skipped
+  and exit 0. A red suite is a real regression.
+- **`arise-it-portal/frontend/tsconfig.tsbuildinfo` is no longer tracked.** It
+  is TypeScript's incremental cache, and having it in git made the tree look
+  dirty after every frontend build. It is now in that package's `.gitignore`.
 - Root `tsconfig.json` **excludes `arise-it-portal`**; the portal has its own.

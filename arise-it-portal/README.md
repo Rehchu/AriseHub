@@ -44,7 +44,7 @@ Branding (colors, fonts) was pulled directly from [arisecenla.church](https://ww
 - `worker/` — Cloudflare Worker: Hono API (Drizzle ORM + D1 + R2) **and** serves the built frontend as static assets via Wrangler's `[assets]` config (Wrangler v4+) — one Worker, one deploy, no Cloudflare Pages project needed.
 - `frontend/` — React + Vite + Tailwind + `vite-plugin-pwa`. `npm run build` outputs to `frontend/dist`, which the Worker serves directly.
 
-Routing: `worker/wrangler.toml`'s `[assets]` block sets `run_worker_first = ["/api/*"]`, so `/api/*` requests always hit the Hono API while everything else is served as a static file (with `not_found_handling = "single-page-application"` so client-side routes like `/assets/5` still resolve to `index.html` on a hard refresh).
+Routing: `worker/wrangler.jsonc`'s `assets` block sets `run_worker_first = ["/api/*"]`, so `/api/*` requests always hit the Hono API while everything else is served as a static file (with `not_found_handling = "single-page-application"` so client-side routes like `/assets/5` still resolve to `index.html` on a hard refresh).
 
 ## First-time setup
 
@@ -62,7 +62,7 @@ cd worker
 npx wrangler d1 create arise_it_portal
 ```
 
-Copy the returned `database_id` into `worker/wrangler.toml`.
+Copy the returned `database_id` into `worker/wrangler.jsonc`.
 
 ```
 npx wrangler r2 bucket create arise-it-portal-files
@@ -84,7 +84,7 @@ npx wrangler secret put RESEND_API_KEY
 
 Email invites: when set, creating a user (or resetting a password) sends a
 branded email with a temp password + Sign in link via [Resend](https://resend.com).
-The sender is `FROM_EMAIL` in `worker/wrangler.toml` — it must be on a domain
+The sender is `FROM_EMAIL` in `worker/wrangler.jsonc` — it must be on a domain
 **verified in your Resend account** to reach arbitrary recipients (currently
 `noreply@myfaithtech.com`, which is verified). To send from an
 `@arisecenla.church` address instead, verify that domain (or a subdomain) in

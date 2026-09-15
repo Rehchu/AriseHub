@@ -1,0 +1,70 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "arise-it",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-12-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // JSONC, not TOML, and the file name is load-bearing. Wrangler looks for
+  // wrangler.json, then wrangler.jsonc, then wrangler.toml, and each of those
+  // is a find-up that walks every ancestor directory before the next name is
+  // tried. With only a wrangler.toml here, the .jsonc search reached the repo
+  // root first and any `wrangler` command run from this directory without -c
+  // silently operated on AriseHub's config instead of this one: `npm run
+  // deploy` here built the portal frontend and then deployed the AriseHub
+  // Worker from whatever stale .open-next/ was lying around, leaving arise-it
+  // untouched. A .jsonc in this directory wins that search, so the plain
+  // command is now correct and -c is belt and braces rather than the only
+  // thing standing between a deploy and the wrong Worker.
+
+  // Serves the built frontend (frontend/dist) directly from this Worker — no
+  // separate Cloudflare Pages project needed. Requests that don't match a static
+  // asset (e.g. everything under /api/*) fall through to the Worker script below.
+  // Unmatched non-API routes (e.g. /assets/5 on a hard refresh) serve index.html
+  // so the React Router SPA can take over client-side.
+  "assets": {
+    "directory": "../frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    // Worker runs first for everything so security headers apply to page loads
+    // too; non-API paths fall through to ASSETS in src/index.ts.
+    "run_worker_first": true
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arise_it_portal",
+      "database_id": "603344e7-bea4-42aa-9a09-527575b61566",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "arise-it-portal-files"
+    }
+  ],
+
+  // Set real secrets with:
+  //   wrangler secret put JWT_SECRET
+  //   wrangler secret put WIFI_ENCRYPTION_KEY
+  //   wrangler secret put RESEND_API_KEY
+  // JWT_SECRET: any long random string.
+  // WIFI_ENCRYPTION_KEY: 32 bytes, base64-encoded (e.g. `openssl rand -base64 32`).
+  "vars": {
+    // Production only. localhost was listed here and, with credentials:true, any
+    // page on a local dev server could make credentialed calls to the live API.
+    "ALLOWED_ORIGINS": "https://arisehub.myfaithtech.com,https://itportal.myfaithtech.com",
+    // Email invites. RESEND_API_KEY is a secret (set via `wrangler secret put`).
+    // FROM_EMAIL uses myfaithtech.com — verified in this Resend account, so invites
+    // can be delivered to any recipient. Change the address if you verify a
+    // different domain (e.g. a subdomain of arisecenla.church) later.
+    "FROM_EMAIL": "Arise IT Portal <noreply@myfaithtech.com>",
+    // AriseHub single sign-in. This API accepts Supabase access tokens from this
+    // project (verified via its public JWKS) and maps them to local users by email,
+    // so one AriseHub login covers IT too. Not a secret — it's a public URL.
+    "SUPABASE_URL": "https://luzmqpfsylpqxbwzyjcz.supabase.co"
+  }
+}
